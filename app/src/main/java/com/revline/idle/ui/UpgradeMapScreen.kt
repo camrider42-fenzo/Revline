@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.revline.idle.DynoPhase
 import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.Effect
@@ -52,6 +53,7 @@ import com.revline.idle.game.Logic
 import com.revline.idle.game.Upgrade
 import com.revline.idle.game.UpgradeMap
 import com.revline.idle.game.Upgrades
+import com.revline.idle.model.EngineSim
 import com.revline.idle.model.FuelKind
 import java.util.Locale
 import kotlin.math.hypot
@@ -77,18 +79,13 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
         label = "affordPulse",
     )
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
-            Text("${formatDollars(ui.sheet.incomePerSec)}/s", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-        }
-        Text(
-            "Grouped by what the part changes. Drag to move, pinch to zoom.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
-        )
+    val bucket = (ui.rpm / 50.0).toInt() * 50
+    val liveLoad = if (ui.phase == DynoPhase.IDLE) Logic.loadFor(ui.game.throttle) else 1.0
+    val live = remember(ui.sheet.params, bucket, liveLoad) {
+        EngineSim.point(ui.sheet.params, bucket.toDouble(), liveLoad)
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp)) {
+        EngineStrip(ui, live)
         FuelRow(ui, onFuel)
         BubbleMap(
             layout = layout,
@@ -101,6 +98,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
         selected.value?.let { id ->
             PartDetail(ui, id, previews[id], onBuy)
         }
+        EngineStrip(ui, live)
     }
 }
 

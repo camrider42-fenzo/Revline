@@ -235,10 +235,52 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
 }
 
 @Composable
+fun EngineStrip(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
+    val s = ui.sheet.stats
+    val boost = if (ui.sheet.params.induction == com.revline.idle.model.Induction.NA) {
+        "0.0"
+    } else {
+        String.format(Locale.US, "%.1f", live.boostPsi)
+    }
+    Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
+            Text("${formatDollars(ui.sheet.incomePerSec)}/s", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Stat("HP", String.format(Locale.US, "%.0f", live.horsepower), Lime, Modifier.weight(1f))
+            Stat("TQ", String.format(Locale.US, "%.0f", live.torqueLbFt), Amber, Modifier.weight(1f))
+            Stat("MPG", String.format(Locale.US, "%.1f", live.mpg), if (live.mpg < 12.0) Amber else White, Modifier.weight(1f))
+            Stat("BOOST", boost, if (ui.sheet.params.induction != com.revline.idle.model.Induction.NA && live.boostPsi < 0.4) Amber else Cyan, Modifier.weight(1f))
+            Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Stat("RPM", live.rpm.toInt().toString(), White, Modifier.weight(1f))
+            Stat("LOAD", "${(live.load * 100).toInt()}%", White, Modifier.weight(1f))
+            Stat("SOAK", "${live.heatSoakC.toInt()}°", if (live.heatSoakC > 18) Red else Cyan, Modifier.weight(1f))
+            Stat("COOL", "${live.coolantTempC.toInt()}°", if (live.coolantTempC > 110) Red else Cyan, Modifier.weight(1f))
+            Stat("OIL", "${live.oilTempC.toInt()}°", if (live.oilTempC > 140) Red else Amber, Modifier.weight(1f))
+            Stat("EGT", "${live.egtC.toInt()}°", if (live.egtC > 900) Red else Amber, Modifier.weight(1f))
+        }
+        Text(
+            "AFR ${String.format(Locale.US, "%.2f", live.afr)}  spark ${live.timingDeg.toInt()}°  " +
+                "octane ${live.octane.toInt()}/${live.octaneDemand.toInt()}  " +
+                "charge ${live.chargeTempC.toInt()}°C  " +
+                (if (ui.sheet.params.induction != com.revline.idle.model.Induction.NA && live.boostPsi < 0.4) "below spool  " else "") +
+                "${String.format(Locale.US, "%.1f", 60.0 / live.mpg.coerceAtLeast(0.8))} gal/h",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+    }
+}
+
+@Composable
 private fun Stat(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier.border(1.dp, White).padding(6.dp)) {
-        Text(label, color = Lime, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-        Text(value, color = color, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+    Column(modifier.border(1.dp, White).padding(horizontal = 4.dp, vertical = 3.dp)) {
+        Text(label, color = Lime, fontFamily = FontFamily.Monospace, fontSize = 9.sp, maxLines = 1)
+        Text(value, color = color, fontFamily = FontFamily.Monospace, fontSize = 12.sp, maxLines = 1)
     }
 }
 
