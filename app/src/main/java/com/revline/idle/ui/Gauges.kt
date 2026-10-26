@@ -243,10 +243,21 @@ fun ThrottlePedal(
 }
 
 fun signed(value: Double, digits: Int = 1): String {
+    val step = 0.5 * Math.pow(10.0, -digits.toDouble())
+    if (kotlin.math.abs(value) < step) return "0"
     val body = String.format(Locale.US, "%.${digits}f", kotlin.math.abs(value))
-    return when {
-        value > 0.05 -> "+$body"
-        value < -0.05 -> "-$body"
-        else -> "0"
-    }
+    return if (value > 0.0) "+$body" else "-$body"
+}
+
+/** Horsepower and torque. Small engines need the fraction; a V8 does not. */
+fun formatPower(value: Double): String = when {
+    kotlin.math.abs(value) < 10.0 -> String.format(Locale.US, "%.2f", value)
+    kotlin.math.abs(value) < 100.0 -> String.format(Locale.US, "%.1f", value)
+    else -> String.format(Locale.US, "%.0f", value)
+}
+
+fun powerDigits(value: Double): Int = when {
+    kotlin.math.abs(value) < 10.0 -> 2
+    kotlin.math.abs(value) < 100.0 -> 1
+    else -> 0
 }

@@ -10,6 +10,7 @@ import com.revline.idle.data.GameState
 import com.revline.idle.data.SaveRepository
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Sheet
+import com.revline.idle.model.Block
 import com.revline.idle.model.FuelKind
 import java.io.File
 import kotlin.math.exp
@@ -67,7 +68,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             clock += dt
             val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle, ui.sheet.params.idleRpm)
             val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
-            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening)
+            val block = Block.forPrestige(ui.game.prestiges)
+            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening) * block.payScale()
             val game = Logic.accrue(ui.game, dt, System.currentTimeMillis(), pay, ui.sheet.rpPerSec)
             publish(
                 ui.copy(

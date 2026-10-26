@@ -192,8 +192,8 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
     val notes = if (s.reliabilityNotes.isEmpty()) "Inside limits" else s.reliabilityNotes.joinToString(" · ")
     Column(Modifier.padding(top = 8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Stat("HP", String.format(Locale.US, "%.0f", live.horsepower), Lime, Modifier.weight(1f))
-            Stat("TQ", String.format(Locale.US, "%.0f", live.torqueLbFt), Amber, Modifier.weight(1f))
+            Stat("HP", formatPower(live.horsepower), Lime, Modifier.weight(1f))
+            Stat("TQ", formatPower(live.torqueLbFt), Amber, Modifier.weight(1f))
             Stat("MPG", String.format(Locale.US, "%.1f", live.mpg), if (live.mpg < 12.0) Amber else White, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
@@ -249,8 +249,8 @@ fun EngineStrip(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Text("${formatDollars(ui.sheet.incomePerSec)}/s", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
         }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Stat("HP", String.format(Locale.US, "%.0f", live.horsepower), Lime, Modifier.weight(1f))
-            Stat("TQ", String.format(Locale.US, "%.0f", live.torqueLbFt), Amber, Modifier.weight(1f))
+            Stat("HP", formatPower(live.horsepower), Lime, Modifier.weight(1f))
+            Stat("TQ", formatPower(live.torqueLbFt), Amber, Modifier.weight(1f))
             Stat("MPG", String.format(Locale.US, "%.1f", live.mpg), if (live.mpg < 12.0) Amber else White, Modifier.weight(1f))
             Stat("BOOST", boost, if (ui.sheet.params.induction != com.revline.idle.model.Induction.NA && live.boostPsi < 0.4) Amber else Cyan, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))

@@ -26,6 +26,7 @@ data class Sheet(
 )
 
 data class StatDelta(
+    /** Change at the pedal the engine is holding right now. */
     val hp: Double,
     val torque: Double,
     val mpg: Double,
@@ -33,6 +34,11 @@ data class StatDelta(
     val coolantC: Double,
     val oilC: Double,
     val egtC: Double,
+    /** Change on the wide-open pull, which is what the rebuild sheet uses. */
+    val peakHp: Double,
+    val peakTorque: Double,
+    val cruiseMpg: Double,
+    val payPerSec: Double,
 )
 
 enum class ResearchStatus { OWNED, LOCKED, OPEN }
@@ -356,16 +362,21 @@ object Logic {
         val next = sheet(state.copy(upgrades = state.upgrades + (id to level + 1)))
         val nowRpm = targetRpm(now.params.redlineRpm, state.throttle, now.params.idleRpm)
         val nextRpm = targetRpm(next.params.redlineRpm, state.throttle, next.params.idleRpm)
-        val nowLoad = loadFor(state.throttle)
-        val nextLoad = loadFor(state.throttle)
+        val load = loadFor(state.throttle)
+        val nowPoint = EngineSim.point(now.params, nowRpm, load)
+        val nextPoint = EngineSim.point(next.params, nextRpm, load)
         return StatDelta(
-            hp = next.stats.peakHorsepower - now.stats.peakHorsepower,
-            torque = next.stats.peakTorqueLbFt - now.stats.peakTorqueLbFt,
-            mpg = EngineSim.point(next.params, nextRpm, nextLoad).mpg - EngineSim.point(now.params, nowRpm, nowLoad).mpg,
+            hp = nextPoint.horsepower - nowPoint.horsepower,
+            torque = nextPoint.torqueLbFt - nowPoint.torqueLbFt,
+            mpg = nextPoint.mpg - nowPoint.mpg,
             reliability = next.stats.reliability - now.stats.reliability,
-            coolantC = next.stats.peakCoolantC - now.stats.peakCoolantC,
-            oilC = next.stats.peakOilC - now.stats.peakOilC,
-            egtC = next.stats.peakEgtC - now.stats.peakEgtC,
+            coolantC = nextPoint.coolantTempC - nowPoint.coolantTempC,
+            oilC = nextPoint.oilTempC - nowPoint.oilTempC,
+            egtC = nextPoint.egtC - nowPoint.egtC,
+            peakHp = next.stats.peakHorsepower - now.stats.peakHorsepower,
+            peakTorque = next.stats.peakTorqueLbFt - now.stats.peakTorqueLbFt,
+            cruiseMpg = next.stats.cruiseMpg - now.stats.cruiseMpg,
+            payPerSec = next.incomePerSec - now.incomePerSec,
         )
     }
 

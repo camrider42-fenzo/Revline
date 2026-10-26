@@ -50,6 +50,7 @@ import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.Effect
 import com.revline.idle.game.Logic
+import com.revline.idle.game.StatDelta
 import com.revline.idle.game.Upgrade
 import com.revline.idle.game.UpgradeMap
 import com.revline.idle.game.Upgrades
@@ -70,7 +71,16 @@ private fun effectColor(effect: Effect): Color = when (effect) {
 fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit) {
     val selected = remember { mutableStateOf<String?>(null) }
     val layout = remember { UpgradeMap.bubbles() }
-    val previews = remember(ui.game.upgrades, ui.game.researched, ui.game.fuel, ui.game.perks, ui.game.knowledge) {
+    val pedalBucket = (ui.game.throttle * 20.0).toInt()
+    val previews = remember(
+        ui.game.upgrades,
+        ui.game.researched,
+        ui.game.fuel,
+        ui.game.perks,
+        ui.game.knowledge,
+        ui.game.prestiges,
+        pedalBucket,
+    ) {
         Upgrades.all.associate { it.id to Logic.preview(ui.game, it.id) }
     }
     val pulse by rememberInfiniteTransition(label = "afford").animateFloat(
@@ -333,6 +343,40 @@ private fun UpgradeBubble(
 }
 
 @Composable
+private fun DeltaReadout(delta: StatDelta) {
+    val live = listOf(delta.hp, delta.torque, delta.mpg, delta.payPerSec)
+    val pull = listOf(delta.peakHp, delta.peakTorque, delta.cruiseMpg, delta.reliability, delta.coolantC, delta.oilC, delta.egtC)
+    val any = (live + pull).any { kotlin.math.abs(it) >= 0.005 }
+    if (!any) {
+        Text(
+            "No change at this pedal or on the pull.",
+            color = Amber,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        return
+    }
+    Text(
+        "This pedal  ${signed(delta.hp, powerDigits(delta.hp))} hp   ${signed(delta.torque, powerDigits(delta.torque))} lb-ft   " +
+            "${signed(delta.mpg)} mpg   ${signed(delta.payPerSec, if (kotlin.math.abs(delta.payPerSec) < 0.1) 3 else 2)}/s",
+        color = Cyan,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    Text(
+        "On the pull  ${signed(delta.peakHp, powerDigits(delta.peakHp))} hp   ${signed(delta.peakTorque, powerDigits(delta.peakTorque))} lb-ft   " +
+            "cruise ${signed(delta.cruiseMpg)} mpg   rel ${signed(delta.reliability)}   " +
+            "cool ${signed(delta.coolantC)}°   oil ${signed(delta.oilC)}°   egt ${signed(delta.egtC, 0)}°",
+        color = Cyan,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+}
+
+@Composable
 private fun PartDetail(
     ui: UiModel,
     id: String,
@@ -359,14 +403,7 @@ private fun PartDetail(
             modifier = Modifier.padding(top = 4.dp),
         )
         if (delta != null) {
-            Text(
-                "${signed(delta.hp, 0)} hp   ${signed(delta.torque, 0)} lb-ft   ${signed(delta.mpg)} mpg   " +
-                    "rel ${signed(delta.reliability, 0)}   coolant ${signed(delta.coolantC, 0)}°   oil ${signed(delta.oilC, 0)}°   egt ${signed(delta.egtC, 0)}°",
-                color = Cyan,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            DeltaReadout(delta)
         }
         val label = when {
             level >= upgrade.maxLevel -> "Installed"

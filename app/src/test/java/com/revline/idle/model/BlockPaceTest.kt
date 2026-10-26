@@ -7,6 +7,7 @@ import com.revline.idle.game.ResearchTree
 import com.revline.idle.game.Upgrades
 import com.revline.idle.model.FuelKind
 import java.util.Locale
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,6 +17,18 @@ import org.junit.Test
  * With that list, and with studies carried forward, each next engine takes a little less time.
  */
 class BlockPaceTest {
+    @Test
+    fun aFilterMovesTheMopedAndThePreviewSaysSo() {
+        val stock = GameState(money = 10_000.0)
+        val preview = Logic.preview(stock, "filter")
+        assertTrue(preview != null && preview.peakHp > 0.03)
+        val bought = Logic.buyUpgrade(stock, "filter")
+        assertEquals(1, bought.upgrades["filter"])
+        val before = Logic.sheet(stock).stats.peakHorsepower
+        val after = Logic.sheet(bought).stats.peakHorsepower
+        assertTrue("filter $before -> $after", after > before + 0.03)
+    }
+
     @Test
     fun aMaxedEngineStillClearsTheSheet() {
         val research = ResearchTree.all.map { it.id }.toSet()
