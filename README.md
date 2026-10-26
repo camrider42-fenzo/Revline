@@ -73,7 +73,9 @@ Research spends research points along a tree (carb to TBI to port to direct inje
 
 Each rebuild throws the parts away and bolts on the next engine, from a 50 cc moped single up through a thumper, a parallel twin, an inline-three, the 2.0 L inline-four, a V6, a V8, and a V12. The drawing follows the cylinder count and, from the V6 up, the vee. Studies and Engineering Knowledge stay. Knowledge still multiplies the contract and the research (`1 + 0.12 × knowledge`).
 
-A rebuild opens when peak horsepower, peak torque, and cruise mpg all clear that engine's sheet. Meeting it pays one Engineering Knowledge. Each stat adds four more per time it beats its own target, up to sixteen from one rebuild, and that knowledge raises the multiplier you keep (`1 + 0.12 × knowledge`). Stock misses the power and torque numbers. A bolt-on build (filter, exhaust, cold air) clears the sheet, and so does a finished engine. A half-built boost setup can miss the mpg number until the rest of the engine is on.
+A rebuild opens when peak horsepower, peak torque, and cruise mpg all clear that engine's sheet. The targets sit where about 60% of the parts have been bought, so a short bolt-on list is not enough and a finished engine still is. Meeting it pays one Engineering Knowledge. Each stat adds four more per time it beats its own target, up to sixteen from one rebuild, and that knowledge raises the multiplier you keep (`1 + 0.12 × knowledge`). Stock misses the power and torque numbers.
+
+The first tools on a fresh engine are cheap (a torque wrench, an oil service, a plug gap, a valve lap) so the opening minutes have something to buy. That wider shop still lands in about one to two hours per engine.
 
 Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Each engine's bolt-on shop takes a little less time than the last: a bit over two hours on the moped, down to a bit over an hour on the V12. Further rebuilds after the V12 stay on that block and only add knowledge.
 

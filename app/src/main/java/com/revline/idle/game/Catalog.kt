@@ -53,6 +53,15 @@ object Upgrades {
     val all: List<Upgrade> = listOf(
         // Prices are about 12 minutes of the contract that level adds on a cooled street car.
         // A level that stops paying gets cheaper. A level that pays more gets dearer.
+        // The opening tools are cheaper on purpose: a new engine should have something to buy within a minute or two.
+        Upgrade("lap", Category.VALVETRAIN, "Valve lap", "A light cut on the seat. The valve seals, and a little more mixture stays in the cylinder.", 5, 14.0, 1.18),
+        Upgrade("gap", Category.IGNITION, "Plug gap", "The gap is opened a hair. The spark kernel gets larger.", 4, 18.0, 1.22),
+        Upgrade("boot", Category.INTAKE, "Intake boot", "The coupler stops sucking hot bay air. Density picks up before any real intake work.", 4, 22.0, 1.25),
+        Upgrade("tip", Category.EXHAUST, "Turn-down tip", "A short outlet. A little less backpressure, nothing like a header.", 3, 16.0, 1.20),
+        Upgrade("needle", Category.FUEL, "Needle clip", "The clip moves one groove. The carb runs closer to the mixture you asked for.", 3, 20.0, 1.22),
+        Upgrade("oil_service", Category.COOLING, "Oil and filter service", "Fresh oil and a new filter. The crank turns easier until the next interval.", 3, 12.0, 1.15),
+        Upgrade("fins", Category.COOLING, "Fin cleanup", "Straightened fins and a clear path for air. The jug sheds a little more heat.", 4, 14.0, 1.20),
+        Upgrade("wrench", Category.INTERNALS, "Torque wrench pass", "Clamps and fasteners brought to spec. A small bump in how together the engine is.", 4, 10.0, 1.15),
         Upgrade("filter", Category.INTAKE, "Cotton panel filter", "Less pressure drop across the element. Peak volumetric efficiency rises a little.", 5, 200.0, 1.15),
         Upgrade("cold_air", Category.INTAKE, "Cold-air inlet", "The snorkel leaves the hot bay. Inlet air drops toward ambient, so density and knock margin both improve.", 4, 1000.0, 1.55),
         Upgrade("manifold", Category.INTAKE, "Ported intake manifold", "Cleaner runners move the breathing peak up the tach and add VE.", 4, 300.0, 1.15, requires = "tbi"),

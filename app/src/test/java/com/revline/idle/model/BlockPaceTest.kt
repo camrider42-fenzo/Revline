@@ -3,6 +3,7 @@ package com.revline.idle.model
 import com.revline.idle.data.GameState
 import com.revline.idle.economy.Prestige
 import com.revline.idle.game.Logic
+import com.revline.idle.game.ResearchStatus
 import com.revline.idle.game.ResearchTree
 import com.revline.idle.game.Upgrades
 import com.revline.idle.model.FuelKind
@@ -44,123 +45,90 @@ class BlockPaceTest {
     fun aMaxedEngineStillClearsTheSheet() {
         val research = ResearchTree.all.map { it.id }.toSet()
         val maxed = Upgrades.all.associate { it.id to it.maxLevel }
+        val misses = mutableListOf<String>()
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
             val stats = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = maxed)).stats
-            assertTrue(
-                "${block.title} maxed ${"%.1f".format(stats.peakHorsepower)}/${"%.1f".format(stats.peakTorqueLbFt)}/${"%.1f".format(stats.cruiseMpg)} " +
-                    "vs ${block.hpGoal}/${block.torqueGoal}/${block.mpgGoal}",
-                Prestige.meets(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block),
-            )
+            val line = "${block.title} maxed ${"%.1f".format(stats.peakHorsepower)}/${"%.1f".format(stats.peakTorqueLbFt)}/${"%.1f".format(stats.cruiseMpg)}"
+            if (!Prestige.meets(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block)) misses += line
         }
+        assertTrue(misses.joinToString("\n"), misses.isEmpty())
     }
 
     @Test
-    fun stockMissesAndABoltOnBuildClearsEverySheet() {
-        val research = ResearchTree.all.map { it.id }.toSet()
+    fun aboutSixtyPercentOfTheShopClearsTheSheet() {
+        val research = setOf("exhaust_fab", "perf_cam", "wasted_spark", "tbi", "ic_node", "premium")
+        val share = sixty.size.toDouble() / Upgrades.all.size
+        assertTrue("sixty share $share", share in 0.55..0.65)
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
-            val stock = Logic.sheet(GameState(prestiges = index)).stats
-            assertFalse(
-                "${block.title} stock already clears ${"%.1f".format(stock.peakHorsepower)} hp",
-                Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stock.cruiseMpg, block),
-            )
-            val built = Logic.sheet(
-                GameState(prestiges = index, researched = research, upgrades = boltOn, fuel = FuelKind.PREMIUM_93),
+            fun stats(upgrades: Map<String, Int>) = Logic.sheet(
+                GameState(
+                    prestiges = index,
+                    knowledge = index,
+                    researched = research,
+                    upgrades = upgrades,
+                    fuel = FuelKind.PREMIUM_93,
+                ),
             ).stats
+            val stock = Logic.sheet(GameState(prestiges = index)).stats
+            assertFalse(block.title, Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stock.cruiseMpg, block))
+            val thin = stats(forty)
+            val wide = stats(sixty)
+            assertFalse(
+                "${block.title} forty ${thin.peakHorsepower.toInt()}/${thin.peakTorqueLbFt.toInt()}",
+                Prestige.meets(thin.peakHorsepower, thin.peakTorqueLbFt, thin.cruiseMpg, block),
+            )
             assertTrue(
-                "${block.title} bolt-on misses ${"%.1f".format(built.peakHorsepower)} hp / " +
-                    "${"%.1f".format(built.peakTorqueLbFt)} lb-ft / ${"%.1f".format(built.cruiseMpg)} mpg " +
-                    "vs ${block.hpGoal} / ${block.torqueGoal} / ${block.mpgGoal}",
-                Prestige.meets(built.peakHorsepower, built.peakTorqueLbFt, built.cruiseMpg, block),
+                "${block.title} sixty ${"%.1f".format(wide.peakHorsepower)}/${"%.1f".format(wide.peakTorqueLbFt)}/${"%.1f".format(wide.cruiseMpg)} " +
+                    "vs ${block.hpGoal}/${block.torqueGoal}/${block.mpgGoal}",
+                Prestige.meets(wide.peakHorsepower, wide.peakTorqueLbFt, wide.cruiseMpg, block),
             )
         }
     }
 
-    @Test
-    fun eachEngineTakesALittleLessTime() {
-        var researched = emptySet<String>()
-        var previous = Double.POSITIVE_INFINITY
-        val lines = mutableListOf<String>()
-        val problems = mutableListOf<String>()
-        for (index in Block.entries.indices) {
-            val block = Block.forPrestige(index)
-            val start = GameState(
-                prestiges = index,
-                knowledge = index,
-                researched = researched,
-                savedAtEpochMs = 1L,
-            )
-            val run = play(start)
-            lines += String.format(
-                Locale.US,
-                "%s  %.2f h  scale %.2f  %s",
-                block.title,
-                run.hours,
-                block.upgradePriceScale(index),
-                run.note,
-            )
-            if (!run.cleared) problems += "${block.title} did not clear: ${run.note}"
-            if (index > 0 && run.cleared && previous.isFinite()) {
-                if (run.hours > previous * 0.975) {
-                    problems += "${block.title} took ${"%.2f".format(run.hours)} h after ${"%.2f".format(previous)} h"
-                }
-                if (run.hours < previous * 0.78) {
-                    problems += "${block.title} collapsed to ${"%.2f".format(run.hours)} h from ${"%.2f".format(previous)} h"
-                }
-            }
-            if (run.cleared) previous = run.hours
-            researched = run.researched
-        }
-        println(lines.joinToString("\n"))
-        assertTrue((problems + lines).joinToString("\n"), problems.isEmpty())
-    }
-
-    private fun play(start: GameState): Run {
+    private fun buyBasket(start: GameState, basket: Map<String, Int>): Run {
         var state = tune(start)
         var sheet = Logic.sheet(state)
         var seconds = 0.0
         var sinceDyno = 0.0
-        var step = 0
-        val horizon = 48.0 * 3600.0
-        while (seconds < horizon && step <= plan.size) {
-            if (Logic.canPrestige(state)) {
-                return Run(true, seconds / 3600.0, state.researched, "step $step")
+        val horizon = 8.0 * 3600.0
+        var guard = 0
+        while (seconds < horizon && guard < 6000) {
+            guard++
+            if (basket.all { (state.upgrades[it.key] ?: 0) >= it.value }) {
+                return Run(true, seconds / 3600.0, state.researched, "owned ${state.upgrades.count { it.value > 0 }}/${Upgrades.all.size}")
             }
-            if (step == plan.size) {
-                return Run(false, seconds / 3600.0, state.researched, stuck(state, sheet))
-            }
-            val item = plan[step]
-            val id = item.substring(2)
-            if (item.startsWith("r:") && id in state.researched) {
-                step++
-                continue
-            }
-            val upgrade = if (item.startsWith("u:")) Upgrades.byId(id) else null
-            if (upgrade != null && (state.upgrades[id] ?: 0) >= upgrade.maxLevel) {
-                step++
-                continue
-            }
-            val bought = when {
-                item.startsWith("r:") && Logic.canBuyResearch(state, id) -> Logic.buyResearch(state, id)
-                item.startsWith("u:") && Logic.canBuyUpgrade(state, id) -> Logic.buyUpgrade(state, id)
-                else -> null
-            }
-            if (bought != null) {
-                state = tune(bought)
-                sheet = Logic.sheet(state)
-                step++
-                continue
-            }
-            val wait = waitFor(state, sheet, item)
-            if (!wait.isFinite() || wait <= 0.0) {
-                val why = if (item.startsWith("r:")) {
-                    Logic.researchStatus(state, id).name
-                } else {
-                    "lock=${Logic.lockReason(state, id)} cost=${Logic.upgradeCost(state, id)}"
+            val nextPart = basket
+                .filter { (state.upgrades[it.key] ?: 0) < it.value && Logic.lockReason(state, it.key) == null }
+                .minByOrNull { Logic.upgradeCost(state, it.key) }
+                ?.key
+            val nextStudy = ResearchTree.all
+                .filter { Logic.researchStatus(state, it.id) == ResearchStatus.OPEN }
+                .filter { study ->
+                    basket.any { (id, level) ->
+                        (state.upgrades[id] ?: 0) < level && Logic.lockReason(state, id)?.contains(ResearchTree.byId(study.id).name) == true
+                    }
                 }
-                return Run(false, seconds / 3600.0, state.researched, "stuck on $item $why")
+                .minByOrNull { it.cost }
+            if (nextPart != null && Logic.canBuyUpgrade(state, nextPart)) {
+                state = tune(Logic.buyUpgrade(state, nextPart))
+                sheet = Logic.sheet(state)
+                continue
             }
+            if (nextStudy != null && Logic.canBuyResearch(state, nextStudy.id)) {
+                state = tune(Logic.buyResearch(state, nextStudy.id))
+                sheet = Logic.sheet(state)
+                continue
+            }
+            val moneyWait = if (nextPart != null && sheet.incomePerSec > 1e-9) {
+                (Logic.upgradeCost(state, nextPart) - state.money).coerceAtLeast(0.0) / sheet.incomePerSec
+            } else Double.POSITIVE_INFINITY
+            val rpWait = if (nextStudy != null && sheet.rpPerSec > 1e-9) {
+                (nextStudy.cost - state.researchPoints).coerceAtLeast(0.0) / sheet.rpPerSec
+            } else Double.POSITIVE_INFINITY
+            val wait = minOf(moneyWait, rpWait)
+            if (!wait.isFinite()) return Run(false, seconds / 3600.0, state.researched, stuck(state, sheet) + " part=$nextPart study=${nextStudy?.id}")
             val tick = wait.coerceIn(1.0, 30.0)
             state = state.copy(
                 money = state.money + sheet.incomePerSec * tick,
@@ -173,19 +141,29 @@ class BlockPaceTest {
             }
             seconds += tick
         }
-        return Run(false, seconds / 3600.0, state.researched, stuck(state, sheet))
+        return Run(false, seconds / 3600.0, state.researched, "horizon")
     }
 
-    private fun waitFor(state: GameState, sheet: com.revline.idle.game.Sheet, item: String): Double {
-        val id = item.substring(2)
-        return if (item.startsWith("r:")) {
-            val gap = ResearchTree.byId(id).cost - state.researchPoints
-            if (gap <= 0.0) 0.0 else gap / sheet.rpPerSec
-        } else {
-            if (Logic.lockReason(state, id) != null) Double.POSITIVE_INFINITY
-            val gap = Logic.upgradeCost(state, id) - state.money
-            if (gap <= 0.0) 0.0 else gap / sheet.incomePerSec
+    @Test
+    fun eachEngineShopFitsInAnHourOrTwo() {
+        var researched = setOf("premium")
+        val lines = mutableListOf<String>()
+        for (index in Block.entries.indices) {
+            val block = Block.forPrestige(index)
+            val start = GameState(
+                prestiges = index,
+                knowledge = index,
+                researched = researched,
+                fuel = FuelKind.PREMIUM_93,
+                savedAtEpochMs = 1L,
+            )
+            val run = buyBasket(start, sixty)
+            lines += "${block.title}  ${"%.2f".format(run.hours)} h  ${run.note}"
+            assertTrue(lines.joinToString("\n"), run.cleared)
+            assertTrue("${block.title} ${run.hours} h", run.hours in 0.85..2.0)
+            researched = run.researched
         }
+        println(lines.joinToString("\n"))
     }
 
     private fun tune(state: GameState): GameState {
@@ -206,25 +184,24 @@ class BlockPaceTest {
     private data class Run(val cleared: Boolean, val hours: Double, val researched: Set<String>, val note: String)
 
     companion object {
-        val boltOn = mapOf(
-            "filter" to 5,
-            "catback" to 3,
-            "headers" to 3,
-            "cold_air" to 2,
-            "plugs" to 2,
-            "springs" to 2,
-            "synthetic" to 1,
+        /** About 60% of the part list, including the research-gated pieces a shop actually reaches. */
+        val sixty = mapOf(
+            "lap" to 3, "gap" to 3, "boot" to 2, "tip" to 2, "needle" to 2,
+            "oil_service" to 2, "fins" to 2, "wrench" to 3,
+            "filter" to 3, "cold_air" to 2, "catback" to 2, "plugs" to 2,
+            "base_timing" to 2, "springs" to 2, "synthetic" to 1,
+            "jets" to 2, "fuel_pump" to 2, "cap" to 1, "radiator" to 2,
+            "duct" to 1, "water_pump" to 1, "thermostat" to 1,
+            "compression" to 2, "studs" to 1, "afr_map" to 2,
+            "headers" to 2, "long_tube" to 1, "ceramic" to 1,
+            "cam" to 1, "coils" to 2, "tbi_unit" to 1, "manifold" to 1,
+            "intercooler" to 1,
         )
-        val plan = listOf(
-            "r:premium",
-            "u:filter", "u:plugs", "u:catback", "u:synthetic",
-            "u:filter", "u:plugs", "u:catback",
-            "r:exhaust_fab",
-            "u:headers", "u:headers", "u:headers",
-            "u:filter", "u:filter", "u:filter",
-            "u:catback",
-            "u:cold_air", "u:cold_air",
-            "u:springs", "u:springs",
-        )
+        val forty = sixty.filterKeys {
+            it !in setOf(
+                "headers", "long_tube", "ceramic", "cam", "coils", "tbi_unit",
+                "manifold", "intercooler", "springs", "cold_air", "compression",
+            )
+        }
     }
 }

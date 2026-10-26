@@ -63,16 +63,18 @@ object UpgradeMap {
     fun effectOf(id: String): Effect = when (id) {
         "filter", "manifold", "itb", "headers", "long_tube", "cam", "vvt", "vvl",
         "compression", "bore", "coils", "base_timing", "mapped_timing", "springs",
+        "lap", "gap",
         -> Effect.POWER
-        "jets", "afr_map", "catback", "cold_air",
+        "jets", "afr_map", "catback", "cold_air", "boot", "tip", "needle",
         -> Effect.ECONOMY
         "supercharger", "turbo", "twin", "intercooler", "boost_controller",
         "fuel_pump", "injectors", "hpfp", "tbi_unit", "meth",
         -> Effect.BOOST
         "radiator", "duct", "thermostat", "cap", "water_pump", "electric_pump",
-        "oil_cooler", "waterless", "synthetic", "ceramic",
+        "oil_cooler", "waterless", "synthetic", "ceramic", "oil_service", "fins",
         -> Effect.COOLING
         "studs", "pistons", "rods", "crank", "billet", "inconel", "knock_box", "plugs", "torque_model",
+        "wrench",
         -> Effect.DURABILITY
         else -> error("No effect for $id")
     }

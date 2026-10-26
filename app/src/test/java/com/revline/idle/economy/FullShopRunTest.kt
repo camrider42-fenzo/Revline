@@ -26,17 +26,9 @@ class FullShopRunTest {
         )
         assertEquals(1, studied.upgrades["turbo"])
         val ready = studied.copy(
-            researched = setOf("exhaust_fab", "turbo_node", "premium"),
+            researched = setOf("exhaust_fab", "perf_cam", "wasted_spark", "tbi", "ic_node", "premium", "turbo_node"),
             fuel = FuelKind.PREMIUM_93,
-            upgrades = mapOf(
-                "filter" to 5,
-                "catback" to 3,
-                "headers" to 3,
-                "cold_air" to 2,
-                "plugs" to 2,
-                "springs" to 2,
-                "synthetic" to 1,
-            ),
+            upgrades = com.revline.idle.model.BlockPaceTest.sixty,
         )
         assertTrue(Logic.canPrestige(ready))
         val rebuilt = Logic.prestige(ready)

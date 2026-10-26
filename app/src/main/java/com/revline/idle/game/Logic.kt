@@ -116,6 +116,14 @@ object Logic {
         val block = Block.forPrestige(state.prestiges)
         fun lvl(id: String) = state.upgrades[id] ?: 0
         val filter = lvl("filter")
+        val boot = lvl("boot")
+        val lap = lvl("lap")
+        val gap = lvl("gap")
+        val tip = lvl("tip")
+        val needle = lvl("needle")
+        val oilService = lvl("oil_service")
+        val fins = lvl("fins")
+        val wrench = lvl("wrench")
         val cai = lvl("cold_air")
         val manifold = lvl("manifold")
         val itb = lvl("itb")
@@ -184,7 +192,7 @@ object Logic {
         if (ceramic > 0 && (induction == Induction.TURBO || induction == Induction.TWIN_TURBO)) {
             spool -= 180.0
         }
-        var bp = (1.0 - 0.045 * catback - 0.06 * headers - 0.05 * longTube).coerceIn(0.35, 1.15)
+        var bp = (1.0 - 0.045 * catback - 0.06 * headers - 0.05 * longTube - 0.012 * tip).coerceIn(0.35, 1.15)
         when (induction) {
             Induction.TURBO -> bp += 0.16
             Induction.TWIN_TURBO -> bp += 0.10
@@ -202,18 +210,19 @@ object Logic {
             0.012 * filter + 0.015 * cai + 0.012 * manifold + 0.018 * itb +
             0.006 * catback + 0.010 * headers + 0.012 * longTube +
             0.020 * cam + 0.012 * vvt + 0.030 * vvl +
+            0.004 * lap + 0.004 * boot + 0.003 * tip + 0.003 * gap + 0.002 * fins +
             0.012 * (state.perks["flow"] ?: 0)
         var frac = block.vePeakFraction + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
             0.018 * longTube + 0.040 * cam + 0.015 * vvl
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
         var strength = 1.0 + 0.035 * springs + 0.08 * studs + 0.18 * pistons +
-            0.11 * rods + 0.08 * crank + 0.25 * billet + 0.06 * (state.perks["fixtures"] ?: 0)
-        var flow = block.fuelFlow + 0.12 * jets + 0.28 * pump + 0.22 * tbi + 0.42 * injectors + 0.70 * hpfp
-        var timing = block.timingDeg + 1.15 * baseTiming + 1.30 * mapped + 0.40 * coils
+            0.11 * rods + 0.08 * crank + 0.25 * billet + 0.015 * wrench + 0.06 * (state.perks["fixtures"] ?: 0)
+        var flow = block.fuelFlow + 0.12 * jets + 0.04 * needle + 0.28 * pump + 0.22 * tbi + 0.42 * injectors + 0.70 * hpfp
+        var timing = block.timingDeg + 1.15 * baseTiming + 1.30 * mapped + 0.40 * coils + 0.28 * gap
         if (torque) timing += 1.4
         var knock = 0.18 + if (knockBox > 0) 0.60 else 0.0
         if (torque) knock += 0.10
-        var ign = 0.95 + 0.012 * plugs + 0.015 * coils
+        var ign = 0.95 + 0.012 * plugs + 0.015 * coils + 0.008 * gap
         var trim = 0.10 * afr
         if (torque) trim += 0.12
         val pumpFlow = 1.0 + 0.07 * waterPump + if (electric) 0.08 else 0.0
@@ -229,7 +238,7 @@ object Logic {
             1 -> 16.0
             else -> 20.0
         }
-        val friction = (1.0 - 0.04 * crank - if (synthetic) 0.025 else 0.0).coerceIn(0.78, 1.2)
+        val friction = (1.0 - 0.04 * crank - 0.012 * oilService - 0.01 * wrench - if (synthetic) 0.025 else 0.0).coerceIn(0.78, 1.2)
         return EngineParams(
             cylinders = block.cylinders,
             boreMm = (block.boreMm + block.boreMm * 0.025 * bore).coerceIn(block.boreMm * 0.9, block.boreMm * 1.2),
@@ -245,7 +254,7 @@ object Logic {
             ignitionQuality = ign.coerceIn(0.70, 0.995),
             fuelFlowFactor = flow.coerceIn(0.4, 12.0),
             afrTrim = trim.coerceIn(0.0, 2.2),
-            jetQuality = (jets / 4.0).coerceIn(0.0, 1.0),
+            jetQuality = ((jets + 0.35 * needle) / 4.0).coerceIn(0.0, 1.0),
             mixture = mixture,
             fuel = fuel,
             maxBoostPsi = boost.coerceIn(0.0, 40.0),
@@ -256,7 +265,7 @@ object Logic {
             friction = friction,
             internalsStrength = strength.coerceIn(0.8, 3.2),
             radiatorUa = ua.coerceIn(80.0, 8000.0),
-            oilCoolerUa = (110.0 * oil).coerceAtLeast(0.0),
+            oilCoolerUa = (110.0 * oil + 18.0 * fins).coerceAtLeast(0.0),
             thermostatC = stat,
             capPsi = capPsi,
             coolant = if (waterless) Coolant.WATERLESS else Coolant.GLYCOL_50,
@@ -266,7 +275,7 @@ object Logic {
             exhaustWrap = if (ceramic > 0) 1.0 else 0.0,
             inconelValves = inconel,
             octaneBonus = 1.2 * (state.perks["octane"] ?: 0),
-            underhoodDeltaC = (12.0 - 2.4 * cai).coerceIn(1.5, 25.0),
+            underhoodDeltaC = (12.0 - 2.4 * cai - 0.30 * boot - 0.25 * fins).coerceIn(1.5, 25.0),
             individualThrottles = itb > 0,
             installedHp = installedHp(block, state),
             banks = block.banks,

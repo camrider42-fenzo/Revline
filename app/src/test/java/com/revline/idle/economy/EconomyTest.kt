@@ -142,85 +142,16 @@ class EconomyTest {
     }
 
     @Test
-    fun scriptedShopReachesTheFirstRebuildInAFewHours() {
-        val minutes = scriptedMinutes()
-        assertTrue("first rebuild in $minutes min", minutes in 110.0..155.0)
-    }
-
-    private fun scriptedMinutes(): Double {
-        val plan = com.revline.idle.model.BlockPaceTest.plan
-        var state = GameState(savedAtEpochMs = 1L)
-        state = state.copy(throttle = Logic.bestThrottle(state))
-        var sheet = Logic.sheet(state)
-        var t = 0.0
-        val dt = 5.0
-        var step = 0
-        var stuckFor = 0.0
-        while (t < 200.0 * 60.0) {
-            if (!Logic.canPrestige(state)) {
-                state = state.copy(
-                    money = state.money + sheet.incomePerSec * dt,
-                    runEarnings = state.runEarnings + sheet.incomePerSec * dt,
-                    researchPoints = state.researchPoints + sheet.rpPerSec * dt,
-                )
-            }
-            if (step % 7 == 0) {
-                state = state.copy(researchPoints = state.researchPoints + Logic.dynoReward(sheet.stats))
-            }
-            val beforeResearch = state.researched
-            if (step < plan.size) {
-                val item = plan[step]
-                val id = item.substring(2)
-                val bought = if (item.startsWith("r:")) {
-                    if (Logic.canBuyResearch(state, id)) Logic.buyResearch(state, id) else state
-                } else if (Logic.canBuyUpgrade(state, id)) {
-                    Logic.buyUpgrade(state, id)
-                } else {
-                    state
-                }
-                if (bought != state) {
-                    state = bought.copy(throttle = Logic.bestThrottle(bought))
-                    step++
-                    stuckFor = 0.0
-                    if (state.researched != beforeResearch) {
-                        val best = FuelKind.entries
-                            .filter { Logic.fuelUnlocked(state, it) }
-                            .maxBy { kind ->
-                                val trial = state.copy(fuel = kind)
-                                Logic.sheet(trial.copy(throttle = Logic.bestThrottle(trial))).incomePerSec
-                            }
-                        val trial = state.copy(fuel = best)
-                        val tuned = trial.copy(throttle = Logic.bestThrottle(trial))
-                        if (Logic.sheet(tuned).incomePerSec > Logic.sheet(state).incomePerSec * 1.01) {
-                            state = tuned
-                        }
-                    }
-                    sheet = Logic.sheet(state)
-                } else {
-                    stuckFor += dt
-                    if (stuckFor > 60.0 * 60.0) {
-                    val item = plan[step]
-                    val id = item.substring(2)
-                    val why = if (item.startsWith("r:")) {
-                        "${Logic.researchStatus(state, id)} cost=${ResearchTree.byId(id).cost}"
-                    } else {
-                        "lock=${Logic.lockReason(state, id)} cost=${Logic.upgradeCost(state, id)} level=${state.upgrades[id] ?: 0}"
-                    }
-                    throw AssertionError(
-                        "stuck on $item at ${t / 60.0} min money=${state.money} rp=${state.researchPoints} income=${sheet.incomePerSec} $why",
-                    )
-                }
-                }
-            }
-            t += dt
-            if (Logic.canPrestige(state) && step >= plan.size - 3) return t / 60.0
-            if (Logic.canPrestige(state) && t > 20.0 * 60.0) return t / 60.0
+    fun theOpeningToolOnEveryEngineIsACoupleOfMinutes() {
+        for (index in com.revline.idle.model.Block.entries.indices) {
+            val state = GameState(prestiges = index, knowledge = index)
+            val pay = Logic.sheet(state.copy(throttle = Logic.bestThrottle(state))).incomePerSec
+            val cheapest = com.revline.idle.game.Upgrades.all
+                .filter { Logic.lockReason(state, it.id) == null }
+                .minOf { Logic.upgradeCost(state, it.id) }
+            val minutes = cheapest / pay / 60.0
+            assertTrue("${com.revline.idle.model.Block.forPrestige(index).title} first tool $minutes min", minutes < 2.5)
         }
-        if (Logic.canPrestige(state)) return t / 60.0
-        throw AssertionError(
-            "no rebuild at ${t / 60.0} min step=$step money=${state.money} earned=${state.runEarnings} " +
-                "income=${sheet.incomePerSec} throttle=${state.throttle} fuel=${state.fuel} upgrades=${state.upgrades}",
-        )
     }
 
     private fun point(

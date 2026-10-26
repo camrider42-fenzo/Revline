@@ -21,6 +21,7 @@ class UpgradePriceProbe {
         for (upgrade in Upgrades.all) {
             val delta = benefit(upgrade, 0)
             val target = priceFor(delta)
+            if (upgrade.baseCost < 80.0) continue
             val actual = upgrade.baseCost
             val low = target * 0.5
             val high = target * 2.2
