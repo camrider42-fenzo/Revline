@@ -63,9 +63,9 @@ object Income {
 object Prestige {
     const val MIN_EARNINGS = 95_000.0
 
-    fun knowledgeGain(runEarnings: Double): Int {
-        if (runEarnings < MIN_EARNINGS) return 0
-        val raw = 3.0 * (runEarnings / MIN_EARNINGS).pow(0.5)
+    fun knowledgeGain(runEarnings: Double, threshold: Double = MIN_EARNINGS): Int {
+        if (runEarnings < threshold) return 0
+        val raw = 3.0 * (runEarnings / threshold).pow(0.5)
         return kotlin.math.floor(raw).toInt().coerceAtLeast(1)
     }
 
