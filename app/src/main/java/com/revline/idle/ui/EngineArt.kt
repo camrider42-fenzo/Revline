@@ -59,33 +59,42 @@ fun EngineArt(
     val exhaustGain = ((egtC - 420f) / 480f).coerceIn(0.55f, 1.45f)
     Canvas(
         modifier.semantics {
-            contentDescription = "Line-art inline-four, coolant ${coolantC.toInt()} degrees, ${rpm.toInt()} rpm"
+            contentDescription = "${params.blockTitle}, coolant ${coolantC.toInt()} degrees, ${rpm.toInt()} rpm"
         },
     ) {
         val w = size.width
         val h = size.height
         val stroke = (w / 170f).coerceIn(1.7f, 3.4f)
-        val n = 4
-        val left = w * 0.30f
-        val right = w * 0.84f
-        val gap = (right - left) / n
+        val n = params.cylinders.coerceIn(1, 12)
+        val perBank = if (params.banks >= 2) (n / 2).coerceAtLeast(1) else n
+        val span = when {
+            perBank <= 1 -> w * 0.28f
+            perBank == 2 -> w * 0.40f
+            perBank == 3 -> w * 0.50f
+            else -> w * 0.54f
+        }
+        val left = if (params.banks >= 2) w * 0.28f else w * 0.36f - span * 0.15f
+        val right = left + span
+        val gap = (right - left) / perBank
         val crankY = h * 0.73f
-        val crankThrow = h * 0.055f
-        val rod = h * 0.155f
-        val phases = floatArrayOf(0f, 180f, 180f, 0f)
+        val crankThrow = h * if (n == 1) 0.07f else 0.055f
+        val rod = h * if (n == 1) 0.20f else 0.155f
+        val phases = firingPhases(perBank)
         val pulse = 0.82f + 0.18f * sin(clock * (2.2f + spinRpm / 1800f))
 
         val radRows = when {
+            params.airCooled -> 0
             params.radiatorUa > 1600.0 -> 4
             params.radiatorUa > 1200.0 -> 3
             params.radiatorUa > 950.0 -> 2
             else -> 1
         }
-        val radW = w * (0.055f + 0.012f * radRows)
+        val radW = w * (0.055f + 0.012f * radRows.coerceAtLeast(1))
         val radL = w * 0.05f
         val radR = radL + radW
         val radT = h * 0.22f
         val radB = h * 0.62f
+        if (!params.airCooled) {
         glowLine(White, Offset(radL, radT), Offset(radR, radT), stroke, 0.7f)
         glowLine(White, Offset(radR, radT), Offset(radR, radB), stroke, 0.7f)
         glowLine(White, Offset(radR, radB), Offset(radL, radB), stroke, 0.7f)
@@ -95,7 +104,8 @@ fun EngineArt(
             val shimmer = 0.45f + 0.55f * ((sin(clock * 3.4f + i) + 1f) / 2f)
             glowLine(Cyan, Offset(x, radT + 4f), Offset(x, radB - 4f), stroke * 0.7f, shimmer)
         }
-        if (params.intercoolerEff > 0.05) {
+        }
+        if (params.intercoolerEff > 0.05 && !params.airCooled) {
             val icL = w * 0.012f
             val icR = radL - 4f
             val icB = radT + h * 0.16f
@@ -112,6 +122,8 @@ fun EngineArt(
             glowLine(Amber, Offset(radL, y + h * 0.08f), Offset(radL, y), stroke)
         }
 
+        val exhY = h * 0.37f
+        if (params.banks < 2) {
         glowLine(White, Offset(left - 6f, h * 0.40f), Offset(right, h * 0.40f), stroke, pulse)
         glowLine(White, Offset(left - 6f, h * 0.33f), Offset(right - 8f, h * 0.33f), stroke, 0.85f)
         glowLine(White, Offset(left - 6f, h * 0.33f), Offset(left - 6f, h * 0.40f), stroke, 0.85f)
@@ -155,7 +167,6 @@ fun EngineArt(
             glowCircle(Cyan, stroke * 1.6f, Offset(left + gap, h * 0.15f), stroke, gain = 1.2f)
         }
 
-        val exhY = h * 0.37f
         if (params.backpressure < 0.78f) {
             for (i in 0 until n) {
                 val cx = left + gap * (i + 0.5f)
@@ -163,6 +174,7 @@ fun EngineArt(
             }
         } else {
             glowLine(exhaust, Offset(left, exhY), Offset(right, exhY), stroke, exhaustGain)
+        }
         }
 
         if (params.induction == Induction.TURBO || params.induction == Induction.TWIN_TURBO) {
@@ -209,6 +221,7 @@ fun EngineArt(
             glowLine(White, Offset(left - 4f, crankY), Offset(left + w * 0.08f, h * 0.32f), stroke * 0.7f, 0.8f)
         }
 
+        if (!params.airCooled) {
         glowLine(hose, Offset(radR, radT + 6f), Offset(left, h * 0.34f), stroke * 0.9f, 1.05f)
         val pumpY = crankY
         glowLine(hose, Offset(radR, radB - 6f), Offset(left, pumpY), stroke * 0.9f, 1.05f)
@@ -229,8 +242,11 @@ fun EngineArt(
             glowCircle(hose, stroke * 0.85f, Offset(upperA.x + (upperB.x - upperA.x) * u, upperA.y + (upperB.y - upperA.y) * u), stroke, filled = true, gain = 0.9f)
             glowCircle(hose, stroke * 0.7f, Offset(lowerA.x + (lowerB.x - lowerA.x) * u, lowerA.y + (lowerB.y - lowerA.y) * u), stroke, filled = true, gain = 0.75f)
         }
+        }
 
-        for (i in 0 until n) {
+        if (params.banks >= 2) {
+            drawVee(params, w, h, stroke, angle, exhaust, exhaustGain, perBank, gap)
+        } else for (i in 0 until perBank) {
             val cx = left + gap * (i + 0.5f)
             val th = Math.toRadians((angle + phases[i]).toDouble())
             val pinX = cx + (sin(th) * crankThrow).toFloat()
@@ -243,6 +259,12 @@ fun EngineArt(
             val half = gap * 0.22f
             glowLine(White, Offset(cx - gap * 0.30f, h * 0.40f), Offset(cx - gap * 0.30f, crankY + h * 0.05f), stroke * 0.75f, 0.55f)
             glowLine(White, Offset(cx + gap * 0.30f, h * 0.40f), Offset(cx + gap * 0.30f, crankY + h * 0.05f), stroke * 0.75f, 0.55f)
+            if (params.airCooled) {
+                for (fin in 0 until 5) {
+                    val fy = h * 0.42f + fin * h * 0.045f
+                    glowLine(Cyan, Offset(cx - gap * 0.34f, fy), Offset(cx + gap * 0.34f, fy), stroke * 0.55f, 0.7f)
+                }
+            }
             glowLine(Cyan, Offset(cx - half, crown), Offset(cx + half, crown), stroke, 1.15f)
             glowLine(White, Offset(cx - half, crown + h * 0.04f), Offset(cx + half, crown + h * 0.04f), stroke)
             glowLine(White, Offset(cx - half, crown), Offset(cx - half, crown + h * 0.04f), stroke)
@@ -262,5 +284,61 @@ fun EngineArt(
         }
         glowLine(White, Offset(left, crankY), Offset(right - 6f, crankY), stroke * 0.75f, 0.85f)
         glowCircle(Lime, stroke * 1.7f, Offset(left, crankY), stroke, filled = true, gain = 0.55f + pulse * 0.3f)
+    }
+}
+
+private fun firingPhases(count: Int): FloatArray = when (count) {
+    1 -> floatArrayOf(0f)
+    2 -> floatArrayOf(0f, 180f)
+    3 -> floatArrayOf(0f, 240f, 120f)
+    4 -> floatArrayOf(0f, 180f, 180f, 0f)
+    else -> FloatArray(count) { index -> (index * (360f / count)) }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawVee(
+    params: EngineParams,
+    w: Float,
+    h: Float,
+    stroke: Float,
+    angle: Float,
+    exhaust: androidx.compose.ui.graphics.Color,
+    exhaustGain: Float,
+    perBank: Int,
+    gap: Float,
+) {
+    val crankY = h * 0.64f
+    val mid = w * 0.50f
+    val span = gap * perBank
+    val left = mid - span / 2f
+    glowLine(androidx.compose.ui.graphics.Color.White, Offset(left, crankY), Offset(left + span, crankY), stroke, 0.9f)
+    val crankThrow = h * 0.035f
+    for (bank in 0..1) {
+        val sign = if (bank == 0) -1f else 1f
+        val tilt = 0.72f
+        for (i in 0 until perBank) {
+            val along = left + gap * (i + 0.5f)
+            val phase = angle + bank * 90f + i * (360f / perBank)
+            val th = Math.toRadians(phase.toDouble())
+            val lift = (cos(th) * crankThrow).toFloat()
+            val pinX = along + sign * tilt * h * 0.02f
+            val pinY = crankY - lift
+            val topX = along + sign * h * 0.20f
+            val topY = crankY - h * 0.28f
+            val crownX = topX - sign * tilt * lift
+            val crownY = topY - lift
+            glowLine(androidx.compose.ui.graphics.Color.White, Offset(along, crankY - h * 0.02f), Offset(topX, topY), stroke * 0.75f, 0.8f)
+            glowLine(Cyan, Offset(crownX - 7f, crownY), Offset(crownX + 7f, crownY), stroke, 1.05f)
+            glowLine(Amber, Offset(crownX, crownY), Offset(pinX, pinY), stroke * 0.8f, 0.9f)
+            glowCircle(androidx.compose.ui.graphics.Color.White, stroke, Offset(pinX, pinY), stroke, filled = true, gain = 0.7f)
+            val fromTdc = min(kotlin.math.abs(phase % 360f), 360f - kotlin.math.abs(phase % 360f))
+            if (fromTdc < 28f) {
+                val spark = 1f - fromTdc / 28f
+                glowCircle(androidx.compose.ui.graphics.Color.White, stroke * (1f + spark * 3f), Offset(topX, topY + 6f), stroke, filled = true, gain = spark)
+                glowLine(exhaust, Offset(topX, topY), Offset(w * 0.92f, h * 0.30f), stroke * 0.45f, spark * exhaustGain)
+            }
+        }
+    }
+    if (params.airCooled) {
+        glowLine(Cyan, Offset(mid - 20f, h * 0.22f), Offset(mid + 20f, h * 0.22f), stroke * 0.6f, 0.6f)
     }
 }

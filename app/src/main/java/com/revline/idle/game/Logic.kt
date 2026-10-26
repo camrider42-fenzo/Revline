@@ -7,6 +7,7 @@ import com.revline.idle.economy.Prestige
 import com.revline.idle.economy.formatCompact
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.economy.formatDuration
+import com.revline.idle.model.Block
 import com.revline.idle.model.Coolant
 import com.revline.idle.model.EngineParams
 import com.revline.idle.model.EngineSim
@@ -41,9 +42,10 @@ object Logic {
     const val REST_THROTTLE = 0.18
 
     /** Throttle stop to crank speed. 0 is idle, 1 is the redline this block can turn. */
-    fun targetRpm(redline: Double, throttle: Double): Double {
-        val span = (redline - IDLE_RPM).coerceAtLeast(1.0)
-        return IDLE_RPM + throttle.coerceIn(0.0, 1.0) * span
+    fun targetRpm(redline: Double, throttle: Double, idle: Double = IDLE_RPM): Double {
+        val floor = idle.coerceIn(500.0, redline - 300.0)
+        val span = (redline - floor).coerceAtLeast(1.0)
+        return floor + throttle.coerceIn(0.0, 1.0) * span
     }
 
     /** Throttle plate. The last part of the pedal opens the engine into boost and a rich mixture. */
@@ -75,7 +77,7 @@ object Logic {
         var bestPay = -1.0
         var t = 0.05
         while (t <= 1.001) {
-            val rpm = targetRpm(params.redlineRpm, t)
+            val rpm = targetRpm(params.redlineRpm, t, params.idleRpm)
             val pay = incomeAt(params, rpm, stats.reliability, mult, t)
             if (pay > bestPay) {
                 bestPay = pay
@@ -87,6 +89,7 @@ object Logic {
     }
 
     fun paramsFrom(state: GameState): EngineParams {
+        val block = Block.forPrestige(state.prestiges)
         fun lvl(id: String) = state.upgrades[id] ?: 0
         val filter = lvl("filter")
         val cai = lvl("cold_air")
@@ -171,18 +174,18 @@ object Logic {
             else -> Mixture.CARB
         }
         val fuel = allowedFuel(state, state.fuel)
-        var ve = 0.93 +
+        var ve = block.peakVe +
             0.012 * filter + 0.015 * cai + 0.012 * manifold + 0.018 * itb +
             0.006 * catback + 0.010 * headers + 0.012 * longTube +
             0.020 * cam + 0.012 * vvt + 0.030 * vvl +
             0.012 * (state.perks["flow"] ?: 0)
-        var frac = 0.58 + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
+        var frac = block.vePeakFraction + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
             0.018 * longTube + 0.040 * cam + 0.015 * vvl
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
         var strength = 1.0 + 0.035 * springs + 0.08 * studs + 0.18 * pistons +
             0.11 * rods + 0.08 * crank + 0.25 * billet + 0.06 * (state.perks["fixtures"] ?: 0)
-        var flow = 1.25 + 0.12 * jets + 0.28 * pump + 0.22 * tbi + 0.42 * injectors + 0.70 * hpfp
-        var timing = 16.0 + 1.15 * baseTiming + 1.30 * mapped + 0.40 * coils
+        var flow = block.fuelFlow + 0.12 * jets + 0.28 * pump + 0.22 * tbi + 0.42 * injectors + 0.70 * hpfp
+        var timing = block.timingDeg + 1.15 * baseTiming + 1.30 * mapped + 0.40 * coils
         if (torque) timing += 1.4
         var knock = 0.18 + if (knockBox > 0) 0.60 else 0.0
         if (torque) knock += 0.10
@@ -190,7 +193,7 @@ object Logic {
         var trim = 0.10 * afr
         if (torque) trim += 0.12
         val pumpFlow = 1.0 + 0.07 * waterPump + if (electric) 0.08 else 0.0
-        var ua = (760.0 + 260.0 * radiator) * (1.0 + 0.10 * duct) * (0.92 + 0.08 * pumpFlow)
+        var ua = (block.radiatorUa + 260.0 * radiator) * (1.0 + 0.10 * duct) * (0.92 + 0.08 * pumpFlow)
         if (waterless) ua *= 0.84
         val stat = when (thermostat) {
             0 -> 88.0
@@ -204,12 +207,14 @@ object Logic {
         }
         val friction = (1.0 - 0.04 * crank - if (synthetic) 0.025 else 0.0).coerceIn(0.78, 1.2)
         return EngineParams(
-            boreMm = (86.0 + 2.0 * bore).coerceIn(80.0, 100.0),
-            compressionRatio = (9.5 + 0.38 * compression).coerceIn(8.0, 14.5),
+            cylinders = block.cylinders,
+            boreMm = (block.boreMm + block.boreMm * 0.025 * bore).coerceIn(block.boreMm * 0.9, block.boreMm * 1.2),
+            strokeMm = block.strokeMm,
+            compressionRatio = (block.compression + 0.38 * compression).coerceIn(7.5, 14.5),
             peakVe = ve.coerceIn(0.55, 1.35),
             vePeakFraction = frac.coerceIn(0.35, 0.92),
             veWidthRpm = width.coerceIn(900.0, 6500.0),
-            redlineRpm = (6500.0 + 230.0 * springs + if (vvl > 0) 150.0 else 0.0).coerceIn(4500.0, 9800.0),
+            redlineRpm = (block.redlineRpm + 180.0 * springs + if (vvl > 0) 150.0 else 0.0).coerceIn(4500.0, 14000.0),
             backpressure = bp.coerceIn(0.30, 1.40),
             timingDeg = timing.coerceIn(6.0, 38.0),
             knockControl = knock.coerceIn(0.05, 0.95),
@@ -239,6 +244,10 @@ object Logic {
             octaneBonus = 1.2 * (state.perks["octane"] ?: 0),
             underhoodDeltaC = (12.0 - 2.4 * cai).coerceIn(1.5, 25.0),
             individualThrottles = itb > 0,
+            banks = block.banks,
+            airCooled = block.airCooled && cai < 3,
+            idleRpm = block.idleRpm,
+            blockTitle = block.title,
         )
     }
 
@@ -248,8 +257,9 @@ object Logic {
         val mult = Prestige.multiplier(state.knowledge)
         val notebook = state.perks["notebook"] ?: 0
         val rp = (0.22 + stats.peakHorsepower / 850.0) * (1.0 + 0.22 * notebook)
-        val rpm = targetRpm(params.redlineRpm, state.throttle)
-        val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle)
+        val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
+        val block = Block.forPrestige(state.prestiges)
+        val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle) * block.payScale()
         return Sheet(params, stats, pay, rp, mult)
     }
 
@@ -343,8 +353,8 @@ object Logic {
         if (level >= u.maxLevel) return null
         val now = sheet(state)
         val next = sheet(state.copy(upgrades = state.upgrades + (id to level + 1)))
-        val nowRpm = targetRpm(now.params.redlineRpm, state.throttle)
-        val nextRpm = targetRpm(next.params.redlineRpm, state.throttle)
+        val nowRpm = targetRpm(now.params.redlineRpm, state.throttle, now.params.idleRpm)
+        val nextRpm = targetRpm(next.params.redlineRpm, state.throttle, next.params.idleRpm)
         val nowLoad = loadFor(state.throttle)
         val nextLoad = loadFor(state.throttle)
         return StatDelta(
@@ -422,10 +432,11 @@ object Logic {
         return state.copy(perks = state.perks + (id to rank + 1))
     }
 
-    fun canPrestige(state: GameState): Boolean = Prestige.knowledgeGain(state.runEarnings) > 0
+    fun canPrestige(state: GameState): Boolean =
+        Prestige.knowledgeGain(state.runEarnings, Block.forPrestige(state.prestiges).goalEarnings) > 0
 
     fun prestige(state: GameState): GameState {
-        val gain = Prestige.knowledgeGain(state.runEarnings)
+        val gain = Prestige.knowledgeGain(state.runEarnings, Block.forPrestige(state.prestiges).goalEarnings)
         if (gain <= 0) return state
         return state.copy(
             money = 0.0,
@@ -455,13 +466,18 @@ object Logic {
         if (fuelUnlocked(state, fuel)) fuel else FuelKind.PUMP_87
 
     fun engineTitle(params: EngineParams): String {
-        val liters = EngineSim.displacementCc(params) / 1000.0
+        val cc = EngineSim.displacementCc(params)
+        val size = if (cc < 900.0) {
+            "${cc.toInt()}cc"
+        } else {
+            String.format(java.util.Locale.US, "%.1fL", cc / 1000.0)
+        }
         val ind = when (params.induction) {
             Induction.NA -> "naturally aspirated"
             Induction.SUPERCHARGER -> "supercharged"
             Induction.TURBO -> "turbo"
             Induction.TWIN_TURBO -> "twin-turbo"
         }
-        return String.format(java.util.Locale.US, "%.2fL inline-four, %s", liters, ind)
+        return "${params.blockTitle}, $size, $ind"
     }
 }

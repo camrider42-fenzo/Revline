@@ -18,7 +18,7 @@ class StrategySweepTest {
 
     @Test
     fun pedalAndFuelStrategies() {
-        val stock = GameState()
+        val stock = GameState(prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal)
         val cooled = stock.copy(
             upgrades = mapOf(
                 "cold_air" to 4,

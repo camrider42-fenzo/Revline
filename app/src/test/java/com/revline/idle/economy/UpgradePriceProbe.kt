@@ -65,7 +65,12 @@ class UpgradePriceProbe {
     }
 
     private fun pay(upgrades: Map<String, Int>): Double {
-        val state = GameState(researched = researched, upgrades = upgrades, fuel = FuelKind.PREMIUM_93)
+        val state = GameState(
+            researched = researched,
+            upgrades = upgrades,
+            fuel = FuelKind.PREMIUM_93,
+            prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal,
+        )
         val throttle = Logic.bestThrottle(state)
         return Logic.sheet(state.copy(throttle = throttle)).incomePerSec
     }

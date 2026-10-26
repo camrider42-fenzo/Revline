@@ -113,7 +113,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
     val bucket = (ui.rpm / 50.0).toInt() * 50
     val liveLoad = if (ui.phase == DynoPhase.IDLE) Logic.loadFor(ui.game.throttle) else 1.0
     val live = remember(params, bucket, liveLoad) { EngineSim.point(params, bucket.toDouble(), liveLoad) }
-    val target = Logic.targetRpm(params.redlineRpm, ui.game.throttle)
+    val target = Logic.targetRpm(params.redlineRpm, ui.game.throttle, params.idleRpm)
     val pedalEnabled = ui.phase == DynoPhase.IDLE
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp
@@ -361,20 +361,25 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
 
 @Composable
 private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () -> Unit) {
-    val gain = Prestige.knowledgeGain(ui.game.runEarnings)
+    val gain = Prestige.knowledgeGain(
+        ui.game.runEarnings,
+        com.revline.idle.model.Block.forPrestige(ui.game.prestiges).goalEarnings,
+    )
     val free = Logic.knowledgeFree(ui.game)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Hud(ui)
-        Text("NEW LONG-BLOCK", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp))
+        val block = com.revline.idle.model.Block.forPrestige(ui.game.prestiges)
+        val next = com.revline.idle.model.Block.forPrestige(ui.game.prestiges + 1)
+        Text(block.title.uppercase(Locale.US), color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp))
         Text(
-            "Money and parts go back to a stock 2.0. Tech you already studied stays. Engineering Knowledge stays and multiplies the contract.",
+            "The next rebuild is a ${next.title}. Parts and money go back to stock. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 8.dp),
         )
         Text(
-            "This run has earned ${formatDollars(ui.game.runEarnings)}. The notebook pays out at ${formatDollars(Prestige.MIN_EARNINGS)}.",
+            "This run has earned ${formatDollars(ui.game.runEarnings)}. This engine pays out at ${formatDollars(block.goalEarnings)}.",
             color = Lime,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
@@ -393,7 +398,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
             fontSize = 12.sp,
             modifier = Modifier.padding(vertical = 8.dp),
         )
-        LineButton(if (gain > 0) "Rebuild the long-block" else "Keep the hours", gain > 0, onPrestige, Modifier.fillMaxWidth())
+        LineButton(if (gain > 0) "Rebuild into a ${next.title}" else "Keep the hours", gain > 0, onPrestige, Modifier.fillMaxWidth())
         Text("PERKS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
         Perks.all.forEach { perk ->
             val rank = ui.game.perks[perk.id] ?: 0

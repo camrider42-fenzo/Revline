@@ -48,7 +48,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val (raw, msg) = Logic.applyOffline(repo.load(), now)
         val loaded = Logic.ensureStudies(raw)
         val sheet = Logic.sheet(loaded)
-        rpm = Logic.targetRpm(sheet.params.redlineRpm, loaded.throttle)
+        rpm = Logic.targetRpm(sheet.params.redlineRpm, loaded.throttle, sheet.params.idleRpm)
         ui = UiModel(loaded, sheet, rpm, DynoPhase.IDLE, msg)
         viewModelScope.launch { loop() }
     }
@@ -65,7 +65,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val dt = ((nowNs - last) / 1e9).coerceIn(0.0, 0.5)
             last = nowNs
             clock += dt
-            val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle)
+            val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle, ui.sheet.params.idleRpm)
             val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
             val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening)
             val game = Logic.accrue(ui.game, dt, System.currentTimeMillis(), pay, ui.sheet.rpPerSec)
@@ -85,8 +85,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun advanceRpm(dt: Double, redline: Double, throttle: Double): Double {
+    private fun advanceRpm(dt: Double, redline: Double, throttle: Double, idle: Double): Double {
         val wobble = 16.0 * sin(clock * 2.4) + 6.0 * sin(clock * 6.1)
+        val floor = idle.coerceIn(500.0, redline - 300.0)
         when (phase) {
             DynoPhase.PULL -> {
                 pullT += dt
@@ -96,12 +97,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     phase = DynoPhase.RETURN
                     pullT = 0.0
                 }
-                rpm = Logic.IDLE_RPM + (redline - Logic.IDLE_RPM) * e
+                rpm = floor + (redline - floor) * e
             }
             DynoPhase.RETURN -> {
                 pullT += dt
                 val u = (pullT / 2.2).coerceIn(0.0, 1.0)
-                val stop = Logic.targetRpm(redline, throttle)
+                val stop = Logic.targetRpm(redline, throttle, floor)
                 if (pullT >= 2.2) {
                     phase = DynoPhase.IDLE
                     pullT = 0.0
@@ -111,7 +112,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             DynoPhase.IDLE -> {
-                val target = Logic.targetRpm(redline, throttle) + wobble * 0.35
+                val target = Logic.targetRpm(redline, throttle, floor) + wobble * 0.35
                 val follow = 1.0 - exp(-dt / 0.42)
                 rpm += (target - rpm) * follow
             }

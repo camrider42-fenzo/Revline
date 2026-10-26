@@ -70,6 +70,10 @@ data class EngineParams(
     val octaneBonus: Double = 0.0,
     val underhoodDeltaC: Double = 12.0,
     val individualThrottles: Boolean = false,
+    val banks: Int = 1,
+    val airCooled: Boolean = false,
+    val idleRpm: Double = 820.0,
+    val blockTitle: String = "2.0L inline-four",
 )
 
 data class OperatingPoint(

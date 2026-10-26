@@ -71,7 +71,7 @@ Parts change the inputs above. A turbo does not add a horsepower sticker. It add
 
 Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies).
 
-Rebuild resets money, the parts on this block, the fuel back to 87, and the throttle stop. Studied nodes and perks stay. You need about $95,000 earned on the current block. The first rebuild lands around an hour to an hour and a half if you hold the pedal on the stop that pays, buy what that contract can afford, and pull the dyno when the rollers are free.
+Each rebuild throws the parts away and bolts on the next engine, from a 50 cc moped single up through a thumper, a parallel twin, an inline-three, the 2.0 L inline-four, a V6, a V8, and a V12. The drawing follows the cylinder count and, from the V6 up, the vee. Studies and Engineering Knowledge stay. Knowledge still multiplies the contract and the research. The dollar goal rises with the engine, so the ladder is a long one. Further rebuilds after the V12 stay on that block and only add knowledge.
 
 Offline earnings pay 80% of the contract and 50% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
 

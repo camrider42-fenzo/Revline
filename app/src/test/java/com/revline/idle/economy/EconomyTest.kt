@@ -56,7 +56,7 @@ class EconomyTest {
 
     @Test
     fun holdingThePedalOnThePayingRpmBeatsIdle() {
-        val stock = GameState(savedAtEpochMs = 1L, throttle = 0.0)
+        val stock = GameState(savedAtEpochMs = 1L, throttle = 0.0, prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal)
         val idle = Logic.sheet(stock).incomePerSec
         val best = Logic.bestThrottle(stock)
         val peaked = Logic.sheet(stock.copy(throttle = best)).incomePerSec
@@ -151,7 +151,7 @@ class EconomyTest {
             "r:ic_node", "u:intercooler", "r:turbo_node", "r:port", "u:injectors",
             "u:fuel_pump", "r:hyper", "r:forged", "u:studs", "u:pistons", "u:compression",
         )
-        var state = GameState(savedAtEpochMs = 1L)
+        var state = GameState(savedAtEpochMs = 1L, prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal)
         state = state.copy(throttle = Logic.bestThrottle(state))
         var sheet = Logic.sheet(state)
         var t = 0.0
