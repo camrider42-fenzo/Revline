@@ -57,8 +57,8 @@ object UpgradeMap {
         return same.maxWithOrNull(compareBy<Upgrade> { closure(it).size }.thenBy { it.id })?.id
     }
 
-    const val UPGRADE_R = 48f
-    const val HUB_R = 56f
+    const val UPGRADE_R = 44f
+    const val HUB_R = 52f
 
     fun effectOf(id: String): Effect = when (id) {
         "filter", "manifold", "itb", "headers", "long_tube", "cam", "vvt", "vvl",
@@ -143,7 +143,7 @@ object UpgradeMap {
             rings.forEachIndexed { ring, capacity ->
                 if (cursor >= ordered.size) return@forEachIndexed
                 val count = minOf(capacity, ordered.size - cursor)
-                val hop = 132f + ring * 110f
+                val hop = 120f + ring * 100f
                 for (i in 0 until count) {
                     val upgrade = ordered[cursor + i]
                     val stagger = if (ring % 2 == 1) Math.PI / count else 0.0

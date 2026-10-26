@@ -94,22 +94,22 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
     val live = remember(ui.sheet.params, bucket, liveLoad) {
         EngineSim.point(ui.sheet.params, bucket.toDouble(), liveLoad)
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp)) {
-        EngineStrip(ui, live)
+    Column(Modifier.fillMaxSize().background(Black).padding(horizontal = 8.dp, vertical = 4.dp)) {
+        PartsStatus(ui, live)
         FuelRow(ui, onFuel)
         BubbleMap(
             layout = layout,
             ui = ui,
-            previews = previews,
             selected = selected.value,
             pulse = pulse,
             onSelect = { selected.value = it },
             modifier = Modifier.weight(1f).fillMaxWidth(),
         )
-        selected.value?.let { id ->
-            PartDetail(ui, id, previews[id], onBuy)
+        if (selected.value == null) {
+            PartsStatus(ui, live)
+        } else {
+            PartDetail(ui, selected.value!!, previews[selected.value], onBuy)
         }
-        EngineStrip(ui, live)
     }
 }
 
@@ -117,7 +117,6 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
 private fun BubbleMap(
     layout: UpgradeMap.BubbleMap,
     ui: UiModel,
-    previews: Map<String, StatDelta?>,
     selected: String?,
     pulse: Float,
     onSelect: (String) -> Unit,
@@ -133,7 +132,10 @@ private fun BubbleMap(
         androidx.compose.runtime.LaunchedEffect(viewW, viewH) {
             if (framed || viewW < 1f || viewH < 1f) return@LaunchedEffect
             val focus = layout.bubbles.first { it.id == Effect.BOOST.name }
-            val fit = (viewW / (560f * density)).coerceIn(0.72f, 1.15f)
+            val reach = layout.bubbles
+                .filter { it.effect == Effect.BOOST }
+                .maxOf { hypot((it.cx - focus.cx).toDouble(), (it.cy - focus.cy).toDouble()).toFloat() + it.r }
+            val fit = (minOf(viewW, viewH) / (2f * reach * density * 1.12f)).coerceIn(0.42f, 1.35f)
             scale = fit
             offset = Offset(
                 viewW / 2f - focus.cx * density * fit,
@@ -216,28 +218,33 @@ private fun BubbleMap(
                     for (edge in layout.edges) {
                         val from = index[edge.from] ?: continue
                         val to = index[edge.to] ?: continue
+                        val dx = to.cx - from.cx
+                        val dy = to.cy - from.cy
+                        val len = hypot(dx.toDouble(), dy.toDouble()).toFloat().coerceAtLeast(1f)
+                        val ux = dx / len
+                        val uy = dy / len
                         glowLine(
                             effectColor(edge.effect),
-                            Offset(from.cx * d, from.cy * d),
-                            Offset(to.cx * d, to.cy * d),
-                            2.4f,
-                            0.7f,
+                            Offset((from.cx + ux * (from.r + 2f)) * d, (from.cy + uy * (from.r + 2f)) * d),
+                            Offset((to.cx - ux * (to.r + 2f)) * d, (to.cy - uy * (to.r + 2f)) * d),
+                            1.6f,
+                            0.28f,
                         )
                     }
                     for (bubble in layout.bubbles) {
                         val level = if (bubble.hub) 0 else ui.game.upgrades[bubble.id] ?: 0
                         val affordable = !bubble.hub && Logic.canBuyUpgrade(ui.game, bubble.id)
                         val gain = when {
-                            bubble.id == selected -> 1.15f
-                            affordable -> pulse
-                            bubble.hub || level > 0 -> 0.8f
-                            else -> 0.32f
+                            bubble.id == selected -> 0.85f
+                            affordable -> 0.28f + pulse * 0.22f
+                            bubble.hub || level > 0 -> 0.42f
+                            else -> 0.16f
                         }
                         glowCircle(
                             effectColor(bubble.effect),
                             bubble.r * d,
                             Offset(bubble.cx * d, bubble.cy * d),
-                            2.4f,
+                            1.6f,
                             gain = gain,
                         )
                     }
@@ -251,7 +258,6 @@ private fun BubbleMap(
                             upgrade = Upgrades.byId(bubble.id),
                             ui = ui,
                             selected = selected == bubble.id,
-                            delta = previews[bubble.id],
                         )
                     }
                 }
@@ -267,18 +273,19 @@ private fun HubBubble(bubble: UpgradeMap.Bubble) {
         Modifier
             .offset((bubble.cx - bubble.r).dp, (bubble.cy - bubble.r).dp)
             .size((bubble.r * 2f).dp)
+            .background(Black, CircleShape)
             .border(1.5.dp, color, CircleShape)
-            .padding(10.dp),
+            .padding(6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             bubble.effect.title.uppercase(Locale.US),
             color = color,
             fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
-            lineHeight = 13.sp,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
             textAlign = TextAlign.Center,
-            maxLines = 3,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
@@ -290,28 +297,26 @@ private fun UpgradeBubble(
     upgrade: Upgrade,
     ui: UiModel,
     selected: Boolean,
-    delta: StatDelta?,
 ) {
     val level = ui.game.upgrades[upgrade.id] ?: 0
     val locked = Logic.lockLabel(ui.game, upgrade.id)
-    val affordable = Logic.canBuyUpgrade(ui.game, upgrade.id)
     val color = when {
         selected -> White
         locked != null -> Olive
-        affordable || level > 0 -> effectColor(UpgradeMap.effectOf(upgrade.id))
         else -> effectColor(UpgradeMap.effectOf(upgrade.id))
     }
     val price = when {
-        level >= upgrade.maxLevel -> "Full"
+        level >= upgrade.maxLevel -> "$level/${upgrade.maxLevel}"
         locked != null -> locked
-        else -> formatDollars(Logic.upgradeCost(ui.game, upgrade.id))
+        else -> "$level/${upgrade.maxLevel}  ${formatDollars(Logic.upgradeCost(ui.game, upgrade.id))}"
     }
     Box(
         Modifier
             .offset((bubble.cx - bubble.r).dp, (bubble.cy - bubble.r).dp)
             .size((bubble.r * 2f).dp)
+            .background(Black, CircleShape)
             .border(if (selected) 2.dp else 1.dp, color, CircleShape)
-            .padding(12.dp),
+            .padding(6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -322,50 +327,47 @@ private fun UpgradeBubble(
                 fontSize = 10.sp,
                 lineHeight = 12.sp,
                 textAlign = TextAlign.Center,
-                maxLines = 3,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "$level/${upgrade.maxLevel}",
-                color = if (level > 0) Lime else color,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-            if (delta != null) {
-                Text(
-                    forecastLabel(delta),
-                    color = Lime,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 8.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 1.dp),
-                )
-            }
-            Text(
                 price,
-                color = if (locked != null) Amber else color,
+                color = if (locked != null) Amber else if (level > 0) Lime else color,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 9.sp,
                 lineHeight = 11.sp,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }
 }
 
-private fun forecastLabel(delta: StatDelta): String {
-    val options = listOf(
-        delta.peakHp to "${signed(delta.peakHp, 2)} hp",
-        delta.peakTorque to "${signed(delta.peakTorque, 2)} tq",
-        delta.cruiseMpg to "${signed(delta.cruiseMpg, 1)} mpg",
-        delta.payPerSec to "${signed(delta.payPerSec, 3)}/s",
+@Composable
+private fun PartsStatus(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
+    val stats = ui.sheet.stats
+    Text(
+        "${formatDollars(ui.game.money)}   ${formatDollars(ui.sheet.incomePerSec)}/s    " +
+            "sheet ${formatPower(stats.peakHorsepower)} hp  ${formatPower(stats.peakTorqueLbFt)}  ${String.format(Locale.US, "%.1f", stats.cruiseMpg)} mpg",
+        color = Lime,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
-    val best = options.maxBy { kotlin.math.abs(it.first) }
-    return if (kotlin.math.abs(best.first) < 0.005) "no change" else best.second
+    Text(
+        "${live.rpm.toInt()} rpm   load ${(live.load * 100).toInt()}%   " +
+            "cool ${live.coolantTempC.toInt()}°   oil ${live.oilTempC.toInt()}°   egt ${live.egtC.toInt()}°   " +
+            "afr ${String.format(Locale.US, "%.1f", live.afr)}",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 10.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+    )
 }
 
 @Composable
@@ -421,7 +423,9 @@ private fun PartDetail(
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
-            modifier = Modifier.padding(top = 4.dp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp),
         )
         if (delta != null) {
             Forecast(ui, delta)
@@ -443,7 +447,7 @@ private fun PartDetail(
 @Composable
 private fun FuelRow(ui: UiModel, onFuel: (FuelKind) -> Unit) {
     Row(
-        Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
+        Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         FuelKind.entries.forEach { fuel ->
