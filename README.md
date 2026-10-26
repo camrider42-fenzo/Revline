@@ -2,7 +2,7 @@
 
 An offline idle shop where the contract pays from a running engine model. You buy parts, study a tech tree, and occasionally scrap the long-block for Engineering Knowledge. Nothing here phones home. There are no ads and no API keys.
 
-The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a black bubble map you drag and pinch. Bubbles are grouped by what the part changes: power, economy, boost, cooling, or durability. The groups sit close together. Studying turbocharging, supercharging, or twins bolts the first unit on, so boost shows up on the gauge once the pedal is in the spool.
+The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a black bubble map you drag and pinch. Bubbles are grouped by what the part changes: power, economy, boost, cooling, or durability. The groups sit close together. Studying turbocharging, supercharging, or twins opens that part for purchase. Nothing bolts on by itself: a lone small turbo on a big block can make less than the same block breathing on its own, so boost is a choice you can preview first.
 
 ## Build
 
@@ -47,7 +47,7 @@ A locked part on the bubble map names the upgrade you still have to buy, or the 
 
 The throttle you set is saved. Offline pay uses that same stop, at 80% of the contract and 50% of passive research, capped at 8 hours. A rebuild puts the pedal back to a light opening so the next long-block gets its own pull.
 
-Research points still tick from peak horsepower (`0.22 + HP/850` per second, more with the Dyno habit perk). A dyno pull sweeps the tach on its own, adds `8 + 0.055 * HP`, and then waits 35 seconds. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
+Research points tick from peak horsepower (`0.05 + 0.035 × HP^0.8` per second, times the knowledge multiplier, more with the Dyno habit perk). A dyno pull sweeps the tach on its own, adds `4 + 0.6 × HP^0.8`, and then waits 35 seconds. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
 
 ## The engine model
 
@@ -69,7 +69,7 @@ Cruise MPG is a 60 mph, 15 kW road load at 2,200 rpm with the wastegate or bypas
 
 Parts change the inputs above. A turbo does not add a horsepower sticker. It adds boost, backpressure, heat, and a fuel-flow demand, and the sheet moves accordingly. The price of a part is about twelve minutes of the contract that first level adds on a cooled street car, at the pedal that pays. A level that stops adding revenue gets cheaper. A level that adds more gets dearer. A part that does not move the contract stays a cheap tool.
 
-Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies).
+Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies). Studies come in five price tiers, from about 25–60 points for the basics to 10,000–11,000 for torque-model control, variable lift, and a billet bottom end. A shop that studies whenever it can finishes the basics on the moped, works through the middle tiers from the thumper to the inline-three, and closes the notebook around the V6. The research pace test checks that spread.
 
 Each rebuild throws the parts away and bolts on the next engine, from a 50 cc moped single up through a thumper, a parallel twin, an inline-three, the 2.0 L inline-four, a V6, a V8, and a V12. The drawing follows the cylinder count and, from the V6 up, the vee. Studies and Engineering Knowledge stay. Knowledge still multiplies the contract and the research (`1 + 0.12 × knowledge`).
 

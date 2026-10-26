@@ -47,8 +47,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         val now = System.currentTimeMillis()
-        val (raw, msg) = Logic.applyOffline(repo.load(), now)
-        val loaded = Logic.ensureStudies(raw)
+        val (loaded, msg) = Logic.applyOffline(repo.load(), now)
         val sheet = Logic.sheet(loaded)
         rpm = Logic.targetRpm(sheet.params.redlineRpm, loaded.throttle, sheet.params.idleRpm)
         ui = UiModel(loaded, sheet, rpm, DynoPhase.IDLE, msg)

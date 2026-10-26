@@ -37,21 +37,22 @@ class EconomyTest {
     }
 
     @Test
-    fun researchingTurboFitsTheFirstTurboAndMakesBoost() {
+    fun researchingTurboOpensTheTurboAndBuyingItMakesBoost() {
         val studied = Logic.buyResearch(
-            GameState(researchPoints = 500.0, researched = setOf("exhaust_fab")),
+            GameState(researchPoints = 1e6, money = 1e9, researched = setOf("exhaust_fab")),
             "turbo_node",
         )
-        assertEquals(1, studied.upgrades["turbo"])
-        val params = Logic.paramsFrom(studied)
+        assertEquals(com.revline.idle.model.Induction.NA, Logic.paramsFrom(studied).induction)
+        assertTrue(Logic.canBuyUpgrade(studied, "turbo"))
+        val fitted = Logic.buyUpgrade(studied, "turbo")
+        assertEquals(1, fitted.upgrades["turbo"])
+        val params = Logic.paramsFrom(fitted)
         assertEquals(com.revline.idle.model.Induction.TURBO, params.induction)
         val wideOpen = com.revline.idle.model.EngineSim.point(params, 5200.0, 1.0)
         assertTrue("wot boost ${wideOpen.boostPsi}", wideOpen.boostPsi > 3.0)
         val rpm = Logic.targetRpm(params.redlineRpm, 0.7)
         val held = com.revline.idle.model.EngineSim.point(params, rpm, Logic.loadFor(0.7))
         assertTrue("pedal boost ${held.boostPsi} at $rpm", held.boostPsi > 1.0)
-        val oldSave = Logic.ensureStudies(GameState(researched = setOf("exhaust_fab", "turbo_node")))
-        assertEquals(1, oldSave.upgrades["turbo"])
     }
 
     @Test

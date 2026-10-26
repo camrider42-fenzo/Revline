@@ -19,12 +19,12 @@ import org.junit.Test
  */
 class FullShopRunTest {
     @Test
-    fun rebuildKeepsStudiedHardware() {
+    fun rebuildKeepsStudiesButStartsNaturallyAspirated() {
         val studied = Logic.buyResearch(
-            GameState(researchPoints = 1_000.0, researched = setOf("exhaust_fab")),
+            GameState(researchPoints = 1e6, researched = setOf("exhaust_fab")),
             "turbo_node",
         )
-        assertEquals(1, studied.upgrades["turbo"])
+        assertEquals(null, studied.upgrades["turbo"])
         val ready = studied.copy(
             researched = setOf("exhaust_fab", "perf_cam", "wasted_spark", "tbi", "ic_node", "premium", "turbo_node"),
             fuel = FuelKind.PREMIUM_93,
@@ -33,8 +33,10 @@ class FullShopRunTest {
         assertTrue(Logic.canPrestige(ready))
         val rebuilt = Logic.prestige(ready)
         assertEquals(1, rebuilt.prestiges)
-        assertEquals(1, rebuilt.upgrades["turbo"])
-        assertEquals(Induction.TURBO, Logic.paramsFrom(rebuilt).induction)
+        assertTrue("turbo_node" in rebuilt.researched)
+        assertEquals(null, rebuilt.upgrades["turbo"])
+        assertEquals(Induction.NA, Logic.paramsFrom(rebuilt).induction)
+        assertEquals(null, Logic.lockReason(rebuilt, "turbo"))
     }
 
     @Test
@@ -79,8 +81,7 @@ class FullShopRunTest {
             if (bought != null) {
                 state = tune(bought)
                 sheet = Logic.sheet(state)
-                if ("turbo_node" in state.researched) {
-                    assertTrue("studied turbo missing at ${seconds / 3600.0} h", (state.upgrades["turbo"] ?: 0) >= 1)
+                if ((state.upgrades["turbo"] ?: 0) >= 1) {
                     val pulled = EngineSim.point(sheet.params, 5200.0, 1.0).boostPsi
                     assertTrue("turbo makes no boost (${pulled} psi)", pulled > 1.0)
                 }
@@ -131,7 +132,7 @@ class FullShopRunTest {
     }
 
     private fun tune(state: GameState): GameState {
-        val base = Logic.ensureStudies(state)
+        val base = state
         val throttle = Logic.bestThrottle(base)
         var tuned = base.copy(throttle = throttle)
         val fuel = FuelKind.entries
@@ -198,7 +199,7 @@ class FullShopRunTest {
         val live = EngineSim.point(sheet.params, Logic.targetRpm(sheet.params.redlineRpm, state.throttle), Logic.loadFor(state.throttle))
         assertTrue("$where soak ${live.heatSoakC}", live.heatSoakC.isFinite() && live.heatSoakC >= 0.0)
         assertTrue("$where mpg ${live.mpg}", live.mpg.isFinite() && live.mpg > 0.0)
-        if ("turbo_node" in state.researched || "twin_node" in state.researched) {
+        if ((state.upgrades["turbo"] ?: 0) > 0 || (state.upgrades["twin"] ?: 0) > 0) {
             assertTrue(where, sheet.params.induction == Induction.TURBO || sheet.params.induction == Induction.TWIN_TURBO)
         }
     }

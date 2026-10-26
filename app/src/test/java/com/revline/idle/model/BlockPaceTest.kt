@@ -167,7 +167,7 @@ class BlockPaceTest {
     }
 
     private fun tune(state: GameState): GameState {
-        val base = Logic.ensureStudies(state)
+        val base = state
         val fuel = if (Logic.fuelUnlocked(base, FuelKind.PREMIUM_93)) FuelKind.PREMIUM_93 else base.fuel
         val fueled = base.copy(fuel = fuel)
         return fueled.copy(throttle = Logic.bestThrottle(fueled))

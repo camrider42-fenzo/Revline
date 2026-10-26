@@ -292,14 +292,14 @@ object Logic {
         val stats = EngineSim.evaluate(params)
         val mult = Prestige.multiplier(state.knowledge)
         val notebook = state.perks["notebook"] ?: 0
-        val rp = (0.22 + stats.peakHorsepower / 850.0) * (1.0 + 0.22 * notebook) * mult
+        val rp = (0.05 + 0.035 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)) * (1.0 + 0.22 * notebook) * mult
         val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
         val block = Block.forPrestige(state.prestiges)
         val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle) * block.payScale()
         return Sheet(params, stats, pay, rp, mult)
     }
 
-    fun dynoReward(stats: EngineStats): Double = 8.0 + stats.peakHorsepower * 0.055
+    fun dynoReward(stats: EngineStats): Double = 4.0 + 0.6 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)
 
     fun accrue(state: GameState, dtSec: Double, nowMs: Long, incomePerSec: Double, rpPerSec: Double): GameState {
         if (dtSec <= 0.0) return state.copy(savedAtEpochMs = nowMs)
@@ -425,29 +425,10 @@ object Logic {
     fun buyResearch(state: GameState, id: String): GameState {
         if (!canBuyResearch(state, id)) return state
         val cost = ResearchTree.byId(id).cost
-        return ensureStudies(
-            state.copy(
-                researchPoints = state.researchPoints - cost,
-                researched = state.researched + id,
-            ),
+        return state.copy(
+            researchPoints = state.researchPoints - cost,
+            researched = state.researched + id,
         )
-    }
-
-    /**
-     * A finished study bolts the first piece on. Older saves that researched the
-     * turbo without a level stored still get that first turbo, so boost is real.
-     */
-    fun ensureStudies(state: GameState): GameState {
-        var upgrades = state.upgrades
-        fun grant(research: String, part: String) {
-            if (research in state.researched && (upgrades[part] ?: 0) < 1) {
-                upgrades = upgrades + (part to 1)
-            }
-        }
-        grant("turbo_node", "turbo")
-        grant("sc_node", "supercharger")
-        grant("twin_node", "twin")
-        return if (upgrades == state.upgrades) state else state.copy(upgrades = upgrades)
     }
 
     fun spentKnowledge(state: GameState): Int {
@@ -498,7 +479,7 @@ object Logic {
             tune = emptyMap(),
             fuel = FuelKind.PUMP_87,
             throttle = REST_THROTTLE,
-        ).let { ensureStudies(it) }
+        )
     }
 
     fun fuelUnlocked(state: GameState, fuel: FuelKind): Boolean = when (fuel) {
