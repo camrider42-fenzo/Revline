@@ -256,7 +256,7 @@ object Logic {
         val stats = EngineSim.evaluate(params)
         val mult = Prestige.multiplier(state.knowledge)
         val notebook = state.perks["notebook"] ?: 0
-        val rp = (0.22 + stats.peakHorsepower / 850.0) * (1.0 + 0.22 * notebook)
+        val rp = (0.22 + stats.peakHorsepower / 850.0) * (1.0 + 0.22 * notebook) * mult
         val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
         val block = Block.forPrestige(state.prestiges)
         val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle) * block.payScale()
