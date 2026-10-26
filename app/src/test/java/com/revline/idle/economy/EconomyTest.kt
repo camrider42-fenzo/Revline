@@ -73,7 +73,9 @@ class EconomyTest {
         assertEquals(0, Prestige.knowledgeGain(block.hpGoal, block.torqueGoal - 0.1, block.mpgGoal, block))
         assertEquals(0, Prestige.knowledgeGain(block.hpGoal, block.torqueGoal, block.mpgGoal - 0.1, block))
         assertEquals(1, Prestige.knowledgeGain(block.hpGoal, block.torqueGoal, block.mpgGoal, block))
-        assertTrue(Prestige.knowledgeGain(block.hpGoal * 2, block.torqueGoal * 2, block.mpgGoal * 2, block) > 1)
+        assertEquals(5, Prestige.knowledgeGain(block.hpGoal * 1.5, block.torqueGoal * 1.5, block.mpgGoal, block))
+        assertEquals(13, Prestige.knowledgeGain(block.hpGoal * 2, block.torqueGoal * 2, block.mpgGoal * 2, block))
+        assertEquals(16, Prestige.knowledgeGain(block.hpGoal * 6, block.torqueGoal * 6, block.mpgGoal * 2, block))
         assertEquals(1.12, Prestige.multiplier(1), 1e-9)
     }
 

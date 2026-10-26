@@ -365,7 +365,8 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
     val block = Block.forPrestige(ui.game.prestiges)
     val next = Block.forPrestige(ui.game.prestiges + 1)
     val stats = ui.sheet.stats
-    val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block)
+        val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block)
+        val nextMultiplier = Prestige.multiplier(ui.game.knowledge + gain)
     val free = Logic.knowledgeFree(ui.game)
     val onLast = ui.game.prestiges >= Block.entries.lastIndex
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
@@ -393,11 +394,24 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
         SheetTarget("Torque", stats.peakTorqueLbFt, block.torqueGoal, "lb-ft")
         SheetTarget("Cruise", stats.cruiseMpg, block.mpgGoal, "mpg")
         Text(
-            if (gain > 0) "Rebuild pays $gain Engineering Knowledge." else "One of those three numbers is still short.",
+            if (gain > 0) {
+                "Rebuild pays $gain Engineering Knowledge. The multiplier goes to x${String.format(Locale.US, "%.2f", nextMultiplier)}."
+            } else {
+                "One of those three numbers is still short."
+            },
             color = if (gain > 0) Cyan else Amber,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.padding(top = 6.dp),
         )
+        if (gain == 1) {
+            Text(
+                "This is the sheet minimum. Power, torque, or cruise past the target raises the payout, up to 16.",
+                color = Amber,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         Text(
             "Knowledge ${ui.game.knowledge} · free $free · rebuilds ${ui.game.prestiges} · multiplier x${String.format(Locale.US, "%.2f", ui.sheet.multiplier)}",
             color = White,
@@ -437,8 +451,10 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
 @Composable
 private fun SheetTarget(name: String, now: Double, goal: Double, unit: String) {
     val met = now >= goal
+    val ratio = if (goal > 0.0) now / goal else 0.0
+    val over = if (met && ratio >= 1.05) "  ${String.format(Locale.US, "%.2f", ratio)}×" else ""
     Text(
-        "$name  ${String.format(Locale.US, "%.1f", now)} / ${String.format(Locale.US, "%.1f", goal)} $unit",
+        "$name  ${String.format(Locale.US, "%.1f", now)} / ${String.format(Locale.US, "%.1f", goal)} $unit$over",
         color = if (met) Lime else Amber,
         fontFamily = FontFamily.Monospace,
         fontSize = 13.sp,
