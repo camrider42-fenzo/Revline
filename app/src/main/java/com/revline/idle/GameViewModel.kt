@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.revline.idle.data.GameState
 import com.revline.idle.data.SaveRepository
 import com.revline.idle.game.Logic
+import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
 import com.revline.idle.model.Block
 import com.revline.idle.model.FuelKind
@@ -149,6 +150,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun research(id: String) = mutate { Logic.buyResearch(it, id) }
     fun perk(id: String) = mutate { Logic.buyPerk(it, id) }
     fun fuel(kind: FuelKind) = mutate { Logic.selectFuel(it, kind) }
+    fun nudgeTune(id: String, direction: Int) = mutate { Tuners.nudge(it, id, direction) }
     fun prestige() = mutate { Logic.prestige(it) }
 
     private fun mutate(block: (GameState) -> GameState) {

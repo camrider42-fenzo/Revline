@@ -19,6 +19,8 @@ data class GameState(
     val fuel: FuelKind = FuelKind.PUMP_87,
     /** Dyno throttle stop, 0 at idle and 1 at redline. The contract pays the rpm this holds. */
     val throttle: Double = 0.18,
+    /** Screw positions. Missing keys are the stock stop. Locked screws are ignored. */
+    val tune: Map<String, Double> = emptyMap(),
     val savedAtEpochMs: Long = 0L,
     val dynoReadyAtEpochMs: Long = 0L,
     val version: Int = 1,

@@ -77,7 +77,9 @@ A rebuild opens when peak horsepower, peak torque, and cruise mpg all clear that
 
 The first tools on a fresh engine are cheap (a torque wrench, an oil service, a plug gap, a valve lap) so the opening minutes have something to buy. That wider shop still lands in about one to two hours per engine.
 
-Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Each engine's bolt-on shop takes a little less time than the last: a bit over two hours on the moped, down to a bit over an hour on the V12. Further rebuilds after the V12 stay on that block and only add knowledge.
+The Tune tab is the screws: idle speed, spark advance, mixture, cam center, wastegate, rev limiter, and thermostat. A screw stays locked until its part is on the engine. More of that part, and the parts that refine it (a mapped spark table, VVT, a boost controller), make the range wider and the clicks smaller. The position goes into the same engine model as the hardware, so the sheet and the contract move when you turn it. A rebuild throws the screws away with the parts.
+
+Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Further rebuilds after the V12 stay on that block and only add knowledge.
 
 Offline earnings pay 80% of the contract and 50% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
 

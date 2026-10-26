@@ -183,7 +183,7 @@ object Logic {
             Induction.TURBO -> 6.5 + (turbo - 1) * 3.2
             Induction.TWIN_TURBO -> 6.5 + (maxOf(turbo, 1) - 1) * 3.2 + twin * 2.4
         }
-        val controllerPsi = controller * 1.3
+        val controllerPsi = controller * 1.3 + Tuners.value(state, "boost")
         var spool = when (induction) {
             Induction.TWIN_TURBO -> 2500.0
             Induction.TURBO -> 3650.0
@@ -213,18 +213,20 @@ object Logic {
             0.004 * lap + 0.004 * boot + 0.003 * tip + 0.003 * gap + 0.002 * fins +
             0.012 * (state.perks["flow"] ?: 0)
         var frac = block.vePeakFraction + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
-            0.018 * longTube + 0.040 * cam + 0.015 * vvl
+            0.018 * longTube + 0.040 * cam + 0.015 * vvl + Tuners.value(state, "cam")
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
         var strength = 1.0 + 0.035 * springs + 0.08 * studs + 0.18 * pistons +
             0.11 * rods + 0.08 * crank + 0.25 * billet + 0.015 * wrench + 0.06 * (state.perks["fixtures"] ?: 0)
         var flow = block.fuelFlow + 0.12 * jets + 0.04 * needle + 0.28 * pump + 0.22 * tbi + 0.42 * injectors + 0.70 * hpfp
         var timing = block.timingDeg + 1.15 * baseTiming + 1.30 * mapped + 0.40 * coils + 0.28 * gap
         if (torque) timing += 1.4
+        timing += Tuners.value(state, "spark")
         var knock = 0.18 + if (knockBox > 0) 0.60 else 0.0
         if (torque) knock += 0.10
         var ign = 0.95 + 0.012 * plugs + 0.015 * coils + 0.008 * gap
         var trim = 0.10 * afr
         if (torque) trim += 0.12
+        trim += Tuners.value(state, "mixture")
         val pumpFlow = 1.0 + 0.07 * waterPump + if (electric) 0.08 else 0.0
         var ua = (block.radiatorUa + 260.0 * radiator) * (1.0 + 0.10 * duct) * (0.92 + 0.08 * pumpFlow)
         if (waterless) ua *= 0.84
@@ -232,7 +234,7 @@ object Logic {
             0 -> 88.0
             1 -> 82.0
             else -> 71.0
-        }
+        } + Tuners.value(state, "thermostat")
         val capPsi = when (cap) {
             0 -> 13.0
             1 -> 16.0
@@ -247,13 +249,13 @@ object Logic {
             peakVe = ve.coerceIn(0.55, 1.35),
             vePeakFraction = frac.coerceIn(0.35, 0.92),
             veWidthRpm = width.coerceIn(900.0, 6500.0),
-            redlineRpm = (block.redlineRpm + 180.0 * springs + if (vvl > 0) 150.0 else 0.0).coerceIn(4500.0, 14000.0),
+            redlineRpm = (block.redlineRpm + 180.0 * springs + Tuners.value(state, "redline") + if (vvl > 0) 150.0 else 0.0).coerceIn(4500.0, 14000.0),
             backpressure = bp.coerceIn(0.30, 1.40),
             timingDeg = timing.coerceIn(6.0, 38.0),
             knockControl = knock.coerceIn(0.05, 0.95),
             ignitionQuality = ign.coerceIn(0.70, 0.995),
             fuelFlowFactor = flow.coerceIn(0.4, 12.0),
-            afrTrim = trim.coerceIn(0.0, 2.2),
+            afrTrim = trim.coerceIn(-1.5, 2.6),
             jetQuality = ((jets + 0.35 * needle) / 4.0).coerceIn(0.0, 1.0),
             mixture = mixture,
             fuel = fuel,
@@ -266,7 +268,7 @@ object Logic {
             internalsStrength = strength.coerceIn(0.8, 3.2),
             radiatorUa = ua.coerceIn(80.0, 8000.0),
             oilCoolerUa = (110.0 * oil + 18.0 * fins).coerceAtLeast(0.0),
-            thermostatC = stat,
+            thermostatC = stat.coerceIn(68.0, 94.0),
             capPsi = capPsi,
             coolant = if (waterless) Coolant.WATERLESS else Coolant.GLYCOL_50,
             syntheticOil = synthetic,
@@ -280,7 +282,7 @@ object Logic {
             installedHp = installedHp(block, state),
             banks = block.banks,
             airCooled = block.airCooled && cai < 3,
-            idleRpm = block.idleRpm,
+            idleRpm = (block.idleRpm + Tuners.value(state, "idle")).coerceIn(500.0, block.idleRpm + 600.0),
             blockTitle = block.title,
         )
     }
@@ -493,6 +495,7 @@ object Logic {
             knowledge = state.knowledge + gain,
             prestiges = state.prestiges + 1,
             upgrades = emptyMap(),
+            tune = emptyMap(),
             fuel = FuelKind.PUMP_87,
             throttle = REST_THROTTLE,
         ).let { ensureStudies(it) }
