@@ -42,8 +42,10 @@ class EconomyTest {
         val idle = Logic.sheet(stock).incomePerSec
         val best = Logic.bestThrottle(stock)
         val peaked = Logic.sheet(stock.copy(throttle = best)).incomePerSec
-        assertTrue("idle $idle best $peaked at $best", peaked > idle * 2.5)
-        assertTrue(best > 0.15)
+        assertTrue("idle $idle best $peaked at $best", peaked > idle * 1.8)
+        val floored = Logic.sheet(stock.copy(throttle = 1.0)).incomePerSec
+        assertTrue("best $peaked at $best should beat wide open $floored", peaked > floored * 1.04)
+        assertTrue("best pedal $best", best in 0.25..0.80)
     }
 
     @Test
@@ -198,7 +200,11 @@ class EconomyTest {
             if (Logic.canPrestige(state) && step >= plan.size - 3) return t / 60.0
             if (Logic.canPrestige(state) && t > 20.0 * 60.0) return t / 60.0
         }
-        return if (Logic.canPrestige(state)) t / 60.0 else 999.0
+        if (Logic.canPrestige(state)) return t / 60.0
+        throw AssertionError(
+            "no rebuild at ${t / 60.0} min step=$step money=${state.money} earned=${state.runEarnings} " +
+                "income=${sheet.incomePerSec} throttle=${state.throttle} fuel=${state.fuel} upgrades=${state.upgrades}",
+        )
     }
 
     private fun point(

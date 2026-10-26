@@ -29,17 +29,19 @@ A copy is also written to `dist/revline-debug.apk` after a local release build f
 
 ## What the contract pays
 
-Income is the engine you have, at the rpm it is turning. The bench pedal is a throttle stop: press it down to open the throttle, and the crank chases that rpm. Horsepower, torque, and MPG are that operating point. MPG is the fuel this rpm is burning, scored as miles per gallon at a steady 60 mph, so a thirsty pull pays less even when the horsepower is up.
+Income is the pedal you are holding, after the intake has heat-soaked. The stop sets rpm and throttle-plate load together. Part throttle is vacuum, a leaner mixture, less boost, and less heat in the runners. Wide open is a rich pull, and the head soaks the charge: coolant and oil warm the manifold, a small radiator lets the head run away from the coolant, and that soak costs density and octane. A cold-air inlet, radiator, oil cooler, intercooler, or water-meth spray cuts the soak, so those parts move the pedal opening that pays.
 
 ```
 powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
-economyScore    = (mpg / 28)^0.58 * (3.40 / dollarsPerGallon)
+economyScore    = (mpg / 28)^0.72 * (3.40 / dollarsPerGallon)^0.42
 durabilityScore = (reliability/100 * condition)^1.15
-dollars/second  = 0.016 * powerScore * economyScore * durabilityScore * multiplier
+dollars/second  = 0.035 * powerScore * economyScore * durabilityScore * multiplier
 multiplier      = 1 + 0.12 * EngineeringKnowledge
 ```
 
-Pump 87 is $3.40/gal, 93 is $4.50, E85 is $4.10, and race fuel is $15. The same burn on a dearer gallon pays less. E85 also uses more gallons, so its live MPG drops on top of the price. `condition` is 1 on a clean pull and falls when this rpm is hot, knocking, or out of fuel flow. The rpm that pays best is a compromise between power and the fuel that pull drinks, and it moves when the cam, the turbo, or the fuel changes.
+Horsepower, torque, MPG, and soak are the operating point at this pedal, not the peak dyno stickers. MPG is that fuel flow scored at a steady 60 mph. `condition` falls when the pull is hot, knocking, fuel-limited, or heat-soaked past about 7°C.
+
+Pump 87 is $3.40/gal, 93 is $4.50, E85 is $4.10, and race fuel is $15. The price exponent is mild. The grade earns its price as burn speed and timing: each 6 octane over 87 is about 9% more of the fuel's energy and about 3.7° of timing, until knock. On a mild engine, 93 lands near 87. On a hot or boosted engine, 87 gives the timing back and 93 or race pulls ahead. E85 still drinks more gallons. Flooring a stock long-block is not the contract. The best stop moves up with cooling, cam, boost, and octane.
 
 A locked part on the bubble map names the upgrade you still have to buy, or the study if that is the only gate, instead of showing a price. Lines stay inside one bay.
 

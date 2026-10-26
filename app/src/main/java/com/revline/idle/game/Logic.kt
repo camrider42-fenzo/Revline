@@ -46,32 +46,44 @@ object Logic {
         return IDLE_RPM + throttle.coerceIn(0.0, 1.0) * span
     }
 
-    fun incomeAt(params: EngineParams, rpm: Double, reliability: Double, multiplier: Double): Double {
-        val point = EngineSim.point(params, rpm)
+    /** Throttle plate. The last part of the pedal opens the engine into boost and a rich mixture. */
+    fun loadFor(throttle: Double): Double {
+        val t = throttle.coerceIn(0.0, 1.0)
+        return (0.16 + 0.84 * t.pow(1.32)).coerceIn(0.16, 1.0)
+    }
+
+    fun incomeAt(
+        params: EngineParams,
+        rpm: Double,
+        reliability: Double,
+        multiplier: Double,
+        throttle: Double,
+    ): Double {
+        val point = EngineSim.point(params, rpm, loadFor(throttle))
         return Income.perSecond(point, reliability, multiplier, params.fuel.dollarsPerGallon)
     }
 
     /**
-     * Throttle opening whose steady rpm pays the most on this build.
-     * Sampled every 100 rpm. The pedal is how a person finds the same spot.
+     * Pedal opening that pays the most once the crank has caught the stop.
+     * Sampled every 5%. Flooring it is not assumed to be the answer.
      */
     fun bestThrottle(state: GameState): Double {
         val params = paramsFrom(state)
         val stats = EngineSim.evaluate(params)
         val mult = Prestige.multiplier(state.knowledge)
-        var bestRpm = IDLE_RPM
+        var bestT = 0.05
         var bestPay = -1.0
-        var rpm = IDLE_RPM
-        while (rpm <= params.redlineRpm + 0.5) {
-            val at = rpm.coerceAtMost(params.redlineRpm)
-            val pay = incomeAt(params, at, stats.reliability, mult)
+        var t = 0.05
+        while (t <= 1.001) {
+            val rpm = targetRpm(params.redlineRpm, t)
+            val pay = incomeAt(params, rpm, stats.reliability, mult, t)
             if (pay > bestPay) {
                 bestPay = pay
-                bestRpm = at
+                bestT = t
             }
-            rpm += 100.0
+            t += 0.05
         }
-        return ((bestRpm - IDLE_RPM) / (params.redlineRpm - IDLE_RPM).coerceAtLeast(1.0)).coerceIn(0.0, 1.0)
+        return bestT.coerceIn(0.0, 1.0)
     }
 
     fun paramsFrom(state: GameState): EngineParams {
@@ -237,7 +249,7 @@ object Logic {
         val notebook = state.perks["notebook"] ?: 0
         val rp = (0.22 + stats.peakHorsepower / 850.0) * (1.0 + 0.22 * notebook)
         val rpm = targetRpm(params.redlineRpm, state.throttle)
-        val pay = incomeAt(params, rpm, stats.reliability, mult)
+        val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle)
         return Sheet(params, stats, pay, rp, mult)
     }
 
@@ -333,10 +345,12 @@ object Logic {
         val next = sheet(state.copy(upgrades = state.upgrades + (id to level + 1)))
         val nowRpm = targetRpm(now.params.redlineRpm, state.throttle)
         val nextRpm = targetRpm(next.params.redlineRpm, state.throttle)
+        val nowLoad = loadFor(state.throttle)
+        val nextLoad = loadFor(state.throttle)
         return StatDelta(
             hp = next.stats.peakHorsepower - now.stats.peakHorsepower,
             torque = next.stats.peakTorqueLbFt - now.stats.peakTorqueLbFt,
-            mpg = EngineSim.point(next.params, nextRpm).mpg - EngineSim.point(now.params, nowRpm).mpg,
+            mpg = EngineSim.point(next.params, nextRpm, nextLoad).mpg - EngineSim.point(now.params, nowRpm, nowLoad).mpg,
             reliability = next.stats.reliability - now.stats.reliability,
             coolantC = next.stats.peakCoolantC - now.stats.peakCoolantC,
             oilC = next.stats.peakOilC - now.stats.peakOilC,

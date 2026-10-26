@@ -104,6 +104,10 @@ data class OperatingPoint(
     val fuelLimited: Boolean,
     /** Miles per gallon if this fuel flow were asked to hold 60 mph. Falls as the pull drinks more. */
     val mpg: Double = 0.0,
+    /** Throttle-plate load, 1.0 on a dyno pull. */
+    val load: Double = 1.0,
+    /** Degrees the intake charge picked up from the head and the bay after the cooler. */
+    val heatSoakC: Double = 0.0,
 )
 
 data class EngineStats(
@@ -174,11 +178,21 @@ object EngineSim {
         return 1.0 - cr.pow(1.0 - GAMMA_HOT)
     }
 
-    fun point(params: EngineParams, rpm: Double): OperatingPoint {
+    /**
+     * Steady pull at this rpm. [load] is the throttle plate: 1 is wide open, lower is
+     * manifold vacuum, less boost, and a leaner mixture. The result is heat-soaked,
+     * the equilibrium of holding that pedal rather than a cold first fire.
+     */
+    fun point(params: EngineParams, rpm: Double, load: Double = 1.0): OperatingPoint {
         val safeRpm = rpm.coerceAtLeast(400.0)
-        val first = once(params, safeRpm, wot = true, extraChargeC = 0.0)
-        val soak = 0.14 * max(0.0, first.coolantTempC - params.thermostatC)
-        return if (soak < 0.4) first else once(params, safeRpm, wot = true, extraChargeC = soak)
+        val open = load.coerceIn(0.12, 1.0)
+        var extra = 0.0
+        var result = once(params, safeRpm, open, extra, plate = true)
+        repeat(3) {
+            extra = heatSoakC(params, result, open)
+            result = once(params, safeRpm, open, extra, plate = true)
+        }
+        return result.copy(load = open, heatSoakC = extra)
     }
 
     fun evaluate(params: EngineParams): EngineStats {
@@ -221,7 +235,7 @@ object EngineSim {
     }
 
     fun cruiseMpg(params: EngineParams): Double {
-        val wot = once(params, CRUISE_RPM, wot = false, extraChargeC = 0.0)
+        val wot = once(params, CRUISE_RPM, load = 1.0, extraChargeC = 0.0, plate = false)
         val unthrottled = wot.brakeKw * 1000.0
         val load = (ROAD_LOAD_W / unthrottled.coerceAtLeast(1500.0)).coerceIn(0.08, 1.0)
         val vd = displacementCc(params) / 1e6
@@ -288,21 +302,50 @@ object EngineSim {
         return score.coerceIn(5.0, 99.0) to notes
     }
 
-    private fun once(params: EngineParams, rpm: Double, wot: Boolean, extraChargeC: Double): OperatingPoint {
-        val boost = if (wot) boostAt(params, rpm) else 0.0
+    /**
+     * Manifold and underhood heat soak, °C added to the charge after the intercooler.
+     * The head runs hotter than the coolant when the radiator is the bottleneck.
+     * A cold-air inlet, a bigger core, an intercooler, and water-meth all cut it.
+     */
+    fun heatSoakC(params: EngineParams, point: OperatingPoint, load: Double): Double {
+        val ua = params.radiatorUa.coerceAtLeast(80.0) + params.oilCoolerUa * 0.65
+        val headRise = (point.coolantKw.coerceAtLeast(0.0) * 1000.0) / (ua * 0.42 + 380.0)
+        val overStat = (point.coolantTempC - params.thermostatC).coerceAtLeast(0.0)
+        val metal = point.coolantTempC * 0.62 + point.oilTempC * 0.38 + headRise + overStat * 0.45
+        val residence = (2400.0 / point.rpm.coerceAtLeast(700.0)).pow(0.35).coerceIn(0.55, 1.45)
+        val open = load.coerceIn(0.0, 1.0)
+        val conductance = (0.07 + 0.30 * open) * residence
+        val cai = (params.underhoodDeltaC / 12.0).coerceIn(0.12, 1.15)
+        val gap = (metal - point.chargeTempC).coerceAtLeast(0.0)
+        val runner = gap * conductance * (0.50 + 0.50 * cai)
+        val meth = params.methFraction.coerceIn(0.0, 1.2)
+        return (runner - meth * 3.2).coerceIn(0.0, 42.0)
+    }
+
+    private fun once(
+        params: EngineParams,
+        rpm: Double,
+        load: Double,
+        extraChargeC: Double,
+        plate: Boolean,
+    ): OperatingPoint {
+        val open = if (plate) load.coerceIn(0.12, 1.0) else 1.0
+        val boost = if (plate) boostAt(params, rpm) * open.pow(1.45) else 0.0
         val ve = volumetricEfficiency(params, rpm)
         val t1 = AMBIENT_K + params.underhoodDeltaC
-        val pr = (ATM_PSI + boost) / ATM_PSI
+        val manifoldPsi = ATM_PSI * (0.30 + 0.70 * open)
+        val pr = (manifoldPsi + boost) / ATM_PSI
         val compressor = compressorTemp(t1, pr, boost, params.intercoolerEff)
         val tAfterCooler = compressor.second
         val mAirGuess = airMass(params, rpm, ve, tAfterCooler, pr)
-        val target = if (wot) wotAfr(params) else cruiseAfr(params)
+        val wotMix = if (!plate) 0.0 else open.pow(1.55)
+        val target = cruiseAfr(params) + (wotAfr(params) - cruiseAfr(params)) * wotMix
         val maxFuel = 0.0096 * params.fuelFlowFactor
         val fuelGuess = minOf(mAirGuess / target, maxFuel)
         val portFrac = portEvapFraction(params)
         val evap = ((fuelGuess * params.fuel.latentJPerKg * portFrac) / (mAirGuess * CP_AIR))
             .coerceIn(0.0, 40.0)
-        val methC = if (wot && params.methFraction > 0.0) {
+        val methC = if (plate && open > 0.62 && params.methFraction > 0.0) {
             ((fuelGuess * params.methFraction * 1.4e6) / (mAirGuess * CP_AIR)).coerceIn(0.0, 28.0)
         } else {
             0.0
@@ -315,7 +358,12 @@ object EngineSim {
         val afr = mAir / mFuel.coerceAtLeast(1e-6)
         val stoich = params.fuel.stoichAfr
         val burned = minOf(mFuel, mAir / stoich)
-        val comb = (0.975 * params.ignitionQuality).coerceIn(0.7, 0.99)
+        val octanePoints = (params.fuel.octane - 87.0).coerceAtLeast(0.0)
+        val grade = (octanePoints / 6.0).coerceIn(0.0, 3.2)
+        val gradeBurn = (1.0 + 0.09 * grade.coerceAtMost(1.15) + 0.035 * (grade - 1.15).coerceAtLeast(0.0))
+            .coerceAtMost(1.26)
+        val gradeTiming = (octanePoints * 0.62).coerceAtMost(14.0)
+        val comb = (0.975 * params.ignitionQuality * gradeBurn).coerceIn(0.7, 0.995)
         val released = burned * params.fuel.lhvJPerKg * comb
         val pumped = mFuel * params.fuel.lhvJPerKg
         val cr = params.compressionRatio
@@ -335,8 +383,8 @@ object EngineSim {
         val demand = 74.0 +
             4.6 * (cr - 8.5) +
             1.12 * boost +
-            0.34 * max(0.0, params.timingDeg - 12.0) +
-            0.08 * max(0.0, tChargeC - 28.0) -
+            0.34 * max(0.0, params.timingDeg + gradeTiming - 12.0) +
+            0.16 * max(0.0, tChargeC - 28.0) -
             (if (params.mixture == Mixture.DIRECT) 3.5 + diCool * 0.15 else 0.0)
         val margin = octane - demand
         val pull = if (margin < 0.0) {
@@ -345,17 +393,21 @@ object EngineSim {
             0.0
         }
         val unresolved = if (margin < 0.0) max(0.0, -margin - params.knockControl * 11.0) else 0.0
-        val timing = params.timingDeg - pull
+        val timing = params.timingDeg + gradeTiming - pull
         val mbt = 15.0 + 2.0 * ((rpm - 2500.0) / 1000.0) +
             0.5 * max(0.0, cr - 10.0) - 0.22 * boost
         val miss = timing - mbt
         val phase = max(0.52, 1.0 - 0.0009 * miss * miss)
-        val etaInd = etaOtto * REAL_CYCLE * (1.0 - wall) * phase
+        // Unresolved knock is octane the ECU did not pull. It burns as detonation, not as torque.
+        val detonation = (1.0 - 0.030 * unresolved).coerceIn(0.46, 1.0)
+        val etaInd = etaOtto * REAL_CYCLE * (1.0 - wall) * phase * detonation
         val pInd = released * etaInd
-        val fmep = fmepKpa(rpm, params, boost, wot)
+        val fmep = fmepKpa(rpm, params, boost, open > 0.9 && boost > 0.4)
         val vd = displacementCc(params) / 1e6
         val pFric = fmep * 1000.0 * vd * (rpm / 120.0)
-        val pBrake = max(0.0, pInd - pFric)
+        val vacuum = if (plate) (1.0 - open).coerceIn(0.0, 1.0) else 0.0
+        val pPump = 78.0 * vacuum * vacuum * 1000.0 * vd * (rpm / 120.0)
+        val pBrake = max(0.0, pInd - pFric - pPump)
         var qWalls = released * wall
         var qExhaust = max(0.0, released - pInd - qWalls)
         val moved = params.exhaustWrap.coerceIn(0.0, 1.0) * 0.10 * qWalls
@@ -397,7 +449,7 @@ object EngineSim {
             fuelPumpedKw = pumped / 1000.0,
             fuelReleasedKw = released / 1000.0,
             brakeKw = pBrake / 1000.0,
-            frictionKw = pFric / 1000.0,
+            frictionKw = (pFric + pPump) / 1000.0,
             wallKw = qWalls / 1000.0,
             brakeEfficiency = if (released > 1.0) pBrake / released else 0.0,
             knockMargin = margin,

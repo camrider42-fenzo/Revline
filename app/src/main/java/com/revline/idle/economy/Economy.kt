@@ -7,21 +7,23 @@ import kotlin.math.abs
 import kotlin.math.pow
 
 object Income {
-    const val K = 0.016
+    const val K = 0.035
     const val HP_EXP = 1.62
-    const val ECONOMY_EXP = 0.58
+    const val ECONOMY_EXP = 0.72
+    const val PRICE_EXP = 0.42
     const val REL_EXP = 1.15
     const val MPG_REF = 28.0
 
     /**
      * Contract dollars per second at the rpm the crank is turning.
      * powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
-     * economyScore    = (mpg / 28)^0.58 * (pumpPrice / thisFuelPrice)
+     * economyScore    = (mpg / 28)^0.72 * (3.40 / dollarsPerGallon)^0.42
      * durabilityScore = (reliability/100 * condition)^1.15
-     * $/s = 0.016 * powerScore * economyScore * durabilityScore * multiplier
+     * $/s = 0.035 * powerScore * economyScore * durabilityScore * multiplier
      *
-     * mpg is this pull's fuel flow scored as miles per gallon at 60 mph.
-     * A dearer gallon pays less for the same burn.
+     * mpg is this pedal's fuel flow scored as miles per gallon at 60 mph.
+     * condition falls when the pull is hot, knocking, or heat-soaked.
+     * The price exponent is gentle. Octane has to earn its keep as power, not as a tax.
      */
     fun perSecond(
         point: OperatingPoint,
@@ -34,8 +36,9 @@ object Income {
         val power = hp.pow(HP_EXP) * (1.0 + tq / 950.0)
         val mpgScore = (point.mpg.coerceAtLeast(0.8) / MPG_REF).pow(ECONOMY_EXP)
         val pump = FuelKind.PUMP_87.dollarsPerGallon
-        val priceScore = pump / dollarsPerGallon.coerceAtLeast(0.5)
-        val rel = (reliability / 100.0 * conditionFactor(point)).coerceIn(0.05, 1.0)
+        val priceScore = (pump / dollarsPerGallon.coerceAtLeast(0.5)).pow(PRICE_EXP)
+        val health = (reliability / 100.0).coerceIn(0.42, 1.0)
+        val rel = (health * conditionFactor(point)).coerceIn(0.12, 1.0)
         return K * power * mpgScore * priceScore * rel.pow(REL_EXP) * multiplier.coerceAtLeast(0.0)
     }
 
@@ -44,9 +47,10 @@ object Income {
         val cool = softLimit(point.coolantTempC, 105.0, 125.0)
         val oil = softLimit(point.oilTempC, 145.0, 175.0)
         val egt = softLimit(point.egtC, 900.0, 1050.0)
-        val knock = 1.0 - point.unresolvedKnock.coerceIn(0.0, 1.0) * 0.65
+        val knock = (1.0 - point.unresolvedKnock.coerceAtLeast(0.0) / 16.0).coerceIn(0.22, 1.0)
         val fuel = if (point.fuelLimited) 0.72 else 1.0
-        return (cool * oil * egt * knock * fuel).coerceIn(0.20, 1.0)
+        val soak = softLimit(point.heatSoakC, 7.0, 30.0)
+        return (cool * oil * egt * knock * fuel * soak).coerceIn(0.18, 1.0)
     }
 
     private fun softLimit(value: Double, ok: Double, bad: Double): Double {

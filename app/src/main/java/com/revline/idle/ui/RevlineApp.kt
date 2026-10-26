@@ -111,7 +111,8 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
     val params = ui.sheet.params
     val stats = ui.sheet.stats
     val bucket = (ui.rpm / 50.0).toInt() * 50
-    val live = remember(params, bucket) { EngineSim.point(params, bucket.toDouble()) }
+    val liveLoad = if (ui.phase == DynoPhase.IDLE) Logic.loadFor(ui.game.throttle) else 1.0
+    val live = remember(params, bucket, liveLoad) { EngineSim.point(params, bucket.toDouble(), liveLoad) }
     val target = Logic.targetRpm(params.redlineRpm, ui.game.throttle)
     val pedalEnabled = ui.phase == DynoPhase.IDLE
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -127,7 +128,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                         ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
                     }
                     Text(
-                        "Press the pedal down. The cyan mark is the stop. Pay follows the rpm the crank actually reaches.",
+                        "The stop is a load, not a free rev. Heat soak and fuel use punish the floor. Cooling, octane, and the cam move the pedal that pays.",
                         color = White,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
@@ -151,7 +152,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                     ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))
                 }
                 Text(
-                    "Press the pedal down to chase the rpm that pays. The cyan mark is where the stop is aimed.",
+                    "Heat soak and a rich mixture tax a floored pedal. The cyan mark is the stop. Pay follows this load.",
                     color = White,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
@@ -196,7 +197,7 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
         Text(
-            "At ${live.rpm.toInt()} rpm · ${String.format(Locale.US, "%.1f", 60.0 / live.mpg.coerceAtLeast(0.8))} gal/h · fuel $${String.format(Locale.US, "%.2f", ui.sheet.params.fuel.dollarsPerGallon)}/gal · peak ${s.peakHorsepower.toInt()} hp",
+            "At ${live.rpm.toInt()} rpm · load ${(live.load * 100).toInt()}% · soak ${live.heatSoakC.toInt()}°C · ${String.format(Locale.US, "%.1f", 60.0 / live.mpg.coerceAtLeast(0.8))} gal/h · $${String.format(Locale.US, "%.2f", ui.sheet.params.fuel.dollarsPerGallon)}/gal",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

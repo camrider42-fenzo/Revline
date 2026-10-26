@@ -65,7 +65,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             last = nowNs
             clock += dt
             val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle)
-            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier)
+            val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
+            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening)
             val game = Logic.accrue(ui.game, dt, System.currentTimeMillis(), pay, ui.sheet.rpPerSec)
             publish(
                 ui.copy(
