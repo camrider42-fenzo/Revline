@@ -71,7 +71,11 @@ Parts change the inputs above. A turbo does not add a horsepower sticker. It add
 
 Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies).
 
-Each rebuild throws the parts away and bolts on the next engine, from a 50 cc moped single up through a thumper, a parallel twin, an inline-three, the 2.0 L inline-four, a V6, a V8, and a V12. The drawing follows the cylinder count and, from the V6 up, the vee. Studies and Engineering Knowledge stay. Knowledge still multiplies the contract and the research. The dollar goal rises with the engine, so the ladder is a long one. Further rebuilds after the V12 stay on that block and only add knowledge.
+Each rebuild throws the parts away and bolts on the next engine, from a 50 cc moped single up through a thumper, a parallel twin, an inline-three, the 2.0 L inline-four, a V6, a V8, and a V12. The drawing follows the cylinder count and, from the V6 up, the vee. Studies and Engineering Knowledge stay. Knowledge still multiplies the contract and the research (`1 + 0.12 × knowledge`).
+
+A rebuild opens when peak horsepower, peak torque, and cruise mpg all clear that engine's sheet. Meeting it pays one Engineering Knowledge. Clearing every number by a margin pays more, up to eight. Stock misses the power and torque numbers. A bolt-on build (filter, exhaust, cold air) clears the sheet, and so does a finished engine. A half-built boost setup can miss the mpg number until the rest of the engine is on.
+
+Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Each engine's bolt-on shop takes a little less time than the last: a bit over two hours on the moped, down to a bit over an hour on the V12. Further rebuilds after the V12 stay on that block and only add knowledge.
 
 Offline earnings pay 80% of the contract and 50% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
 
@@ -81,4 +85,4 @@ Offline earnings pay 80% of the contract and 50% of passive research, capped at 
 ./gradlew testDebugUnitTest
 ```
 
-The unit tests cover the Otto and boiling-point anchors, the stock band, energy balance, cam tradeoffs, radiator and intercooler temperature, spark versus EGT, fuel-flow limiting, knock on high compression, the income formula, offline pay, the save file, a scripted first-rebuild timing check, and a full shop run that buys every study and every part level. That full run is the balance and bug gate before an APK is published.
+The unit tests cover the Otto and boiling-point anchors, the stock band, energy balance, cam tradeoffs, radiator and intercooler temperature, spark versus EGT, fuel-flow limiting, knock on high compression, the income formula, offline pay, the save file, a scripted first-rebuild timing check, the per-engine pace of the horsepower / torque / mpg sheet, and a full shop run that buys every study and every part level. That full run is the balance and bug gate before an APK is published.

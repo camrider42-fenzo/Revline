@@ -68,8 +68,12 @@ class EconomyTest {
 
     @Test
     fun prestigePaysNothingUnderTheThreshold() {
-        assertEquals(0, Prestige.knowledgeGain(Prestige.MIN_EARNINGS - 1.0))
-        assertTrue(Prestige.knowledgeGain(Prestige.MIN_EARNINGS) >= 1)
+        val block = com.revline.idle.model.Block.MOPED
+        assertEquals(0, Prestige.knowledgeGain(block.hpGoal - 0.1, block.torqueGoal, block.mpgGoal, block))
+        assertEquals(0, Prestige.knowledgeGain(block.hpGoal, block.torqueGoal - 0.1, block.mpgGoal, block))
+        assertEquals(0, Prestige.knowledgeGain(block.hpGoal, block.torqueGoal, block.mpgGoal - 0.1, block))
+        assertEquals(1, Prestige.knowledgeGain(block.hpGoal, block.torqueGoal, block.mpgGoal, block))
+        assertTrue(Prestige.knowledgeGain(block.hpGoal * 2, block.torqueGoal * 2, block.mpgGoal * 2, block) > 1)
         assertEquals(1.12, Prestige.multiplier(1), 1e-9)
     }
 
@@ -136,29 +140,21 @@ class EconomyTest {
     }
 
     @Test
-    fun scriptedShopReachesTheFirstRebuildInAboutAnHour() {
+    fun scriptedShopReachesTheFirstRebuildInAFewHours() {
         val minutes = scriptedMinutes()
-        assertTrue("first rebuild in $minutes min", minutes in 25.0..95.0)
+        assertTrue("first rebuild in $minutes min", minutes in 110.0..155.0)
     }
 
     private fun scriptedMinutes(): Double {
-        val plan = listOf(
-            "u:synthetic", "u:filter", "u:plugs", "u:cap", "u:catback", "u:jets", "u:radiator",
-            "u:base_timing", "u:cold_air", "u:fuel_pump", "r:exhaust_fab", "r:premium",
-            "r:heat_basics", "u:headers", "u:duct", "u:water_pump", "r:tbi", "u:tbi_unit",
-            "r:piggyback", "u:mapped_timing", "u:afr_map", "r:wasted_spark", "u:coils",
-            "r:oil_science", "u:oil_cooler", "r:perf_cam", "u:springs", "u:cam",
-            "r:ic_node", "u:intercooler", "r:turbo_node", "r:port", "u:injectors",
-            "u:fuel_pump", "r:hyper", "r:forged", "u:studs", "u:pistons", "u:compression",
-        )
-        var state = GameState(savedAtEpochMs = 1L, prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal)
+        val plan = com.revline.idle.model.BlockPaceTest.plan
+        var state = GameState(savedAtEpochMs = 1L)
         state = state.copy(throttle = Logic.bestThrottle(state))
         var sheet = Logic.sheet(state)
         var t = 0.0
         val dt = 5.0
         var step = 0
         var stuckFor = 0.0
-        while (t < 90.0 * 60.0) {
+        while (t < 200.0 * 60.0) {
             if (!Logic.canPrestige(state)) {
                 state = state.copy(
                     money = state.money + sheet.incomePerSec * dt,
@@ -200,7 +196,7 @@ class EconomyTest {
                     sheet = Logic.sheet(state)
                 } else {
                     stuckFor += dt
-                    if (stuckFor > 20.0 * 60.0) {
+                    if (stuckFor > 60.0 * 60.0) {
                     val item = plan[step]
                     val id = item.substring(2)
                     val why = if (item.startsWith("r:")) {

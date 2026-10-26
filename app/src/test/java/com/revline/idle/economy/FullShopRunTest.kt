@@ -4,6 +4,7 @@ import com.revline.idle.data.GameState
 import com.revline.idle.game.Logic
 import com.revline.idle.game.ResearchTree
 import com.revline.idle.game.Upgrades
+import com.revline.idle.model.Block
 import com.revline.idle.model.EngineSim
 import com.revline.idle.model.FuelKind
 import com.revline.idle.model.Induction
@@ -23,10 +24,23 @@ class FullShopRunTest {
             GameState(researchPoints = 1_000.0, researched = setOf("exhaust_fab")),
             "turbo_node",
         )
-        val rebuilt = Logic.prestige(
-            studied.copy(runEarnings = Prestige.MIN_EARNINGS, money = 10_000.0),
+        assertEquals(1, studied.upgrades["turbo"])
+        val ready = studied.copy(
+            researched = setOf("exhaust_fab", "turbo_node", "premium"),
+            fuel = FuelKind.PREMIUM_93,
+            upgrades = mapOf(
+                "filter" to 5,
+                "catback" to 3,
+                "headers" to 3,
+                "cold_air" to 2,
+                "plugs" to 2,
+                "springs" to 2,
+                "synthetic" to 1,
+            ),
         )
-        assertTrue(rebuilt.prestiges == 1)
+        assertTrue(Logic.canPrestige(ready))
+        val rebuilt = Logic.prestige(ready)
+        assertEquals(1, rebuilt.prestiges)
         assertEquals(1, rebuilt.upgrades["turbo"])
         assertEquals(Induction.TURBO, Logic.paramsFrom(rebuilt).induction)
     }
@@ -81,8 +95,22 @@ class FullShopRunTest {
                 continue
             }
             if (prestiges < 2 && Logic.canPrestige(state)) {
-                notes.append(String.format(Locale.US, "rebuild %d at %.1f h  $%.0f/s%n", prestiges + 1, seconds / 3600.0, sheet.incomePerSec))
-                state = tune(Logic.prestige(state))
+                val rebuilt = tune(Logic.prestige(state))
+                val nextSheet = Logic.sheet(rebuilt)
+                notes.append(
+                    String.format(
+                        Locale.US,
+                        "rebuild %d at %.2f h  $%.0f/s  hp %.1f -> %s hp %.1f  parts %s%n",
+                        prestiges + 1,
+                        seconds / 3600.0,
+                        sheet.incomePerSec,
+                        sheet.stats.peakHorsepower,
+                        Block.forPrestige(rebuilt.prestiges).title,
+                        nextSheet.stats.peakHorsepower,
+                        rebuilt.upgrades,
+                    ),
+                )
+                state = rebuilt
                 sheet = Logic.sheet(state)
                 prestiges++
                 checkSanity(state, sheet, seconds)

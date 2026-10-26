@@ -302,7 +302,8 @@ object Logic {
     fun upgradeCost(state: GameState, id: String): Double {
         val u = Upgrades.byId(id)
         val level = state.upgrades[id] ?: 0
-        return u.baseCost * u.growth.pow(level.toDouble()) * costMultiplier(state) * 0.5
+        val scale = Block.forPrestige(state.prestiges).upgradePriceScale(state.prestiges)
+        return u.baseCost * u.growth.pow(level.toDouble()) * costMultiplier(state) * 0.5 * scale
     }
 
     /**
@@ -432,11 +433,19 @@ object Logic {
         return state.copy(perks = state.perks + (id to rank + 1))
     }
 
-    fun canPrestige(state: GameState): Boolean =
-        Prestige.knowledgeGain(state.runEarnings, Block.forPrestige(state.prestiges).goalEarnings) > 0
+    fun canPrestige(state: GameState): Boolean {
+        val stats = sheet(state).stats
+        return Prestige.meets(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, Block.forPrestige(state.prestiges))
+    }
 
     fun prestige(state: GameState): GameState {
-        val gain = Prestige.knowledgeGain(state.runEarnings, Block.forPrestige(state.prestiges).goalEarnings)
+        val stats = sheet(state).stats
+        val gain = Prestige.knowledgeGain(
+            stats.peakHorsepower,
+            stats.peakTorqueLbFt,
+            stats.cruiseMpg,
+            Block.forPrestige(state.prestiges),
+        )
         if (gain <= 0) return state
         return state.copy(
             money = 0.0,

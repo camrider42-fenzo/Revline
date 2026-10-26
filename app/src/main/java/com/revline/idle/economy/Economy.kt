@@ -1,5 +1,6 @@
 package com.revline.idle.economy
 
+import com.revline.idle.model.Block
 import com.revline.idle.model.FuelKind
 import com.revline.idle.model.OperatingPoint
 import java.util.Locale
@@ -61,12 +62,14 @@ object Income {
 }
 
 object Prestige {
-    const val MIN_EARNINGS = 95_000.0
+    fun meets(hp: Double, torque: Double, mpg: Double, block: Block): Boolean =
+        hp >= block.hpGoal && torque >= block.torqueGoal && mpg >= block.mpgGoal
 
-    fun knowledgeGain(runEarnings: Double, threshold: Double = MIN_EARNINGS): Int {
-        if (runEarnings < threshold) return 0
-        val raw = 3.0 * (runEarnings / threshold).pow(0.5)
-        return kotlin.math.floor(raw).toInt().coerceAtLeast(1)
+    /** One point for clearing the sheet, more if every number is past the bar. */
+    fun knowledgeGain(hp: Double, torque: Double, mpg: Double, block: Block): Int {
+        if (!meets(hp, torque, mpg, block)) return 0
+        val ratio = minOf(hp / block.hpGoal, torque / block.torqueGoal, mpg / block.mpgGoal)
+        return kotlin.math.floor(1.0 + (ratio - 1.0) * 4.0).toInt().coerceIn(1, 8)
     }
 
     fun multiplier(knowledge: Int): Double = 1.0 + knowledge.coerceAtLeast(0) * 0.12

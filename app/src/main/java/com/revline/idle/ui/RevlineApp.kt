@@ -38,6 +38,7 @@ import com.revline.idle.UiModel
 import com.revline.idle.economy.Prestige
 import com.revline.idle.economy.formatCompact
 import com.revline.idle.economy.formatDollars
+import com.revline.idle.model.Block
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Perks
 import com.revline.idle.game.ResearchStatus
@@ -361,33 +362,39 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
 
 @Composable
 private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () -> Unit) {
-    val gain = Prestige.knowledgeGain(
-        ui.game.runEarnings,
-        com.revline.idle.model.Block.forPrestige(ui.game.prestiges).goalEarnings,
-    )
+    val block = Block.forPrestige(ui.game.prestiges)
+    val next = Block.forPrestige(ui.game.prestiges + 1)
+    val stats = ui.sheet.stats
+    val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block)
     val free = Logic.knowledgeFree(ui.game)
+    val onLast = ui.game.prestiges >= Block.entries.lastIndex
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Hud(ui)
-        val block = com.revline.idle.model.Block.forPrestige(ui.game.prestiges)
-        val next = com.revline.idle.model.Block.forPrestige(ui.game.prestiges + 1)
         Text(block.title.uppercase(Locale.US), color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp))
         Text(
-            "The next rebuild is a ${next.title}. Parts and money go back to stock. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research.",
+            if (onLast) {
+                "Another rebuild stays on the ${block.title}. Parts and money go back to stock. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
+            } else {
+                "The next rebuild is a ${next.title}. Parts and money go back to stock. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
+            },
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 8.dp),
         )
         Text(
-            "This run has earned ${formatDollars(ui.game.runEarnings)}. This engine pays out at ${formatDollars(block.goalEarnings)}.",
-            color = Lime,
+            "The sheet has to clear power, torque, and cruise economy together.",
+            color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 8.dp),
         )
+        SheetTarget("Power", stats.peakHorsepower, block.hpGoal, "hp")
+        SheetTarget("Torque", stats.peakTorqueLbFt, block.torqueGoal, "lb-ft")
+        SheetTarget("Cruise", stats.cruiseMpg, block.mpgGoal, "mpg")
         Text(
-            if (gain > 0) "Rebuild pays $gain Engineering Knowledge." else "Not enough hours on this block yet.",
-            color = if (gain > 0) Cyan else White,
+            if (gain > 0) "Rebuild pays $gain Engineering Knowledge." else "One of those three numbers is still short.",
+            color = if (gain > 0) Cyan else Amber,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.padding(top = 6.dp),
         )
@@ -398,7 +405,16 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
             fontSize = 12.sp,
             modifier = Modifier.padding(vertical = 8.dp),
         )
-        LineButton(if (gain > 0) "Rebuild into a ${next.title}" else "Keep the hours", gain > 0, onPrestige, Modifier.fillMaxWidth())
+        LineButton(
+            when {
+                gain <= 0 -> "Keep building"
+                onLast -> "Rebuild the ${block.title}"
+                else -> "Rebuild into a ${next.title}"
+            },
+            gain > 0,
+            onPrestige,
+            Modifier.fillMaxWidth(),
+        )
         Text("PERKS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
         Perks.all.forEach { perk ->
             val rank = ui.game.perks[perk.id] ?: 0
@@ -416,6 +432,18 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+@Composable
+private fun SheetTarget(name: String, now: Double, goal: Double, unit: String) {
+    val met = now >= goal
+    Text(
+        "$name  ${String.format(Locale.US, "%.1f", now)} / ${String.format(Locale.US, "%.1f", goal)} $unit",
+        color = if (met) Lime else Amber,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 13.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
 }
 
 @Composable
