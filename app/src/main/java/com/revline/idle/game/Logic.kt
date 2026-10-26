@@ -436,7 +436,7 @@ object Logic {
             upgrades = emptyMap(),
             fuel = FuelKind.PUMP_87,
             throttle = REST_THROTTLE,
-        )
+        ).let { ensureStudies(it) }
     }
 
     fun fuelUnlocked(state: GameState, fuel: FuelKind): Boolean = when (fuel) {

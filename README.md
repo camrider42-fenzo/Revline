@@ -81,4 +81,4 @@ Offline earnings pay 80% of the contract and 50% of passive research, capped at 
 ./gradlew testDebugUnitTest
 ```
 
-The unit tests cover the Otto and boiling-point anchors, the stock band, energy balance, cam tradeoffs, radiator and intercooler temperature, spark versus EGT, fuel-flow limiting, knock on high compression, the income formula, offline pay, the save file, and a scripted first-rebuild timing check.
+The unit tests cover the Otto and boiling-point anchors, the stock band, energy balance, cam tradeoffs, radiator and intercooler temperature, spark versus EGT, fuel-flow limiting, knock on high compression, the income formula, offline pay, the save file, a scripted first-rebuild timing check, and a full shop run that buys every study and every part level. That full run is the balance and bug gate before an APK is published.
