@@ -50,6 +50,7 @@ data class EngineParams(
     val mixture: Mixture = Mixture.CARB,
     val fuel: FuelKind = FuelKind.PUMP_87,
     val maxBoostPsi: Double = 0.0,
+    val boostControllerPsi: Double = 0.0,
     val induction: Induction = Induction.NA,
     val spoolRpm: Double = 3800.0,
     val intercoolerEff: Double = 0.0,
@@ -136,7 +137,7 @@ object EngineSim {
     const val GAMMA_COLD = 1.40
     const val GAMMA_HOT = 1.30
     const val COMPRESSOR_EFF = 0.72
-    const val REAL_CYCLE = 0.84
+    const val REAL_CYCLE = 0.95
     const val SENSIBLE_EXHAUST = 0.68
     const val OIL_GALLERY_UA = 210.0
     const val OIL_SUMP_UA = 45.0
@@ -427,7 +428,7 @@ object EngineSim {
     }
 
     private fun boostAt(params: EngineParams, rpm: Double): Double {
-        val maxB = params.maxBoostPsi
+        val maxB = params.maxBoostPsi + params.boostControllerPsi
         if (params.induction == Induction.NA || maxB <= 0.0) return 0.0
         val x = (rpm / params.redlineRpm).coerceIn(0.0, 1.0)
         return when (params.induction) {

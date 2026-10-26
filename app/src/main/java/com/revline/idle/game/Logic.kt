@@ -99,7 +99,7 @@ object Logic {
             Induction.TURBO -> 6.5 + (turbo - 1) * 3.2
             Induction.TWIN_TURBO -> 6.5 + (maxOf(turbo, 1) - 1) * 3.2 + twin * 2.4
         }
-        if (induction != Induction.NA) boost += controller * 1.3
+        val controllerPsi = controller * 1.3
         var spool = when (induction) {
             Induction.TWIN_TURBO -> 2500.0
             Induction.TURBO -> 3650.0
@@ -171,6 +171,7 @@ object Logic {
             mixture = mixture,
             fuel = fuel,
             maxBoostPsi = boost.coerceIn(0.0, 40.0),
+            boostControllerPsi = controllerPsi,
             induction = induction,
             spoolRpm = spool.coerceIn(1400.0, 6000.0),
             intercoolerEff = (if (ic <= 0) 0.0 else 0.30 + (ic - 1) * 0.15).coerceIn(0.0, 0.86),
@@ -241,7 +242,7 @@ object Logic {
     fun upgradeCost(state: GameState, id: String): Double {
         val u = Upgrades.byId(id)
         val level = state.upgrades[id] ?: 0
-        return u.baseCost * u.growth.pow(level.toDouble()) * costMultiplier(state)
+        return u.baseCost * u.growth.pow(level.toDouble()) * costMultiplier(state) * 0.5
     }
 
     fun lockReason(state: GameState, id: String): String? {

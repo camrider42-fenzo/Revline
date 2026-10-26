@@ -160,7 +160,18 @@ class EconomyTest {
                     sheet = Logic.sheet(state)
                 } else {
                     stuckFor += dt
-                    if (stuckFor > 20.0 * 60.0) return 999.0
+                    if (stuckFor > 20.0 * 60.0) {
+                    val item = plan[step]
+                    val id = item.substring(2)
+                    val why = if (item.startsWith("r:")) {
+                        "${Logic.researchStatus(state, id)} cost=${ResearchTree.byId(id).cost}"
+                    } else {
+                        "lock=${Logic.lockReason(state, id)} cost=${Logic.upgradeCost(state, id)} level=${state.upgrades[id] ?: 0}"
+                    }
+                    throw AssertionError(
+                        "stuck on $item at ${t / 60.0} min money=${state.money} rp=${state.researchPoints} income=${sheet.incomePerSec} $why",
+                    )
+                }
                 }
             }
             t += dt

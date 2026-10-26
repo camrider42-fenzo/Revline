@@ -35,7 +35,7 @@ Income is not a flat number on the part. Every tick uses the current dyno sheet:
 powerScore      = HP^1.72 * (1 + torqueLbFt / 950)
 economyScore    = (MPG / 28)^0.58
 durabilityScore = (reliability / 100)^1.28 * (redline / 6500)^0.24
-dollars/second  = 0.0030 * powerScore * economyScore * durabilityScore * multiplier
+dollars/second  = 0.0055 * powerScore * economyScore * durabilityScore * multiplier
 multiplier      = 1 + 0.12 * EngineeringKnowledge
 ```
 
@@ -65,7 +65,7 @@ Parts change the inputs above. A turbo does not add a horsepower sticker. It add
 
 Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies).
 
-Rebuild resets money, the parts on this block, and the fuel back to 87. Studied nodes and perks stay. You need about $175,000 earned on the current block. The first rebuild is tuned to land around 30–60 minutes if you keep buying what the sheet says is worth it and pull the dyno when the rollers are free.
+Rebuild resets money, the parts on this block, and the fuel back to 87. Studied nodes and perks stay. You need about $95,000 earned on the current block. The first rebuild is tuned to land around 30–60 minutes if you keep buying what the sheet says is worth it and pull the dyno when the rollers are free.
 
 Offline earnings pay 80% of the contract and 50% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
 

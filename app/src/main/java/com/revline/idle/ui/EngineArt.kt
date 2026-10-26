@@ -66,7 +66,7 @@ fun EngineArt(
         val right = w * 0.86f
         val gap = (right - left) / n
         val crankY = h * 0.73f
-        val throw = h * 0.055f
+        val crankThrow = h * 0.055f
         val rod = h * 0.155f
         val phases = floatArrayOf(0f, 180f, 180f, 0f)
 
@@ -206,8 +206,8 @@ fun EngineArt(
         for (i in 0 until n) {
             val cx = left + gap * (i + 0.5f)
             val th = Math.toRadians((angle + phases[i]).toDouble())
-            val pinX = cx + (sin(th) * throw).toFloat()
-            val pinY = crankY - (cos(th) * throw).toFloat()
+            val pinX = cx + (sin(th) * crankThrow).toFloat()
+            val pinY = crankY - (cos(th) * crankThrow).toFloat()
             val horiz = pinX - cx
             val rodY = sqrt((rod * rod - horiz * horiz).coerceAtLeast(4f))
             val crown = pinY - rodY

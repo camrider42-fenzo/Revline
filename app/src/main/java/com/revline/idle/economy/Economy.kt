@@ -6,14 +6,14 @@ import kotlin.math.abs
 import kotlin.math.pow
 
 object Income {
-    const val K = 0.0030
+    const val K = 0.0055
 
     /**
      * Contract dollars per second from the dyno sheet.
      * powerScore = HP^1.72 * (1 + torque/950)
      * economyScore = (MPG/28)^0.58
      * durabilityScore = (reliability/100)^1.28 * (redline/6500)^0.24
-     * $/s = 0.0030 * powerScore * economyScore * durabilityScore * multiplier
+     * $/s = 0.0055 * powerScore * economyScore * durabilityScore * multiplier
      */
     fun perSecond(stats: EngineStats, multiplier: Double): Double {
         val hp = stats.peakHorsepower.coerceAtLeast(1.0)
@@ -29,7 +29,7 @@ object Income {
 }
 
 object Prestige {
-    const val MIN_EARNINGS = 175_000.0
+    const val MIN_EARNINGS = 95_000.0
 
     fun knowledgeGain(runEarnings: Double): Int {
         if (runEarnings < MIN_EARNINGS) return 0
