@@ -86,7 +86,7 @@ fun RevlineApp(vm: GameViewModel) {
                     Tab.PARTS -> PartsScreen(ui, vm::buy, vm::fuel)
                     Tab.TUNE -> TuneScreen(ui, vm::nudgeTune)
                     Tab.STUDY -> StudyScreen(ui, vm::research)
-                    Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige)
+                    Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
                 }
             }
         }
@@ -175,7 +175,18 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
 private fun Hud(ui: UiModel) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Column {
-            Text("REVLINE", color = White, fontFamily = FontFamily.Monospace, fontSize = 20.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("REVLINE", color = White, fontFamily = FontFamily.Monospace, fontSize = 20.sp)
+                if (ui.game.devMode) {
+                    Text(
+                        "DEV",
+                        color = Red,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(start = 8.dp).border(1.dp, Red).padding(horizontal = 4.dp, vertical = 1.dp),
+                    )
+                }
+            }
             Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 22.sp)
             Text("${formatDollars(ui.sheet.incomePerSec)}/s this rpm", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
@@ -359,7 +370,7 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
                     val label = when (status) {
                         ResearchStatus.OWNED -> "In the notebook"
                         ResearchStatus.LOCKED -> "Needs ${node.requires.joinToString { ResearchTree.byId(it).name }}"
-                        ResearchStatus.OPEN -> "${formatCompact(node.cost)} RP"
+                        ResearchStatus.OPEN -> if (ui.game.devMode) "Study · free (dev)" else "${formatCompact(node.cost)} RP"
                     }
                     LineButton(label, Logic.canBuyResearch(ui.game, node.id), { onBuy(node.id) }, Modifier.padding(top = 6.dp))
                 }
@@ -369,7 +380,7 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
 }
 
 @Composable
-private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () -> Unit) {
+private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () -> Unit, onDevMode: () -> Unit) {
     val block = Block.forPrestige(ui.game.prestiges)
     val next = Block.forPrestige(ui.game.prestiges + 1)
     val stats = ui.sheet.stats
@@ -453,6 +464,52 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
             }
             Spacer(Modifier.height(8.dp))
         }
+        Text("DEV MODE", color = Red, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+        Text(
+            if (ui.game.devMode) {
+                "On. Every part level and every study costs nothing. Study gates still apply, so open them in the STUDY tab first. Money and research keep counting."
+            } else {
+                "Off. Turning it on makes every part level and every study free, for testing builds. It stays on across rebuilds until you turn it off."
+            },
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp, bottom = 16.dp)
+                .border(1.dp, if (ui.game.devMode) Red else Olive)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDevMode,
+                )
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Free upgrades", color = White, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            DevSwitch(ui.game.devMode)
+        }
+    }
+}
+
+@Composable
+private fun DevSwitch(on: Boolean) {
+    val color = if (on) Red else Olive
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(48.dp).height(22.dp).border(1.dp, color, androidx.compose.foundation.shape.RoundedCornerShape(11.dp))) {
+            Box(
+                Modifier
+                    .align(if (on) Alignment.CenterEnd else Alignment.CenterStart)
+                    .padding(3.dp)
+                    .width(16.dp)
+                    .height(16.dp)
+                    .background(color, androidx.compose.foundation.shape.CircleShape),
+            )
+        }
+        Text(if (on) " ON" else " OFF", color = color, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
     }
 }
 

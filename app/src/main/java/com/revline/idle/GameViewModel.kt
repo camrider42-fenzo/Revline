@@ -151,6 +151,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun fuel(kind: FuelKind) = mutate { Logic.selectFuel(it, kind) }
     fun nudgeTune(id: String, direction: Int) = mutate { Tuners.nudge(it, id, direction) }
     fun prestige() = mutate { Logic.prestige(it) }
+    fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
 
     private fun mutate(block: (GameState) -> GameState) {
         val game = block(ui.game)

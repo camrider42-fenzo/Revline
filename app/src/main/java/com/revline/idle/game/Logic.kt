@@ -336,6 +336,7 @@ object Logic {
         (1.0 - 0.05 * (state.perks["tooling"] ?: 0)).coerceAtLeast(0.82)
 
     fun upgradeCost(state: GameState, id: String): Double {
+        if (state.devMode) return 0.0
         val u = Upgrades.byId(id)
         val level = state.upgrades[id] ?: 0
         val scale = Block.forPrestige(state.prestiges).upgradePriceScale(state.prestiges)
@@ -419,12 +420,15 @@ object Logic {
 
     fun canBuyResearch(state: GameState, id: String): Boolean {
         if (researchStatus(state, id) != ResearchStatus.OPEN) return false
-        return state.researchPoints >= ResearchTree.byId(id).cost
+        return state.researchPoints >= researchCost(state, id)
     }
+
+    fun researchCost(state: GameState, id: String): Double =
+        if (state.devMode) 0.0 else ResearchTree.byId(id).cost
 
     fun buyResearch(state: GameState, id: String): GameState {
         if (!canBuyResearch(state, id)) return state
-        val cost = ResearchTree.byId(id).cost
+        val cost = researchCost(state, id)
         return state.copy(
             researchPoints = state.researchPoints - cost,
             researched = state.researched + id,

@@ -21,6 +21,8 @@ data class GameState(
     val throttle: Double = 0.18,
     /** Screw positions. Missing keys are the stock stop. Locked screws are ignored. */
     val tune: Map<String, Double> = emptyMap(),
+    /** Testing switch: parts and studies cost nothing. Gates still apply. */
+    val devMode: Boolean = false,
     val savedAtEpochMs: Long = 0L,
     val dynoReadyAtEpochMs: Long = 0L,
     val version: Int = 1,

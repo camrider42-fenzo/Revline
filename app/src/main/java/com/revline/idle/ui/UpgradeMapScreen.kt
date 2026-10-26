@@ -308,6 +308,7 @@ private fun UpgradeBubble(
     val price = when {
         level >= upgrade.maxLevel -> "$level/${upgrade.maxLevel}"
         locked != null -> locked
+        ui.game.devMode -> "$level/${upgrade.maxLevel}  free"
         else -> "$level/${upgrade.maxLevel}  ${formatDollars(Logic.upgradeCost(ui.game, upgrade.id))}"
     }
     Box(
@@ -433,6 +434,7 @@ private fun PartDetail(
         val label = when {
             level >= upgrade.maxLevel -> "Installed"
             lock != null -> lock
+            ui.game.devMode -> "Fit it · free (dev)"
             else -> formatDollars(cost)
         }
         LineButton(
