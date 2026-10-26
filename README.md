@@ -67,7 +67,7 @@ Cruise MPG is a 60 mph, 15 kW road load at 2,200 rpm with the wastegate or bypas
 
 ## The rest of the shop
 
-Parts change the inputs above. A turbo does not add a horsepower sticker. It adds boost, backpressure, heat, and a fuel-flow demand, and the sheet moves accordingly.
+Parts change the inputs above. A turbo does not add a horsepower sticker. It adds boost, backpressure, heat, and a fuel-flow demand, and the sheet moves accordingly. The price of a part is about twelve minutes of the contract that first level adds on a cooled street car, at the pedal that pays. A level that stops adding revenue gets cheaper. A level that adds more gets dearer. A part that does not move the contract stays a cheap tool.
 
 Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies).
 

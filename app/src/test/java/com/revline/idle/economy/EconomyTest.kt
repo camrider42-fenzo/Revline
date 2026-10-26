@@ -148,7 +148,7 @@ class EconomyTest {
             "r:heat_basics", "u:headers", "u:duct", "u:water_pump", "r:tbi", "u:tbi_unit",
             "r:piggyback", "u:mapped_timing", "u:afr_map", "r:wasted_spark", "u:coils",
             "r:oil_science", "u:oil_cooler", "r:perf_cam", "u:springs", "u:cam",
-            "r:ic_node", "u:intercooler", "r:turbo_node", "u:turbo", "r:port", "u:injectors",
+            "r:ic_node", "u:intercooler", "r:turbo_node", "r:port", "u:injectors",
             "u:fuel_pump", "r:hyper", "r:forged", "u:studs", "u:pistons", "u:compression",
         )
         var state = GameState(savedAtEpochMs = 1L)
