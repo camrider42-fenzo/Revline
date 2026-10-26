@@ -1,30 +1,50 @@
 package com.revline.idle.economy
 
-import com.revline.idle.model.EngineStats
+import com.revline.idle.model.OperatingPoint
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.pow
 
 object Income {
-    const val K = 0.0055
+    const val K = 0.0096
+    const val HP_EXP = 1.62
+    const val ECONOMY_EXP = 0.58
+    const val REL_EXP = 1.15
+    const val BTE_REF = 0.30
 
     /**
-     * Contract dollars per second from the dyno sheet.
-     * powerScore = HP^1.72 * (1 + torque/950)
-     * economyScore = (MPG/28)^0.58
-     * durabilityScore = (reliability/100)^1.28 * (redline/6500)^0.24
-     * $/s = 0.0055 * powerScore * economyScore * durabilityScore * multiplier
+     * Contract dollars per second from the operating point the crank is at right now.
+     * powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
+     * economyScore    = (brakeThermalEfficiency / 0.30)^0.58
+     * durabilityScore = (reliability/100 * heatFactor)^1.15
+     * $/s = 0.0096 * powerScore * economyScore * durabilityScore * multiplier
+     *
+     * Horsepower, torque, and brake efficiency are the point at this rpm, not the
+     * peak stickers. heatFactor falls when this pull is hot, knocking, or fuel-limited.
      */
-    fun perSecond(stats: EngineStats, multiplier: Double): Double {
-        val hp = stats.peakHorsepower.coerceAtLeast(1.0)
-        val tq = stats.peakTorqueLbFt.coerceAtLeast(1.0)
-        val mpg = stats.cruiseMpg.coerceAtLeast(1.0)
-        val redline = stats.redlineRpm.coerceAtLeast(1.0)
-        val rel = (stats.reliability / 100.0).coerceIn(0.05, 1.0)
-        val power = hp.pow(1.72) * (1.0 + tq / 950.0)
-        val economy = (mpg / 28.0).pow(0.58)
-        val durability = rel.pow(1.28) * (redline / 6500.0).pow(0.24)
-        return K * power * economy * durability * multiplier.coerceAtLeast(0.0)
+    fun perSecond(point: OperatingPoint, reliability: Double, multiplier: Double): Double {
+        val hp = point.horsepower.coerceAtLeast(0.2)
+        val tq = point.torqueLbFt.coerceAtLeast(0.2)
+        val power = hp.pow(HP_EXP) * (1.0 + tq / 950.0)
+        val economy = (point.brakeEfficiency.coerceAtLeast(0.05) / BTE_REF).pow(ECONOMY_EXP)
+        val rel = (reliability / 100.0 * conditionFactor(point)).coerceIn(0.05, 1.0)
+        return K * power * economy * rel.pow(REL_EXP) * multiplier.coerceAtLeast(0.0)
+    }
+
+    /** 1 when this rpm is inside thermal and knock limits, down toward 0.2 when it is not. */
+    fun conditionFactor(point: OperatingPoint): Double {
+        val cool = softLimit(point.coolantTempC, 105.0, 125.0)
+        val oil = softLimit(point.oilTempC, 145.0, 175.0)
+        val egt = softLimit(point.egtC, 900.0, 1050.0)
+        val knock = 1.0 - point.unresolvedKnock.coerceIn(0.0, 1.0) * 0.65
+        val fuel = if (point.fuelLimited) 0.72 else 1.0
+        return (cool * oil * egt * knock * fuel).coerceIn(0.20, 1.0)
+    }
+
+    private fun softLimit(value: Double, ok: Double, bad: Double): Double {
+        if (value <= ok) return 1.0
+        val u = ((value - ok) / (bad - ok)).coerceIn(0.0, 1.0)
+        return 1.0 - 0.72 * u
     }
 }
 

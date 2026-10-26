@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,14 +38,11 @@ import com.revline.idle.UiModel
 import com.revline.idle.economy.Prestige
 import com.revline.idle.economy.formatCompact
 import com.revline.idle.economy.formatDollars
-import com.revline.idle.game.Category
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Perks
 import com.revline.idle.game.ResearchStatus
 import com.revline.idle.game.ResearchTree
-import com.revline.idle.game.Upgrades
 import com.revline.idle.model.EngineSim
-import com.revline.idle.model.FuelKind
 import java.util.Locale
 
 private enum class Tab(val label: String) { BENCH("BENCH"), PARTS("PARTS"), STUDY("STUDY"), REBUILD("REBUILD") }
@@ -85,7 +81,7 @@ fun RevlineApp(vm: GameViewModel) {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).background(Black)) {
                 when (tab.value) {
-                    Tab.BENCH -> BenchScreen(ui, vm::startDyno)
+                    Tab.BENCH -> BenchScreen(ui, vm::startDyno, vm::setThrottle)
                     Tab.PARTS -> PartsScreen(ui, vm::buy, vm::fuel)
                     Tab.STUDY -> StudyScreen(ui, vm::research)
                     Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige)
@@ -111,11 +107,13 @@ fun RevlineApp(vm: GameViewModel) {
 }
 
 @Composable
-private fun BenchScreen(ui: UiModel, onDyno: () -> Unit) {
+private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) -> Unit) {
     val params = ui.sheet.params
     val stats = ui.sheet.stats
     val bucket = (ui.rpm / 50.0).toInt() * 50
     val live = remember(params, bucket) { EngineSim.point(params, bucket.toDouble()) }
+    val target = Logic.targetRpm(params.redlineRpm, ui.game.throttle)
+    val pedalEnabled = ui.phase == DynoPhase.IDLE
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp
         if (wide) {
@@ -124,7 +122,17 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit) {
                     Hud(ui)
                     Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), Modifier.fillMaxWidth().height(280.dp))
-                    Tachometer(ui.rpm, params.redlineRpm, Modifier.fillMaxWidth().height(160.dp))
+                    Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(170.dp))
+                        ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
+                    }
+                    Text(
+                        "Press the pedal down. The cyan mark is the stop. Pay follows the rpm the crank actually reaches.",
+                        color = White,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
                 Column(Modifier.weight(0.9f).verticalScroll(rememberScrollState())) {
                     StatGrid(ui, live)
@@ -134,15 +142,27 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit) {
                 }
             }
         } else {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+            Column(Modifier.fillMaxSize().padding(12.dp)) {
                 Hud(ui)
                 Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), Modifier.fillMaxWidth().height(230.dp))
-                Tachometer(ui.rpm, params.redlineRpm, Modifier.fillMaxWidth().height(150.dp))
-                StatGrid(ui, live)
-                EnergyBlock(live)
-                DynoChart(stats.curve, ui.rpm, Modifier.fillMaxWidth())
-                DynoButton(ui, onDyno)
+                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), Modifier.fillMaxWidth().height(200.dp))
+                Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(148.dp))
+                    ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))
+                }
+                Text(
+                    "Press the pedal down to chase the rpm that pays. The cyan mark is where the stop is aimed.",
+                    color = White,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                )
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    StatGrid(ui, live)
+                    EnergyBlock(live)
+                    DynoChart(stats.curve, ui.rpm, Modifier.fillMaxWidth())
+                    DynoButton(ui, onDyno)
+                }
             }
         }
     }
@@ -154,7 +174,7 @@ private fun Hud(ui: UiModel) {
         Column {
             Text("REVLINE", color = White, fontFamily = FontFamily.Monospace, fontSize = 20.sp)
             Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 22.sp)
-            Text("${formatDollars(ui.sheet.incomePerSec)}/s", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text("${formatDollars(ui.sheet.incomePerSec)}/s this rpm", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
         Column(horizontalAlignment = Alignment.End) {
             Text("x${String.format(Locale.US, "%.2f", ui.sheet.multiplier)}", color = Cyan, fontFamily = FontFamily.Monospace)
@@ -170,11 +190,18 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
     val notes = if (s.reliabilityNotes.isEmpty()) "Inside limits" else s.reliabilityNotes.joinToString(" · ")
     Column(Modifier.padding(top = 8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Stat("HP", String.format(Locale.US, "%.0f", s.peakHorsepower), Lime, Modifier.weight(1f))
-            Stat("TQ", String.format(Locale.US, "%.0f", s.peakTorqueLbFt), Amber, Modifier.weight(1f))
+            Stat("HP", String.format(Locale.US, "%.0f", live.horsepower), Lime, Modifier.weight(1f))
+            Stat("TQ", String.format(Locale.US, "%.0f", live.torqueLbFt), Amber, Modifier.weight(1f))
             Stat("MPG", String.format(Locale.US, "%.1f", s.cruiseMpg), White, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
+        Text(
+            "At ${live.rpm.toInt()} rpm · peak ${s.peakHorsepower.toInt()} hp @ ${s.peakHorsepowerRpm.toInt()} · peak torque ${s.peakTorqueLbFt.toInt()} @ ${s.peakTorqueRpm.toInt()}",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Stat("COOLANT", "${live.coolantTempC.toInt()}°C", if (live.coolantTempC > 110) Red else Cyan, Modifier.weight(1f))
@@ -223,11 +250,18 @@ private fun EnergyLine(label: String, kw: Double, fraction: Double, color: Color
             Text(label, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             Text(String.format(Locale.US, "%.1f kW", kw), color = color, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
         }
-        Box(Modifier.fillMaxWidth().height(2.dp).background(Black).border(0.dp, Black)) {
+        Box(Modifier.fillMaxWidth().height(8.dp)) {
+            Box(
+                Modifier
+                    .fillMaxWidth(fraction.coerceIn(0.0, 1.0).toFloat())
+                    .height(8.dp)
+                    .background(color.copy(alpha = 0.22f)),
+            )
             Box(
                 Modifier
                     .fillMaxWidth(fraction.coerceIn(0.0, 1.0).toFloat())
                     .height(2.dp)
+                    .align(Alignment.CenterStart)
                     .background(color),
             )
         }
@@ -245,97 +279,6 @@ private fun DynoButton(ui: UiModel, onDyno: () -> Unit) {
         else -> "Dyno pull  +${formatCompact(Logic.dynoReward(ui.sheet.stats))} RP"
     }
     LineButton(label, !busy && left == 0L, onDyno, Modifier.fillMaxWidth().padding(top = 10.dp))
-}
-
-@Composable
-private fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit) {
-    val category = remember { androidx.compose.runtime.mutableStateOf(Category.INTAKE) }
-    val previews = remember(ui.game.upgrades, ui.game.researched, ui.game.fuel, ui.game.perks, ui.game.knowledge) {
-        Upgrades.all.associate { it.id to Logic.preview(ui.game, it.id) }
-    }
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
-        Hud(ui)
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
-            Category.entries.forEach { cat ->
-                Text(
-                    cat.title.uppercase(Locale.US),
-                    color = if (category.value == cat) Lime else White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .padding(end = 14.dp)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { category.value = cat },
-                )
-            }
-        }
-        if (category.value == Category.FUEL) {
-            FuelRow(ui, onFuel)
-        }
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(Upgrades.all.filter { it.category == category.value }, key = { it.id }) { upgrade ->
-                val level = ui.game.upgrades[upgrade.id] ?: 0
-                val lock = Logic.lockReason(ui.game, upgrade.id)
-                val delta = previews[upgrade.id]
-                val cost = if (level < upgrade.maxLevel) Logic.upgradeCost(ui.game, upgrade.id) else 0.0
-                Column(Modifier.fillMaxWidth().border(1.dp, White).padding(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(upgrade.name, color = White, fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Text("$level/${upgrade.maxLevel}", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                    }
-                    Text(upgrade.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-                    if (delta != null) {
-                        Text(
-                            "${signed(delta.hp, 0)} hp   ${signed(delta.torque, 0)} lb-ft   ${signed(delta.mpg)} mpg   " +
-                                "rel ${signed(delta.reliability, 0)}   coolant ${signed(delta.coolantC, 0)}°   oil ${signed(delta.oilC, 0)}°   egt ${signed(delta.egtC, 0)}°",
-                            color = Cyan,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    val label = when {
-                        level >= upgrade.maxLevel -> "Installed"
-                        lock != null -> "Needs $lock"
-                        else -> formatDollars(cost)
-                    }
-                    LineButton(
-                        label,
-                        Logic.canBuyUpgrade(ui.game, upgrade.id),
-                        { onBuy(upgrade.id) },
-                        Modifier.padding(top = 6.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FuelRow(ui: UiModel, onFuel: (FuelKind) -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FuelKind.entries.forEach { fuel ->
-            val open = Logic.fuelUnlocked(ui.game, fuel)
-            val on = ui.game.fuel == fuel
-            Text(
-                fuel.name,
-                color = if (on) Black else if (open) Lime else Olive,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier
-                    .background(if (on) Lime else Black)
-                    .border(1.dp, if (open) Lime else Olive)
-                    .clickable(
-                        enabled = open,
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onFuel(fuel) }
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            )
-        }
-    }
 }
 
 @Composable

@@ -12,6 +12,7 @@ import com.revline.idle.game.Logic
 import com.revline.idle.game.Sheet
 import com.revline.idle.model.FuelKind
 import java.io.File
+import kotlin.math.exp
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -40,12 +41,14 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private var pullT = 0.0
     private var clock = 0.0
     private var sinceSave = 0.0
+    private var rpm = Logic.IDLE_RPM
 
     init {
         val now = System.currentTimeMillis()
         val (loaded, msg) = Logic.applyOffline(repo.load(), now)
         val sheet = Logic.sheet(loaded)
-        ui = UiModel(loaded, sheet, 820.0, DynoPhase.IDLE, msg)
+        rpm = Logic.targetRpm(sheet.params.redlineRpm, loaded.throttle)
+        ui = UiModel(loaded, sheet, rpm, DynoPhase.IDLE, msg)
         viewModelScope.launch { loop() }
     }
 
@@ -61,9 +64,17 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val dt = ((nowNs - last) / 1e9).coerceIn(0.0, 0.5)
             last = nowNs
             clock += dt
-            val game = Logic.accrue(ui.game, dt, System.currentTimeMillis())
-            val rpm = advanceRpm(dt, ui.sheet.params.redlineRpm)
-            publish(ui.copy(game = game, rpm = rpm, phase = phase))
+            val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle)
+            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier)
+            val game = Logic.accrue(ui.game, dt, System.currentTimeMillis(), pay, ui.sheet.rpPerSec)
+            publish(
+                ui.copy(
+                    game = game,
+                    rpm = spun,
+                    phase = phase,
+                    sheet = ui.sheet.copy(incomePerSec = pay),
+                ),
+            )
             sinceSave += dt
             if (sinceSave > 5.0) {
                 sinceSave = 0.0
@@ -72,10 +83,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun advanceRpm(dt: Double, redline: Double): Double {
-        val idle = 820.0 + 28.0 * sin(clock * 2.4) + 12.0 * sin(clock * 6.1)
+    private fun advanceRpm(dt: Double, redline: Double, throttle: Double): Double {
+        val wobble = 16.0 * sin(clock * 2.4) + 6.0 * sin(clock * 6.1)
         when (phase) {
-            DynoPhase.IDLE -> return idle.coerceAtLeast(700.0)
             DynoPhase.PULL -> {
                 pullT += dt
                 val u = (pullT / 7.0).coerceIn(0.0, 1.0)
@@ -84,19 +94,34 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     phase = DynoPhase.RETURN
                     pullT = 0.0
                 }
-                return idle + (redline - idle) * e
+                rpm = Logic.IDLE_RPM + (redline - Logic.IDLE_RPM) * e
             }
             DynoPhase.RETURN -> {
                 pullT += dt
                 val u = (pullT / 2.2).coerceIn(0.0, 1.0)
+                val stop = Logic.targetRpm(redline, throttle)
                 if (pullT >= 2.2) {
                     phase = DynoPhase.IDLE
                     pullT = 0.0
-                    return idle
+                    rpm = stop
+                } else {
+                    rpm = redline + (stop - redline) * u
                 }
-                return redline + (idle - redline) * u
+            }
+            DynoPhase.IDLE -> {
+                val target = Logic.targetRpm(redline, throttle) + wobble * 0.35
+                val follow = 1.0 - exp(-dt / 0.42)
+                rpm += (target - rpm) * follow
             }
         }
+        return rpm.coerceIn(680.0, redline + 80.0)
+    }
+
+    fun setThrottle(position: Double) {
+        if (phase != DynoPhase.IDLE) return
+        val next = position.coerceIn(0.0, 1.0)
+        if (kotlin.math.abs(next - ui.game.throttle) < 0.002) return
+        publish(ui.copy(game = ui.game.copy(throttle = next)))
     }
 
     fun startDyno() {

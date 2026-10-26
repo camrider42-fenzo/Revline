@@ -17,6 +17,8 @@ data class GameState(
     val researched: Set<String> = emptySet(),
     val perks: Map<String, Int> = emptyMap(),
     val fuel: FuelKind = FuelKind.PUMP_87,
+    /** Dyno throttle stop, 0 at idle and 1 at redline. The contract pays the rpm this holds. */
+    val throttle: Double = 0.18,
     val savedAtEpochMs: Long = 0L,
     val dynoReadyAtEpochMs: Long = 0L,
     val version: Int = 1,

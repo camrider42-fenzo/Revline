@@ -6,8 +6,8 @@ import com.revline.idle.data.SaveRepository
 import com.revline.idle.game.Logic
 import com.revline.idle.game.ResearchTree
 import com.revline.idle.game.Upgrades
-import com.revline.idle.model.EngineStats
 import com.revline.idle.model.FuelKind
+import com.revline.idle.model.OperatingPoint
 import java.io.File
 import kotlin.math.pow
 import org.junit.Assert.assertEquals
@@ -18,18 +18,29 @@ import org.junit.Test
 class EconomyTest {
     @Test
     fun incomeMatchesThePublishedFormula() {
-        val stats = sample(100.0, 100.0, 28.0, 6500.0, 100.0)
-        val expected = Income.K * 100.0.pow(1.72) * (1.0 + 100.0 / 950.0)
-        assertEquals(expected, Income.perSecond(stats, 1.0), 1e-6)
+        val point = point(100.0, 100.0, 0.30)
+        val expected = Income.K * 100.0.pow(Income.HP_EXP) * (1.0 + 100.0 / 950.0)
+        assertEquals(expected, Income.perSecond(point, 100.0, 1.0), 1e-6)
     }
 
     @Test
     fun incomeRisesWithPowerEconomyAndReliability() {
-        val base = Income.perSecond(sample(140.0, 140.0, 30.0, 6500.0, 90.0), 1.0)
-        assertTrue(Income.perSecond(sample(200.0, 140.0, 30.0, 6500.0, 90.0), 1.0) > base)
-        assertTrue(Income.perSecond(sample(140.0, 140.0, 36.0, 6500.0, 90.0), 1.0) > base)
-        assertTrue(Income.perSecond(sample(140.0, 140.0, 30.0, 6500.0, 60.0), 1.0) < base)
-        assertEquals(base * 1.12, Income.perSecond(sample(140.0, 140.0, 30.0, 6500.0, 90.0), 1.12), 1e-6)
+        val base = Income.perSecond(point(140.0, 140.0, 0.30), 90.0, 1.0)
+        assertTrue(Income.perSecond(point(200.0, 140.0, 0.30), 90.0, 1.0) > base)
+        assertTrue(Income.perSecond(point(140.0, 140.0, 0.36), 90.0, 1.0) > base)
+        assertTrue(Income.perSecond(point(140.0, 140.0, 0.30), 60.0, 1.0) < base)
+        assertTrue(Income.perSecond(point(140.0, 140.0, 0.30, coolant = 122.0), 90.0, 1.0) < base)
+        assertEquals(base * 1.12, Income.perSecond(point(140.0, 140.0, 0.30), 90.0, 1.12), 1e-6)
+    }
+
+    @Test
+    fun holdingThePedalOnThePayingRpmBeatsIdle() {
+        val stock = GameState(savedAtEpochMs = 1L, throttle = 0.0)
+        val idle = Logic.sheet(stock).incomePerSec
+        val best = Logic.bestThrottle(stock)
+        val peaked = Logic.sheet(stock.copy(throttle = best)).incomePerSec
+        assertTrue("idle $idle best $peaked at $best", peaked > idle * 2.5)
+        assertTrue(best > 0.15)
     }
 
     @Test
@@ -118,6 +129,7 @@ class EconomyTest {
             "u:fuel_pump", "r:hyper", "r:forged", "u:studs", "u:pistons", "u:compression",
         )
         var state = GameState(savedAtEpochMs = 1L)
+        state = state.copy(throttle = Logic.bestThrottle(state))
         var sheet = Logic.sheet(state)
         var t = 0.0
         val dt = 5.0
@@ -146,15 +158,20 @@ class EconomyTest {
                     state
                 }
                 if (bought != state) {
-                    state = bought
+                    state = bought.copy(throttle = Logic.bestThrottle(bought))
                     step++
                     stuckFor = 0.0
                     if (state.researched != beforeResearch) {
                         val best = FuelKind.entries
                             .filter { Logic.fuelUnlocked(state, it) }
-                            .maxBy { kind -> Logic.sheet(state.copy(fuel = kind)).incomePerSec }
-                        if (Logic.sheet(state.copy(fuel = best)).incomePerSec > sheet.incomePerSec * 1.01) {
-                            state = state.copy(fuel = best)
+                            .maxBy { kind ->
+                                val trial = state.copy(fuel = kind)
+                                Logic.sheet(trial.copy(throttle = Logic.bestThrottle(trial))).incomePerSec
+                            }
+                        val trial = state.copy(fuel = best)
+                        val tuned = trial.copy(throttle = Logic.bestThrottle(trial))
+                        if (Logic.sheet(tuned).incomePerSec > Logic.sheet(state).incomePerSec * 1.01) {
+                            state = tuned
                         }
                     }
                     sheet = Logic.sheet(state)
@@ -181,27 +198,43 @@ class EconomyTest {
         return if (Logic.canPrestige(state)) t / 60.0 else 999.0
     }
 
-    private fun sample(hp: Double, tq: Double, mpg: Double, redline: Double, rel: Double) = EngineStats(
-        displacementCc = 1998.0,
-        peakHorsepower = hp,
-        peakHorsepowerRpm = 6000.0,
-        peakTorqueLbFt = tq,
-        peakTorqueRpm = 4000.0,
-        cruiseMpg = mpg,
-        redlineRpm = redline,
-        reliability = rel,
-        reliabilityNotes = emptyList(),
-        meanPistonSpeedMps = 18.0,
-        peakCoolantC = 90.0,
-        peakOilC = 110.0,
-        peakEgtC = 800.0,
-        peakChargeC = 30.0,
-        peakCoolantKw = 30.0,
-        peakOilKw = 8.0,
-        peakExhaustKw = 40.0,
-        peakFuelKw = 100.0,
-        peakBrakeEfficiency = 0.3,
-        peakBoostPsi = 0.0,
-        curve = emptyList(),
+    private fun point(
+        hp: Double,
+        tq: Double,
+        bte: Double,
+        coolant: Double = 90.0,
+        oil: Double = 110.0,
+        egt: Double = 720.0,
+    ) = OperatingPoint(
+        rpm = 4000.0,
+        horsepower = hp,
+        torqueLbFt = tq,
+        boostPsi = 0.0,
+        volumetricEfficiency = 0.9,
+        afr = 12.8,
+        timingDeg = 20.0,
+        mbtDeg = 20.0,
+        chargeTempC = 35.0,
+        compressorOutC = 25.0,
+        coolantTempC = coolant,
+        oilTempC = oil,
+        egtC = egt,
+        coolantKw = 20.0,
+        oilToAirKw = 2.0,
+        oilGeneratedKw = 4.0,
+        exhaustKw = 40.0,
+        bayKw = 1.0,
+        fuelPumpedKw = 80.0,
+        fuelReleasedKw = 80.0,
+        brakeKw = hp * 0.7457,
+        frictionKw = 5.0,
+        wallKw = 15.0,
+        brakeEfficiency = bte,
+        knockMargin = 5.0,
+        octane = 87.0,
+        octaneDemand = 82.0,
+        unresolvedKnock = 0.0,
+        fuelLimited = false,
     )
+
 }

@@ -2,7 +2,7 @@
 
 An offline idle shop where the contract pays from a running engine model. You buy parts, study a tech tree, and occasionally scrap the long-block for Engineering Knowledge. Nothing here phones home. There are no ads and no API keys.
 
-The screen is pure black (`#000000`) with thin instrument lines: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline and trouble.
+The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a scrollable map. Each category is a node, and a part that waits on an earlier part is branched off it. Solid lines stay in the same bay. Dashed lines cross to a part in another bay that this one still depends on.
 
 ## Build
 
@@ -29,19 +29,21 @@ A copy is also written to `dist/revline-debug.apk` after a local release build f
 
 ## What the contract pays
 
-Income is not a flat number on the part. Every tick uses the current dyno sheet:
+Income is the engine you have, at the rpm it is turning. The bench pedal is a throttle stop: press it down to open the throttle, and the crank chases that rpm. Horsepower, torque, and brake thermal efficiency are read off that operating point, not off the peak stickers.
 
 ```
-powerScore      = HP^1.72 * (1 + torqueLbFt / 950)
-economyScore    = (MPG / 28)^0.58
-durabilityScore = (reliability / 100)^1.28 * (redline / 6500)^0.24
-dollars/second  = 0.0055 * powerScore * economyScore * durabilityScore * multiplier
+powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
+economyScore    = (brakeThermalEfficiency / 0.30)^0.58
+durabilityScore = (reliability/100 * condition)^1.15
+dollars/second  = 0.0096 * powerScore * economyScore * durabilityScore * multiplier
 multiplier      = 1 + 0.12 * EngineeringKnowledge
 ```
 
-Horsepower, torque, cruise MPG, redline, and reliability all come from the engine model. A hot, knocking, or fuel-starved build loses money because those show up as less power or less reliability, not because the part has a hidden penalty.
+`condition` is 1 on a clean pull and falls when this rpm is hot (coolant, oil, or EGT), knocking, or out of fuel flow. Cruise MPG is still on the sheet, but it is a road-load number and it does not set the contract. Leaving the pedal near idle pays a thin contract. The rpm where this build actually makes power pays several times more, and that spot moves when the cam, the turbo, or the fuel changes.
 
-Research points tick passively (`0.22 + HP/850` per second, more with the Dyno habit perk). A dyno pull adds `8 + 0.055 * HP` and then waits 35 seconds. Pulls do not happen while the app is closed.
+The throttle you set is saved. Offline pay uses that same stop, at 80% of the contract and 50% of passive research, capped at 8 hours. A rebuild puts the pedal back to a light opening so the next long-block gets its own pull.
+
+Research points still tick from peak horsepower (`0.22 + HP/850` per second, more with the Dyno habit perk). A dyno pull sweeps the tach on its own, adds `8 + 0.055 * HP`, and then waits 35 seconds. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
 
 ## The engine model
 
@@ -65,7 +67,7 @@ Parts change the inputs above. A turbo does not add a horsepower sticker. It add
 
 Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies).
 
-Rebuild resets money, the parts on this block, and the fuel back to 87. Studied nodes and perks stay. You need about $95,000 earned on the current block. The first rebuild is tuned to land around 30–60 minutes if you keep buying what the sheet says is worth it and pull the dyno when the rollers are free.
+Rebuild resets money, the parts on this block, the fuel back to 87, and the throttle stop. Studied nodes and perks stay. You need about $95,000 earned on the current block. The first rebuild is tuned to land around 30–60 minutes if you hold the pedal on the rpm that pays, buy what that contract can afford, and pull the dyno when the rollers are free.
 
 Offline earnings pay 80% of the contract and 50% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
 

@@ -37,6 +37,41 @@ data class StatDelta(
 enum class ResearchStatus { OWNED, LOCKED, OPEN }
 
 object Logic {
+    const val IDLE_RPM = 820.0
+    const val REST_THROTTLE = 0.18
+
+    /** Throttle stop to crank speed. 0 is idle, 1 is the redline this block can turn. */
+    fun targetRpm(redline: Double, throttle: Double): Double {
+        val span = (redline - IDLE_RPM).coerceAtLeast(1.0)
+        return IDLE_RPM + throttle.coerceIn(0.0, 1.0) * span
+    }
+
+    fun incomeAt(params: EngineParams, rpm: Double, reliability: Double, multiplier: Double): Double =
+        Income.perSecond(EngineSim.point(params, rpm), reliability, multiplier)
+
+    /**
+     * Throttle opening whose steady rpm pays the most on this build.
+     * Sampled every 100 rpm. The pedal is how a person finds the same spot.
+     */
+    fun bestThrottle(state: GameState): Double {
+        val params = paramsFrom(state)
+        val stats = EngineSim.evaluate(params)
+        val mult = Prestige.multiplier(state.knowledge)
+        var bestRpm = IDLE_RPM
+        var bestPay = -1.0
+        var rpm = IDLE_RPM
+        while (rpm <= params.redlineRpm + 0.5) {
+            val at = rpm.coerceAtMost(params.redlineRpm)
+            val pay = incomeAt(params, at, stats.reliability, mult)
+            if (pay > bestPay) {
+                bestPay = pay
+                bestRpm = at
+            }
+            rpm += 100.0
+        }
+        return ((bestRpm - IDLE_RPM) / (params.redlineRpm - IDLE_RPM).coerceAtLeast(1.0)).coerceIn(0.0, 1.0)
+    }
+
     fun paramsFrom(state: GameState): EngineParams {
         fun lvl(id: String) = state.upgrades[id] ?: 0
         val filter = lvl("filter")
@@ -199,19 +234,20 @@ object Logic {
         val mult = Prestige.multiplier(state.knowledge)
         val notebook = state.perks["notebook"] ?: 0
         val rp = (0.22 + stats.peakHorsepower / 850.0) * (1.0 + 0.22 * notebook)
-        return Sheet(params, stats, Income.perSecond(stats, mult), rp, mult)
+        val rpm = targetRpm(params.redlineRpm, state.throttle)
+        val pay = incomeAt(params, rpm, stats.reliability, mult)
+        return Sheet(params, stats, pay, rp, mult)
     }
 
     fun dynoReward(stats: EngineStats): Double = 8.0 + stats.peakHorsepower * 0.055
 
-    fun accrue(state: GameState, dtSec: Double, nowMs: Long): GameState {
+    fun accrue(state: GameState, dtSec: Double, nowMs: Long, incomePerSec: Double, rpPerSec: Double): GameState {
         if (dtSec <= 0.0) return state.copy(savedAtEpochMs = nowMs)
-        val s = sheet(state)
-        val gained = s.incomePerSec * dtSec
+        val gained = incomePerSec.coerceAtLeast(0.0) * dtSec
         return state.copy(
             money = state.money + gained,
             runEarnings = state.runEarnings + gained,
-            researchPoints = state.researchPoints + s.rpPerSec * dtSec,
+            researchPoints = state.researchPoints + rpPerSec.coerceAtLeast(0.0) * dtSec,
             savedAtEpochMs = nowMs,
         )
     }
@@ -351,6 +387,7 @@ object Logic {
             prestiges = state.prestiges + 1,
             upgrades = emptyMap(),
             fuel = FuelKind.PUMP_87,
+            throttle = REST_THROTTLE,
         )
     }
 
