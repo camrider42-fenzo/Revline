@@ -74,6 +74,12 @@ data class EngineParams(
     val airCooled: Boolean = false,
     val idleRpm: Double = 820.0,
     val blockTitle: String = "2.0L inline-four",
+    /**
+     * Horsepower bolted on by parts whose other effect is latent on this engine
+     * (a radiator on a cool moped, a pump that is not yet out of fuel).
+     * Scales down on larger blocks. Applied with throttle so the pull sees all of it.
+     */
+    val installedHp: Double = 0.0,
 )
 
 data class OperatingPoint(
@@ -428,7 +434,7 @@ object EngineSim {
         var egt = tChargeC + (qExhaust * SENSIBLE_EXHAUST) / (mEx * CP_EXHAUST)
         if (afr < stoich) egt -= (stoich - afr) * 12.0
         if (afr > stoich + 0.4) egt += (afr - stoich) * 18.0
-        val hp = pBrake / 745.7
+        val hp = pBrake / 745.7 + params.installedHp * open.coerceIn(0.45, 1.0)
         val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon
         val mpg = (60.0 / gallonsPerHour.coerceAtLeast(0.04)).coerceIn(0.8, 80.0)
         return OperatingPoint(

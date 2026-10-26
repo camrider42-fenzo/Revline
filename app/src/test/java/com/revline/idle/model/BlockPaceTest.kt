@@ -18,6 +18,17 @@ import org.junit.Test
  */
 class BlockPaceTest {
     @Test
+    fun aRadiatorMovesTheMopedSheet() {
+        val stock = GameState(money = 100_000.0)
+        val before = Logic.sheet(stock).stats.peakHorsepower
+        val preview = Logic.preview(stock, "radiator")
+        assertTrue(preview != null && preview.peakHp > 0.1)
+        val bought = Logic.buyUpgrade(stock, "radiator")
+        val after = Logic.sheet(bought).stats.peakHorsepower
+        assertTrue("radiator $before -> $after", after > before + 0.1)
+    }
+
+    @Test
     fun aFilterMovesTheMopedAndThePreviewSaysSo() {
         val stock = GameState(money = 10_000.0)
         val preview = Logic.preview(stock, "filter")

@@ -100,6 +100,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
         BubbleMap(
             layout = layout,
             ui = ui,
+            previews = previews,
             selected = selected.value,
             pulse = pulse,
             onSelect = { selected.value = it },
@@ -116,6 +117,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
 private fun BubbleMap(
     layout: UpgradeMap.BubbleMap,
     ui: UiModel,
+    previews: Map<String, StatDelta?>,
     selected: String?,
     pulse: Float,
     onSelect: (String) -> Unit,
@@ -249,6 +251,7 @@ private fun BubbleMap(
                             upgrade = Upgrades.byId(bubble.id),
                             ui = ui,
                             selected = selected == bubble.id,
+                            delta = previews[bubble.id],
                         )
                     }
                 }
@@ -287,6 +290,7 @@ private fun UpgradeBubble(
     upgrade: Upgrade,
     ui: UiModel,
     selected: Boolean,
+    delta: StatDelta?,
 ) {
     val level = ui.game.upgrades[upgrade.id] ?: 0
     val locked = Logic.lockLabel(ui.game, upgrade.id)
@@ -328,6 +332,17 @@ private fun UpgradeBubble(
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 2.dp),
             )
+            if (delta != null) {
+                Text(
+                    forecastLabel(delta),
+                    color = Lime,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 8.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 1.dp),
+                )
+            }
             Text(
                 price,
                 color = if (locked != null) Amber else color,
@@ -342,36 +357,42 @@ private fun UpgradeBubble(
     }
 }
 
-@Composable
-private fun DeltaReadout(delta: StatDelta) {
-    val live = listOf(delta.hp, delta.torque, delta.mpg, delta.payPerSec)
-    val pull = listOf(delta.peakHp, delta.peakTorque, delta.cruiseMpg, delta.reliability, delta.coolantC, delta.oilC, delta.egtC)
-    val any = (live + pull).any { kotlin.math.abs(it) >= 0.005 }
-    if (!any) {
-        Text(
-            "No change at this pedal or on the pull.",
-            color = Amber,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        return
-    }
-    Text(
-        "This pedal  ${signed(delta.hp, powerDigits(delta.hp))} hp   ${signed(delta.torque, powerDigits(delta.torque))} lb-ft   " +
-            "${signed(delta.mpg)} mpg   ${signed(delta.payPerSec, if (kotlin.math.abs(delta.payPerSec) < 0.1) 3 else 2)}/s",
-        color = Cyan,
-        fontFamily = FontFamily.Monospace,
-        fontSize = 11.sp,
-        modifier = Modifier.padding(top = 4.dp),
+private fun forecastLabel(delta: StatDelta): String {
+    val options = listOf(
+        delta.peakHp to "${signed(delta.peakHp, 2)} hp",
+        delta.peakTorque to "${signed(delta.peakTorque, 2)} tq",
+        delta.cruiseMpg to "${signed(delta.cruiseMpg, 1)} mpg",
+        delta.payPerSec to "${signed(delta.payPerSec, 3)}/s",
     )
+    val best = options.maxBy { kotlin.math.abs(it.first) }
+    return if (kotlin.math.abs(best.first) < 0.005) "no change" else best.second
+}
+
+@Composable
+private fun Forecast(ui: UiModel, delta: StatDelta) {
+    val stats = ui.sheet.stats
+    ForecastRow("Peak hp", stats.peakHorsepower, stats.peakHorsepower + delta.peakHp, "hp")
+    ForecastRow("Torque", stats.peakTorqueLbFt, stats.peakTorqueLbFt + delta.peakTorque, "lb-ft")
+    ForecastRow("Cruise", stats.cruiseMpg, stats.cruiseMpg + delta.cruiseMpg, "mpg")
     Text(
-        "On the pull  ${signed(delta.peakHp, powerDigits(delta.peakHp))} hp   ${signed(delta.peakTorque, powerDigits(delta.peakTorque))} lb-ft   " +
-            "cruise ${signed(delta.cruiseMpg)} mpg   rel ${signed(delta.reliability)}   " +
-            "cool ${signed(delta.coolantC)}°   oil ${signed(delta.oilC)}°   egt ${signed(delta.egtC, 0)}°",
-        color = Cyan,
+        "Contract  ${signed(delta.payPerSec, if (kotlin.math.abs(delta.payPerSec) < 0.1) 3 else 2)}/s at this pedal",
+        color = if (delta.payPerSec > 0.0005) Lime else if (delta.payPerSec < -0.0005) Red else White,
         fontFamily = FontFamily.Monospace,
-        fontSize = 11.sp,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+}
+
+@Composable
+private fun ForecastRow(label: String, now: Double, next: Double, unit: String) {
+    val digits = stepDigits(now, next - now)
+    val pattern = "%.${digits}f"
+    val changed = kotlin.math.abs(next - now) >= 0.5 * Math.pow(10.0, -digits.toDouble())
+    Text(
+        "$label  ${String.format(java.util.Locale.US, pattern, now)} → ${String.format(java.util.Locale.US, pattern, next)} $unit",
+        color = if (changed) Lime else White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
         modifier = Modifier.padding(top = 2.dp),
     )
 }
@@ -403,7 +424,7 @@ private fun PartDetail(
             modifier = Modifier.padding(top = 4.dp),
         )
         if (delta != null) {
-            DeltaReadout(delta)
+            Forecast(ui, delta)
         }
         val label = when {
             level >= upgrade.maxLevel -> "Installed"

@@ -261,3 +261,11 @@ fun powerDigits(value: Double): Int = when {
     kotlin.math.abs(value) < 100.0 -> 1
     else -> 0
 }
+
+/** Digits that keep a small step visible next to a large number. */
+fun stepDigits(now: Double, delta: Double): Int = when {
+    kotlin.math.abs(delta) >= 10.0 -> 0
+    kotlin.math.abs(delta) >= 1.0 && kotlin.math.abs(now) >= 20.0 -> 1
+    kotlin.math.abs(now) >= 100.0 && kotlin.math.abs(delta) >= 1.0 -> 0
+    else -> 2
+}

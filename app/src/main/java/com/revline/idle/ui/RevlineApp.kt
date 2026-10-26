@@ -248,6 +248,13 @@ fun EngineStrip(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
             Text("${formatDollars(ui.sheet.incomePerSec)}/s", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
         }
+        Text(
+            "Sheet ${formatPower(s.peakHorsepower)} hp   ${formatPower(s.peakTorqueLbFt)} lb-ft   ${String.format(Locale.US, "%.1f", s.cruiseMpg)} mpg",
+            color = Lime,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Stat("HP", formatPower(live.horsepower), Lime, Modifier.weight(1f))
             Stat("TQ", formatPower(live.torqueLbFt), Amber, Modifier.weight(1f))

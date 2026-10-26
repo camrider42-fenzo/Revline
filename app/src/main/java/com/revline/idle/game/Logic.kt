@@ -94,6 +94,24 @@ object Logic {
         return bestT.coerceIn(0.0, 1.0)
     }
 
+    /**
+     * Parts that do not move a cool, unboosted little engine through the physics
+     * still have to move the sheet, or buying them looks like a no-op.
+     * The bonus is a real fraction of a horsepower on a 50 cc single and fades
+     * on the bigger blocks, where the same part already works through the model.
+     */
+    private fun installedHp(block: Block, state: GameState): Double {
+        fun lvl(id: String) = state.upgrades[id] ?: 0
+        val latent = listOf(
+            "jets", "fuel_pump", "studs", "cap", "radiator", "duct", "water_pump",
+            "thermostat", "afr_map", "oil_cooler", "electric_pump", "inconel",
+            "waterless", "ceramic", "knock_box", "boost_controller", "torque_model", "meth",
+        ).sumOf { lvl(it) }
+        if (latent <= 0) return 0.0
+        val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders).coerceAtLeast(40.0)
+        return latent * 0.22 * (50.0 / cc).coerceIn(0.05, 1.0)
+    }
+
     fun paramsFrom(state: GameState): EngineParams {
         val block = Block.forPrestige(state.prestiges)
         fun lvl(id: String) = state.upgrades[id] ?: 0
@@ -250,6 +268,7 @@ object Logic {
             octaneBonus = 1.2 * (state.perks["octane"] ?: 0),
             underhoodDeltaC = (12.0 - 2.4 * cai).coerceIn(1.5, 25.0),
             individualThrottles = itb > 0,
+            installedHp = installedHp(block, state),
             banks = block.banks,
             airCooled = block.airCooled && cai < 3,
             idleRpm = block.idleRpm,
