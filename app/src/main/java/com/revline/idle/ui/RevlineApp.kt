@@ -197,7 +197,9 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
         Text(
-            "At ${live.rpm.toInt()} rpm · load ${(live.load * 100).toInt()}% · soak ${live.heatSoakC.toInt()}°C · ${String.format(Locale.US, "%.1f", 60.0 / live.mpg.coerceAtLeast(0.8))} gal/h · $${String.format(Locale.US, "%.2f", ui.sheet.params.fuel.dollarsPerGallon)}/gal",
+            "At ${live.rpm.toInt()} rpm · load ${(live.load * 100).toInt()}% · soak ${live.heatSoakC.toInt()}°C · " +
+                (if (ui.sheet.params.induction != com.revline.idle.model.Induction.NA && live.boostPsi < 0.4) "below spool · " else "") +
+                "${String.format(Locale.US, "%.1f", 60.0 / live.mpg.coerceAtLeast(0.8))} gal/h · $${String.format(Locale.US, "%.2f", ui.sheet.params.fuel.dollarsPerGallon)}/gal",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -208,7 +210,16 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Stat("COOLANT", "${live.coolantTempC.toInt()}°C", if (live.coolantTempC > 110) Red else Cyan, Modifier.weight(1f))
             Stat("OIL", "${live.oilTempC.toInt()}°C", if (live.oilTempC > 140) Red else Amber, Modifier.weight(1f))
             Stat("EGT", "${live.egtC.toInt()}°C", if (live.egtC > 900) Red else Amber, Modifier.weight(1f))
-            Stat("BOOST", String.format(Locale.US, "%.1f", live.boostPsi), Cyan, Modifier.weight(1f))
+            Stat(
+                "BOOST",
+                if (ui.sheet.params.induction == com.revline.idle.model.Induction.NA) {
+                    "0.0"
+                } else {
+                    String.format(Locale.US, "%.1f", live.boostPsi)
+                },
+                if (ui.sheet.params.induction != com.revline.idle.model.Induction.NA && live.boostPsi < 0.4) Amber else Cyan,
+                Modifier.weight(1f),
+            )
         }
         Text(notes, color = if (s.reliabilityNotes.isEmpty()) Lime else Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         Text(

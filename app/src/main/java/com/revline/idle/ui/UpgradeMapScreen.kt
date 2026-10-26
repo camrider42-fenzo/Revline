@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
-import com.revline.idle.game.Category
+import com.revline.idle.game.Effect
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Upgrade
 import com.revline.idle.game.UpgradeMap
@@ -56,16 +56,12 @@ import com.revline.idle.model.FuelKind
 import java.util.Locale
 import kotlin.math.hypot
 
-private fun categoryColor(category: Category): Color = when (category) {
-    Category.INTAKE -> Lime
-    Category.EXHAUST -> Red
-    Category.FUEL -> Amber
-    Category.IGNITION -> White
-    Category.VALVETRAIN -> Cyan
-    Category.INDUCTION -> Lime
-    Category.INTERNALS -> Amber
-    Category.COOLING -> Cyan
-    Category.ECU -> Red
+private fun effectColor(effect: Effect): Color = when (effect) {
+    Effect.POWER -> Lime
+    Effect.ECONOMY -> Amber
+    Effect.BOOST -> Cyan
+    Effect.COOLING -> White
+    Effect.DURABILITY -> Red
 }
 
 @Composable
@@ -87,7 +83,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
             Text("${formatDollars(ui.sheet.incomePerSec)}/s", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
         Text(
-            "Drag the map. Pinch to zoom.",
+            "Grouped by what the part changes. Drag to move, pinch to zoom.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -118,11 +114,23 @@ private fun BubbleMap(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current.density
-    var scale by remember { mutableFloatStateOf(0.62f) }
-    var offset by remember { mutableStateOf(Offset(24f, 16f)) }
+    var scale by remember { mutableFloatStateOf(0.9f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var framed by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier) {
         val viewW = with(LocalDensity.current) { maxWidth.toPx() }
         val viewH = with(LocalDensity.current) { maxHeight.toPx() }
+        androidx.compose.runtime.LaunchedEffect(viewW, viewH) {
+            if (framed || viewW < 1f || viewH < 1f) return@LaunchedEffect
+            val focus = layout.bubbles.first { it.id == Effect.BOOST.name }
+            val fit = (viewW / (560f * density)).coerceIn(0.72f, 1.15f)
+            scale = fit
+            offset = Offset(
+                viewW / 2f - focus.cx * density * fit,
+                viewH / 2f - focus.cy * density * fit,
+            )
+            framed = true
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -173,7 +181,7 @@ private fun BubbleMap(
                             val mapX = (start.x - offset.x) / scale / density
                             val mapY = (start.y - offset.y) / scale / density
                             val hit = layout.bubbles
-                                .filter { !it.categoryNode }
+                                .filter { !it.hub }
                                 .filter { bubble ->
                                     hypot(bubble.cx - mapX, bubble.cy - mapY) <= bubble.r
                                 }
@@ -199,7 +207,7 @@ private fun BubbleMap(
                         val from = index[edge.from] ?: continue
                         val to = index[edge.to] ?: continue
                         glowLine(
-                            categoryColor(edge.category),
+                            effectColor(edge.effect),
                             Offset(from.cx * d, from.cy * d),
                             Offset(to.cx * d, to.cy * d),
                             2.4f,
@@ -207,16 +215,16 @@ private fun BubbleMap(
                         )
                     }
                     for (bubble in layout.bubbles) {
-                        val level = if (bubble.categoryNode) 0 else ui.game.upgrades[bubble.id] ?: 0
-                        val affordable = !bubble.categoryNode && Logic.canBuyUpgrade(ui.game, bubble.id)
+                        val level = if (bubble.hub) 0 else ui.game.upgrades[bubble.id] ?: 0
+                        val affordable = !bubble.hub && Logic.canBuyUpgrade(ui.game, bubble.id)
                         val gain = when {
                             bubble.id == selected -> 1.15f
                             affordable -> pulse
-                            bubble.categoryNode || level > 0 -> 0.8f
+                            bubble.hub || level > 0 -> 0.8f
                             else -> 0.32f
                         }
                         glowCircle(
-                            categoryColor(bubble.category),
+                            effectColor(bubble.effect),
                             bubble.r * d,
                             Offset(bubble.cx * d, bubble.cy * d),
                             2.4f,
@@ -225,8 +233,8 @@ private fun BubbleMap(
                     }
                 }
                 layout.bubbles.forEach { bubble ->
-                    if (bubble.categoryNode) {
-                        CategoryBubble(bubble)
+                    if (bubble.hub) {
+                        HubBubble(bubble)
                     } else {
                         UpgradeBubble(
                             bubble = bubble,
@@ -242,8 +250,8 @@ private fun BubbleMap(
 }
 
 @Composable
-private fun CategoryBubble(bubble: UpgradeMap.Bubble) {
-    val color = categoryColor(bubble.category)
+private fun HubBubble(bubble: UpgradeMap.Bubble) {
+    val color = effectColor(bubble.effect)
     Box(
         Modifier
             .offset((bubble.cx - bubble.r).dp, (bubble.cy - bubble.r).dp)
@@ -253,7 +261,7 @@ private fun CategoryBubble(bubble: UpgradeMap.Bubble) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            bubble.category.title.uppercase(Locale.US),
+            bubble.effect.title.uppercase(Locale.US),
             color = color,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -278,8 +286,8 @@ private fun UpgradeBubble(
     val color = when {
         selected -> White
         locked != null -> Olive
-        affordable || level > 0 -> categoryColor(upgrade.category)
-        else -> categoryColor(upgrade.category)
+        affordable || level > 0 -> effectColor(UpgradeMap.effectOf(upgrade.id))
+        else -> effectColor(UpgradeMap.effectOf(upgrade.id))
     }
     val price = when {
         level >= upgrade.maxLevel -> "Full"
@@ -341,7 +349,7 @@ private fun PartDetail(
         Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .border(1.dp, categoryColor(upgrade.category))
+            .border(1.dp, effectColor(UpgradeMap.effectOf(upgrade.id)))
             .padding(8.dp),
     ) {
         Text(upgrade.name, color = White, fontFamily = FontFamily.Monospace, fontSize = 14.sp)

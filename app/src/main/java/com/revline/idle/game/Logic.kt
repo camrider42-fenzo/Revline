@@ -373,10 +373,29 @@ object Logic {
     fun buyResearch(state: GameState, id: String): GameState {
         if (!canBuyResearch(state, id)) return state
         val cost = ResearchTree.byId(id).cost
-        return state.copy(
-            researchPoints = state.researchPoints - cost,
-            researched = state.researched + id,
+        return ensureStudies(
+            state.copy(
+                researchPoints = state.researchPoints - cost,
+                researched = state.researched + id,
+            ),
         )
+    }
+
+    /**
+     * A finished study bolts the first piece on. Older saves that researched the
+     * turbo without a level stored still get that first turbo, so boost is real.
+     */
+    fun ensureStudies(state: GameState): GameState {
+        var upgrades = state.upgrades
+        fun grant(research: String, part: String) {
+            if (research in state.researched && (upgrades[part] ?: 0) < 1) {
+                upgrades = upgrades + (part to 1)
+            }
+        }
+        grant("turbo_node", "turbo")
+        grant("sc_node", "supercharger")
+        grant("twin_node", "twin")
+        return if (upgrades == state.upgrades) state else state.copy(upgrades = upgrades)
     }
 
     fun spentKnowledge(state: GameState): Int {

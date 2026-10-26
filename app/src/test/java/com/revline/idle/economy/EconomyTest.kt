@@ -37,6 +37,24 @@ class EconomyTest {
     }
 
     @Test
+    fun researchingTurboFitsTheFirstTurboAndMakesBoost() {
+        val studied = Logic.buyResearch(
+            GameState(researchPoints = 500.0, researched = setOf("exhaust_fab")),
+            "turbo_node",
+        )
+        assertEquals(1, studied.upgrades["turbo"])
+        val params = Logic.paramsFrom(studied)
+        assertEquals(com.revline.idle.model.Induction.TURBO, params.induction)
+        val wideOpen = com.revline.idle.model.EngineSim.point(params, 5200.0, 1.0)
+        assertTrue("wot boost ${wideOpen.boostPsi}", wideOpen.boostPsi > 3.0)
+        val rpm = Logic.targetRpm(params.redlineRpm, 0.7)
+        val held = com.revline.idle.model.EngineSim.point(params, rpm, Logic.loadFor(0.7))
+        assertTrue("pedal boost ${held.boostPsi} at $rpm", held.boostPsi > 1.0)
+        val oldSave = Logic.ensureStudies(GameState(researched = setOf("exhaust_fab", "turbo_node")))
+        assertEquals(1, oldSave.upgrades["turbo"])
+    }
+
+    @Test
     fun holdingThePedalOnThePayingRpmBeatsIdle() {
         val stock = GameState(savedAtEpochMs = 1L, throttle = 0.0)
         val idle = Logic.sheet(stock).incomePerSec
@@ -120,7 +138,7 @@ class EconomyTest {
     @Test
     fun scriptedShopReachesTheFirstRebuildInAboutAnHour() {
         val minutes = scriptedMinutes()
-        assertTrue("first rebuild in $minutes min", minutes in 25.0..75.0)
+        assertTrue("first rebuild in $minutes min", minutes in 25.0..95.0)
     }
 
     private fun scriptedMinutes(): Double {

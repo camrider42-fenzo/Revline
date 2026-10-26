@@ -2,7 +2,7 @@
 
 An offline idle shop where the contract pays from a running engine model. You buy parts, study a tech tree, and occasionally scrap the long-block for Engineering Knowledge. Nothing here phones home. There are no ads and no API keys.
 
-The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a black bubble map you drag and pinch. Category bubbles sit in a grid, and the parts in that bay ring around them.
+The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a black bubble map you drag and pinch. Bubbles are grouped by what the part changes: power, economy, boost, cooling, or durability. The groups sit close together. Studying turbocharging, supercharging, or twins bolts the first unit on, so boost shows up on the gauge once the pedal is in the spool.
 
 ## Build
 
@@ -71,7 +71,7 @@ Parts change the inputs above. A turbo does not add a horsepower sticker. It add
 
 Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies).
 
-Rebuild resets money, the parts on this block, the fuel back to 87, and the throttle stop. Studied nodes and perks stay. You need about $95,000 earned on the current block. The first rebuild is tuned to land around 30–60 minutes if you hold the pedal on the rpm that pays, buy what that contract can afford, and pull the dyno when the rollers are free.
+Rebuild resets money, the parts on this block, the fuel back to 87, and the throttle stop. Studied nodes and perks stay. You need about $95,000 earned on the current block. The first rebuild lands around an hour to an hour and a half if you hold the pedal on the stop that pays, buy what that contract can afford, and pull the dyno when the rollers are free.
 
 Offline earnings pay 80% of the contract and 50% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
 

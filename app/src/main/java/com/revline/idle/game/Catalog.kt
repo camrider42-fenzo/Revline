@@ -12,6 +12,15 @@ enum class Category(val title: String) {
     ECU("ECU"),
 }
 
+/** What the part changes on the sheet. The parts map is grouped by this, not by bay. */
+enum class Effect(val title: String) {
+    POWER("Power"),
+    ECONOMY("Economy"),
+    BOOST("Boost"),
+    COOLING("Cooling"),
+    DURABILITY("Durability"),
+}
+
 data class Upgrade(
     val id: String,
     val category: Category,

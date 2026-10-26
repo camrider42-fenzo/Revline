@@ -330,7 +330,7 @@ object EngineSim {
         plate: Boolean,
     ): OperatingPoint {
         val open = if (plate) load.coerceIn(0.12, 1.0) else 1.0
-        val boost = if (plate) boostAt(params, rpm) * open.pow(1.45) else 0.0
+        val boost = if (plate) boostAt(params, rpm) * open.pow(1.08) else 0.0
         val ve = volumetricEfficiency(params, rpm)
         val t1 = AMBIENT_K + params.underhoodDeltaC
         val manifoldPsi = ATM_PSI * (0.30 + 0.70 * open)

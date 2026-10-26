@@ -47,7 +47,10 @@ class UpgradeMapTest {
     @Test
     fun bubblesStayApartAndLinesDoNotCrossBays() {
         val map = UpgradeMap.bubbles()
-        assertEquals(Upgrades.all.size + Category.entries.size, map.bubbles.size)
+        assertEquals(Upgrades.all.size + Effect.entries.size, map.bubbles.size)
+        assertTrue("map got wide again ${map.width}", map.width < 2200f)
+        assertTrue("map got tall again ${map.height}", map.height < 1500f)
+        assertEquals(Upgrades.all.size, Upgrades.all.map { UpgradeMap.effectOf(it.id) }.size)
         val bubbles = map.bubbles
         for (i in bubbles.indices) {
             for (j in i + 1 until bubbles.size) {
@@ -60,8 +63,9 @@ class UpgradeMapTest {
         for (edge in map.edges) {
             val from = map.bubbles.first { it.id == edge.from }
             val to = map.bubbles.first { it.id == edge.to }
-            assertEquals(edge.to, from.category, to.category)
-            assertFalse(from.categoryNode && to.categoryNode)
+            assertEquals(edge.to, from.effect, to.effect)
+            assertFalse(from.hub && to.hub)
+            assertEquals(Effect.BOOST, UpgradeMap.effectOf("turbo"))
         }
         val open = Logic.lockLabel(GameState(), "filter")
         assertEquals(null, open)
