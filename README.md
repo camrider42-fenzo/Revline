@@ -77,6 +77,8 @@ A rebuild opens when peak horsepower, peak torque, and cruise mpg all clear that
 
 The first tools on a fresh engine are cheap (a torque wrench, an oil service, a plug gap, a valve lap) so the opening minutes have something to buy. That wider shop still lands in about one to two hours per engine.
 
+The bench drawing follows the parts on the engine. A filter grows pleats, a cold-air snorkel reaches farther, headers replace the log manifold and get longer, the turbo and supercharger get larger, the intercooler and oil cooler gain rows, fins stick out on an air-cooled jug, and the pistons widen and thicken as the bore and compression go up. Higher levels of the same part change the picture again.
+
 The Tune tab is the screws: idle speed, spark advance, mixture, cam center, wastegate, rev limiter, and thermostat. A screw stays locked until its part is on the engine. More of that part, and the parts that refine it (a mapped spark table, VVT, a boost controller), make the range wider and the clicks smaller. The position goes into the same engine model as the hardware, so the sheet and the contract move when you turn it. A rebuild throws the screws away with the parts.
 
 Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Further rebuilds after the V12 stay on that block and only add knowledge.

@@ -124,7 +124,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                 Column(Modifier.weight(1.1f)) {
                     Hud(ui)
                     Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                    EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), Modifier.fillMaxWidth().height(280.dp))
+                    EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(280.dp))
                     Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(170.dp))
                         ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
@@ -148,7 +148,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
             Column(Modifier.fillMaxSize().padding(12.dp)) {
                 Hud(ui)
                 Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), Modifier.fillMaxWidth().height(200.dp))
+                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(200.dp))
                 Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(148.dp))
                     ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))

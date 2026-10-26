@@ -29,6 +29,7 @@ fun EngineArt(
     rpm: Float,
     coolantC: Float,
     egtC: Float,
+    parts: Map<String, Int> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
     val rpmState = rememberUpdatedState(rpm)
@@ -59,7 +60,7 @@ fun EngineArt(
     val exhaustGain = ((egtC - 420f) / 480f).coerceIn(0.55f, 1.45f)
     Canvas(
         modifier.semantics {
-            contentDescription = "${params.blockTitle}, coolant ${coolantC.toInt()} degrees, ${rpm.toInt()} rpm"
+            contentDescription = "${params.blockTitle}, ${parts.count { it.value > 0 }} parts fitted, ${rpm.toInt()} rpm"
         },
     ) {
         val w = size.width
@@ -81,6 +82,35 @@ fun EngineArt(
         val rod = h * if (n == 1) 0.20f else 0.155f
         val phases = firingPhases(perBank)
         val pulse = 0.82f + 0.18f * sin(clock * (2.2f + spinRpm / 1800f))
+        fun part(id: String) = parts[id] ?: 0
+        val filterLvl = part("filter")
+        val coldLvl = part("cold_air")
+        val bootLvl = part("boot")
+        val headerLvl = part("headers")
+        val longLvl = part("long_tube")
+        val tipLvl = part("tip")
+        val catLvl = part("catback")
+        val ceramicOn = part("ceramic") > 0
+        val springLvl = part("springs")
+        val camLvl = part("cam")
+        val vvtLvl = part("vvt")
+        val boreLvl = part("bore")
+        val compLvl = part("compression")
+        val forged = part("pistons") > 0
+        val finLvl = part("fins")
+        val ductLvl = part("duct")
+        val capLvl = part("cap")
+        val oilLvl = part("oil_cooler")
+        val pumpLvl = part("fuel_pump")
+        val needleLvl = part("needle")
+        val coilLvl = part("coils")
+        val plugLvl = part("plugs") + part("gap")
+        val turboLvl = part("turbo")
+        val scLvl = part("supercharger")
+        val icLvl = part("intercooler")
+        val controllerLvl = part("boost_controller")
+        val methLvl = part("meth")
+        val studLvl = part("studs")
 
         val radRows = when {
             params.airCooled -> 0
@@ -104,22 +134,45 @@ fun EngineArt(
             val shimmer = 0.45f + 0.55f * ((sin(clock * 3.4f + i) + 1f) / 2f)
             glowLine(Cyan, Offset(x, radT + 4f), Offset(x, radB - 4f), stroke * 0.7f, shimmer)
         }
+        if (capLvl > 0) {
+            val nub = 4f + capLvl * 3f
+            glowLine(White, Offset((radL + radR) / 2f - 4f, radT), Offset((radL + radR) / 2f - 4f, radT - nub), stroke * 0.7f)
+            glowLine(White, Offset((radL + radR) / 2f + 4f, radT), Offset((radL + radR) / 2f + 4f, radT - nub), stroke * 0.7f)
+            glowLine(White, Offset((radL + radR) / 2f - 4f, radT - nub), Offset((radL + radR) / 2f + 4f, radT - nub), stroke * 0.7f)
         }
-        if (params.intercoolerEff > 0.05 && !params.airCooled) {
+        if (ductLvl > 0) {
+            val mouth = radL - 6f - ductLvl * 5f
+            glowLine(Cyan, Offset(mouth, radT - 4f), Offset(radL, radT + 8f), stroke * 0.8f, 0.9f)
+            glowLine(Cyan, Offset(mouth, radB + 4f), Offset(radL, radB - 8f), stroke * 0.8f, 0.9f)
+        }
+        }
+        if ((params.intercoolerEff > 0.05 || icLvl > 0) && !params.airCooled) {
+            val depth = h * (0.10f + 0.025f * icLvl.coerceAtLeast(1))
             val icL = w * 0.012f
             val icR = radL - 4f
-            val icB = radT + h * 0.16f
-            glowLine(Cyan, Offset(icL, radT + 8f), Offset(icR, radT + 8f), stroke, 0.9f)
-            glowLine(Cyan, Offset(icR, radT + 8f), Offset(icR, icB), stroke, 0.9f)
+            val icTop = radT + 8f
+            val icB = icTop + depth
+            glowLine(Cyan, Offset(icL, icTop), Offset(icR, icTop), stroke, 0.9f)
+            glowLine(Cyan, Offset(icR, icTop), Offset(icR, icB), stroke, 0.9f)
             glowLine(Cyan, Offset(icR, icB), Offset(icL, icB), stroke, 0.9f)
-            glowLine(Cyan, Offset(icL, icB), Offset(icL, radT + 8f), stroke, 0.9f)
+            glowLine(Cyan, Offset(icL, icB), Offset(icL, icTop), stroke, 0.9f)
+            val bars = icLvl.coerceAtLeast(if (params.intercoolerEff > 0.05) 1 else 0)
+            for (bar in 1..bars) {
+                val y = icTop + depth * bar / (bars + 1f)
+                glowLine(Cyan, Offset(icL + 3f, y), Offset(icR - 3f, y), stroke * 0.55f, 0.7f)
+            }
         }
-        if (params.oilCoolerUa > 10.0) {
+        if (params.oilCoolerUa > 10.0 || oilLvl > 0) {
             val y = radB + h * 0.05f
+            val coolerH = h * (0.05f + 0.018f * oilLvl.coerceAtLeast(1))
             glowLine(Amber, Offset(radL, y), Offset(radR, y), stroke)
-            glowLine(Amber, Offset(radR, y), Offset(radR, y + h * 0.08f), stroke)
-            glowLine(Amber, Offset(radR, y + h * 0.08f), Offset(radL, y + h * 0.08f), stroke)
-            glowLine(Amber, Offset(radL, y + h * 0.08f), Offset(radL, y), stroke)
+            glowLine(Amber, Offset(radR, y), Offset(radR, y + coolerH), stroke)
+            glowLine(Amber, Offset(radR, y + coolerH), Offset(radL, y + coolerH), stroke)
+            glowLine(Amber, Offset(radL, y + coolerH), Offset(radL, y), stroke)
+            for (row in 1..oilLvl.coerceAtLeast(1)) {
+                val yy = y + coolerH * row / (oilLvl.coerceAtLeast(1) + 1f)
+                glowLine(Amber, Offset(radL + 3f, yy), Offset(radR - 3f, yy), stroke * 0.5f, 0.6f)
+            }
         }
 
         val exhY = h * 0.37f
@@ -162,18 +215,91 @@ fun EngineArt(
                 }
             }
         }
-        if (params.methFraction > 0.0) {
+        if (params.methFraction > 0.0 || methLvl > 0) {
+            val nozzle = stroke * (1.4f + 0.45f * methLvl.coerceAtLeast(1))
             glowLine(Cyan, Offset(left + gap, h * 0.16f), Offset(left + gap, h * 0.24f), stroke, 1.2f)
-            glowCircle(Cyan, stroke * 1.6f, Offset(left + gap, h * 0.15f), stroke, gain = 1.2f)
+            glowCircle(Cyan, nozzle, Offset(left + gap, h * 0.15f), stroke, gain = 1.2f)
+        }
+        if (filterLvl > 0 || coldLvl > 0 || bootLvl > 0 || needleLvl > 0) {
+            val mouth = (left + right) / 2f
+            val boxW = 8f + filterLvl * 4.5f + if (bootLvl > 0) 4f else 0f
+            val boxH = 7f + filterLvl * 2.2f
+            val top = h * 0.125f
+            glowLine(Lime, Offset(mouth - boxW, top), Offset(mouth + boxW, top), stroke * 0.8f, 1f)
+            glowLine(Lime, Offset(mouth + boxW, top), Offset(mouth + boxW, top + boxH), stroke * 0.8f, 1f)
+            glowLine(Lime, Offset(mouth + boxW, top + boxH), Offset(mouth - boxW, top + boxH), stroke * 0.8f, 1f)
+            glowLine(Lime, Offset(mouth - boxW, top + boxH), Offset(mouth - boxW, top), stroke * 0.8f, 1f)
+            for (pleat in 1..filterLvl.coerceAtMost(5)) {
+                val x = mouth - boxW + boxW * 2f * pleat / (filterLvl.coerceAtLeast(1) + 1f)
+                glowLine(Cyan, Offset(x, top + 2f), Offset(x, top + boxH - 2f), stroke * 0.45f, 0.75f)
+            }
+            if (coldLvl > 0 || bootLvl > 0) {
+                val reach = w * (0.03f * bootLvl.coerceAtLeast(0) + 0.045f * coldLvl)
+                val snorkelY = top - h * (0.015f * coldLvl)
+                glowLine(Cyan, Offset(mouth - boxW, top + boxH * 0.4f), Offset(mouth - boxW - reach, snorkelY), stroke, 1f)
+                glowLine(Cyan, Offset(mouth - boxW - reach, snorkelY), Offset(mouth - boxW - reach - 8f, snorkelY - 6f), stroke, 1f)
+            }
+            if (needleLvl > 0) {
+                for (mark in 0 until needleLvl.coerceAtMost(4)) {
+                    val y = top + 3f + mark * 3.5f
+                    glowLine(White, Offset(mouth + boxW, y), Offset(mouth + boxW + 6f + needleLvl, y), stroke * 0.45f, 0.8f)
+                }
+            }
         }
 
-        if (params.backpressure < 0.78f) {
+        val collectorX = right + w * (0.03f + 0.018f * headerLvl + 0.02f * longLvl)
+        val tailX = collectorX + w * (0.03f + 0.012f * catLvl)
+        val tailDrop = h * 0.012f * tipLvl
+        if (headerLvl > 0) {
             for (i in 0 until n) {
                 val cx = left + gap * (i + 0.5f)
-                glowLine(exhaust, Offset(cx, h * 0.40f), Offset(right + w * 0.02f, exhY), stroke * 0.8f, exhaustGain)
+                val spread = (i - (n - 1) / 2f) * (1.5f + headerLvl)
+                glowLine(exhaust, Offset(cx, h * 0.40f), Offset(collectorX, exhY + spread), stroke * (0.65f + 0.06f * headerLvl), exhaustGain)
+                if (ceramicOn) {
+                    glowLine(White, Offset(cx, h * 0.40f + 3f), Offset(collectorX, exhY + spread + 3f), stroke * 0.4f, 0.65f)
+                }
             }
         } else {
             glowLine(exhaust, Offset(left, exhY), Offset(right, exhY), stroke, exhaustGain)
+        }
+        if (headerLvl > 0 || catLvl > 0 || tipLvl > 0) {
+            glowLine(exhaust, Offset(if (headerLvl > 0) collectorX else right, exhY), Offset(tailX, exhY + tailDrop), stroke * (0.85f + 0.08f * catLvl), exhaustGain)
+        }
+        if (tipLvl > 0) {
+            glowLine(exhaust, Offset(tailX, exhY + tailDrop), Offset(tailX - 6f, exhY + tailDrop + 6f + tipLvl * 4f), stroke, exhaustGain)
+        }
+        if (pumpLvl > 0) {
+            val pumpW = 8f + pumpLvl * 3f
+            val py = h * 0.86f
+            glowLine(Amber, Offset(left, py), Offset(left + pumpW, py), stroke * 0.7f)
+            glowLine(Amber, Offset(left + pumpW, py), Offset(left + pumpW, py + 10f), stroke * 0.7f)
+            glowLine(Amber, Offset(left + pumpW, py + 10f), Offset(left, py + 10f), stroke * 0.7f)
+            glowLine(Amber, Offset(left, py + 10f), Offset(left, py), stroke * 0.7f)
+        }
+        if (camLvl > 0) {
+            val camY = h * 0.295f
+            glowLine(White, Offset(left - 4f, camY), Offset(right - 8f, camY), stroke * 0.65f, 0.9f)
+            for (i in 0 until n) {
+                val cx = left + gap * (i + 0.5f)
+                glowCircle(Lime, 3.5f + camLvl * 1.3f, Offset(cx, camY), stroke * 0.55f, gain = 0.95f)
+            }
+            if (vvtLvl > 0) {
+                glowCircle(Cyan, 5f + vvtLvl * 2.5f, Offset(left - 10f, camY), stroke, gain = 1.05f)
+            }
+        }
+        if (plugLvl > 0 || coilLvl > 0) {
+            val packs = (1 + coilLvl).coerceAtMost(n)
+            val railY = h * 0.275f
+            glowLine(White, Offset(left, railY), Offset(left + gap * packs, railY), stroke * 0.55f, 0.8f)
+            for (i in 0 until packs) {
+                val cx = left + gap * (i + 0.5f)
+                val pack = 3f + coilLvl * 1.2f
+                glowLine(White, Offset(cx - pack, railY - pack), Offset(cx + pack, railY - pack), stroke * 0.5f)
+                glowLine(White, Offset(cx + pack, railY - pack), Offset(cx + pack, railY + pack), stroke * 0.5f)
+                glowLine(White, Offset(cx + pack, railY + pack), Offset(cx - pack, railY + pack), stroke * 0.5f)
+                glowLine(White, Offset(cx - pack, railY + pack), Offset(cx - pack, railY - pack), stroke * 0.5f)
+                glowLine(Amber, Offset(cx, railY + pack), Offset(cx, h * 0.36f), stroke * 0.4f, 0.7f + 0.05f * plugLvl)
+            }
         }
         }
 
@@ -182,7 +308,8 @@ fun EngineArt(
             for (t in 0 until count) {
                 val cx = right + w * 0.065f
                 val cy = h * (0.34f + t * 0.13f)
-                val rad = h * if (count == 2) 0.048f else 0.064f
+                val grown = 1f + 0.16f * (turboLvl - 1).coerceAtLeast(0)
+                val rad = h * (if (count == 2) 0.048f else 0.064f) * grown
                 glowCircle(Cyan, rad, Offset(cx, cy), stroke, gain = 1.15f)
                 for (trail in 2 downTo 0) {
                     val spin = Math.toRadians((-(angle * 7f) - trail * 14f + t * 40f).toDouble())
@@ -199,12 +326,20 @@ fun EngineArt(
                         )
                     }
                 }
+                if (controllerLvl > 0 && t == 0) {
+                    val box = 4f + controllerLvl * 2.5f
+                    glowLine(Lime, Offset(cx + rad, cy - box), Offset(cx + rad + box, cy - box), stroke * 0.6f)
+                    glowLine(Lime, Offset(cx + rad + box, cy - box), Offset(cx + rad + box, cy + box), stroke * 0.6f)
+                    glowLine(Lime, Offset(cx + rad + box, cy + box), Offset(cx + rad, cy + box), stroke * 0.6f)
+                }
             }
         }
         if (params.induction == Induction.SUPERCHARGER) {
-            glowLine(Lime, Offset(left + w * 0.08f, h * 0.28f), Offset(left + w * 0.28f, h * 0.28f), stroke, 1.1f)
-            glowLine(Lime, Offset(left + w * 0.28f, h * 0.28f), Offset(left + w * 0.28f, h * 0.36f), stroke, 1.1f)
-            glowLine(Lime, Offset(left + w * 0.28f, h * 0.36f), Offset(left + w * 0.08f, h * 0.36f), stroke, 1.1f)
+            val grow = 1f + 0.16f * (scLvl - 1).coerceAtLeast(0)
+            val scR = left + w * 0.08f + w * 0.20f * grow
+            glowLine(Lime, Offset(left + w * 0.08f, h * 0.28f), Offset(scR, h * 0.28f), stroke, 1.1f)
+            glowLine(Lime, Offset(scR, h * 0.28f), Offset(scR, h * 0.36f), stroke, 1.1f)
+            glowLine(Lime, Offset(scR, h * 0.36f), Offset(left + w * 0.08f, h * 0.36f), stroke, 1.1f)
             glowLine(Lime, Offset(left + w * 0.08f, h * 0.36f), Offset(left + w * 0.08f, h * 0.28f), stroke, 1.1f)
             val spin = Math.toRadians((angle * 5f).toDouble())
             val sx = left + w * 0.18f
@@ -245,7 +380,7 @@ fun EngineArt(
         }
 
         if (params.banks >= 2) {
-            drawVee(params, w, h, stroke, angle, exhaust, exhaustGain, perBank, gap)
+            drawVee(params, parts, w, h, stroke, angle, exhaust, exhaustGain, perBank, gap)
         } else for (i in 0 until perBank) {
             val cx = left + gap * (i + 0.5f)
             val th = Math.toRadians((angle + phases[i]).toDouble())
@@ -256,20 +391,36 @@ fun EngineArt(
             val horiz = pinX - cx
             val rodY = sqrt((rod * rod - horiz * horiz).coerceAtLeast(4f))
             val crown = pinY - rodY
-            val half = gap * 0.22f
             glowLine(White, Offset(cx - gap * 0.30f, h * 0.40f), Offset(cx - gap * 0.30f, crankY + h * 0.05f), stroke * 0.75f, 0.55f)
             glowLine(White, Offset(cx + gap * 0.30f, h * 0.40f), Offset(cx + gap * 0.30f, crankY + h * 0.05f), stroke * 0.75f, 0.55f)
             if (params.airCooled) {
-                for (fin in 0 until 5) {
-                    val fy = h * 0.42f + fin * h * 0.045f
-                    glowLine(Cyan, Offset(cx - gap * 0.34f, fy), Offset(cx + gap * 0.34f, fy), stroke * 0.55f, 0.7f)
+                val fins = 4 + finLvl
+                val stick = gap * (0.34f + 0.035f * finLvl)
+                for (fin in 0 until fins) {
+                    val fy = h * 0.42f + fin * (h * 0.22f / fins)
+                    glowLine(Cyan, Offset(cx - stick, fy), Offset(cx + stick, fy), stroke * 0.55f, 0.7f)
                 }
             }
-            glowLine(Cyan, Offset(cx - half, crown), Offset(cx + half, crown), stroke, 1.15f)
-            glowLine(White, Offset(cx - half, crown + h * 0.04f), Offset(cx + half, crown + h * 0.04f), stroke)
-            glowLine(White, Offset(cx - half, crown), Offset(cx - half, crown + h * 0.04f), stroke)
-            glowLine(White, Offset(cx + half, crown), Offset(cx + half, crown + h * 0.04f), stroke)
-            glowLine(Amber, Offset(cx, crown + h * 0.04f), Offset(pinX, pinY), stroke * 0.9f, 0.95f)
+            val skirt = gap * (0.22f + 0.028f * boreLvl)
+            val crownDrop = h * (0.04f + 0.007f * compLvl)
+            val crownColor = if (forged) Lime else Cyan
+            if (springLvl > 0) {
+                val coils = 2 + springLvl
+                for (coil in 0 until coils) {
+                    val sy = h * 0.31f - coil * h * 0.012f
+                    val zig = if (coil % 2 == 0) -3f else 3f
+                    glowLine(White, Offset(cx + zig, sy), Offset(cx - zig, sy + h * 0.01f), stroke * 0.4f, 0.65f)
+                }
+            }
+            if (studLvl > 0) {
+                glowCircle(White, stroke * (0.7f + 0.15f * studLvl), Offset(cx - skirt, h * 0.40f), stroke, filled = true, gain = 0.6f)
+                glowCircle(White, stroke * (0.7f + 0.15f * studLvl), Offset(cx + skirt, h * 0.40f), stroke, filled = true, gain = 0.6f)
+            }
+            glowLine(crownColor, Offset(cx - skirt, crown), Offset(cx + skirt, crown), stroke, 1.15f)
+            glowLine(White, Offset(cx - skirt, crown + crownDrop), Offset(cx + skirt, crown + crownDrop), stroke)
+            glowLine(White, Offset(cx - skirt, crown), Offset(cx - skirt, crown + crownDrop), stroke)
+            glowLine(White, Offset(cx + skirt, crown), Offset(cx + skirt, crown + crownDrop), stroke)
+            glowLine(Amber, Offset(cx, crown + crownDrop), Offset(pinX, pinY), stroke * 0.9f, 0.95f)
             glowLine(White, Offset(cx, crankY), Offset(pinX, pinY), stroke, 0.9f)
             glowLine(White, Offset(cx, crankY), Offset(counterX, counterY), stroke * 1.15f, 0.7f)
             glowCircle(White, stroke * 1.05f, Offset(pinX, pinY), stroke, filled = true, gain = 0.8f)
@@ -297,6 +448,7 @@ private fun firingPhases(count: Int): FloatArray = when (count) {
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawVee(
     params: EngineParams,
+    parts: Map<String, Int>,
     w: Float,
     h: Float,
     stroke: Float,
@@ -327,7 +479,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawVee(
             val crownX = topX - sign * tilt * lift
             val crownY = topY - lift
             glowLine(androidx.compose.ui.graphics.Color.White, Offset(along, crankY - h * 0.02f), Offset(topX, topY), stroke * 0.75f, 0.8f)
-            glowLine(Cyan, Offset(crownX - 7f, crownY), Offset(crownX + 7f, crownY), stroke, 1.05f)
+            val skirt = 7f + (parts["bore"] ?: 0) * 1.6f
+            val crownColor = if ((parts["pistons"] ?: 0) > 0) Lime else Cyan
+            glowLine(crownColor, Offset(crownX - skirt, crownY), Offset(crownX + skirt, crownY), stroke, 1.05f)
+            if ((parts["headers"] ?: 0) > 0) {
+                glowLine(exhaust, Offset(topX, topY), Offset(w * (0.84f + 0.015f * (parts["headers"] ?: 0)), h * 0.28f), stroke * 0.55f, exhaustGain)
+            }
             glowLine(Amber, Offset(crownX, crownY), Offset(pinX, pinY), stroke * 0.8f, 0.9f)
             glowCircle(androidx.compose.ui.graphics.Color.White, stroke, Offset(pinX, pinY), stroke, filled = true, gain = 0.7f)
             val fromTdc = min(kotlin.math.abs(phase % 360f), 360f - kotlin.math.abs(phase % 360f))
