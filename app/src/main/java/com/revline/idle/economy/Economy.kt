@@ -1,34 +1,42 @@
 package com.revline.idle.economy
 
+import com.revline.idle.model.FuelKind
 import com.revline.idle.model.OperatingPoint
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.pow
 
 object Income {
-    const val K = 0.0096
+    const val K = 0.016
     const val HP_EXP = 1.62
     const val ECONOMY_EXP = 0.58
     const val REL_EXP = 1.15
-    const val BTE_REF = 0.30
+    const val MPG_REF = 28.0
 
     /**
-     * Contract dollars per second from the operating point the crank is at right now.
+     * Contract dollars per second at the rpm the crank is turning.
      * powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
-     * economyScore    = (brakeThermalEfficiency / 0.30)^0.58
-     * durabilityScore = (reliability/100 * heatFactor)^1.15
-     * $/s = 0.0096 * powerScore * economyScore * durabilityScore * multiplier
+     * economyScore    = (mpg / 28)^0.58 * (pumpPrice / thisFuelPrice)
+     * durabilityScore = (reliability/100 * condition)^1.15
+     * $/s = 0.016 * powerScore * economyScore * durabilityScore * multiplier
      *
-     * Horsepower, torque, and brake efficiency are the point at this rpm, not the
-     * peak stickers. heatFactor falls when this pull is hot, knocking, or fuel-limited.
+     * mpg is this pull's fuel flow scored as miles per gallon at 60 mph.
+     * A dearer gallon pays less for the same burn.
      */
-    fun perSecond(point: OperatingPoint, reliability: Double, multiplier: Double): Double {
+    fun perSecond(
+        point: OperatingPoint,
+        reliability: Double,
+        multiplier: Double,
+        dollarsPerGallon: Double = FuelKind.PUMP_87.dollarsPerGallon,
+    ): Double {
         val hp = point.horsepower.coerceAtLeast(0.2)
         val tq = point.torqueLbFt.coerceAtLeast(0.2)
         val power = hp.pow(HP_EXP) * (1.0 + tq / 950.0)
-        val economy = (point.brakeEfficiency.coerceAtLeast(0.05) / BTE_REF).pow(ECONOMY_EXP)
+        val mpgScore = (point.mpg.coerceAtLeast(0.8) / MPG_REF).pow(ECONOMY_EXP)
+        val pump = FuelKind.PUMP_87.dollarsPerGallon
+        val priceScore = pump / dollarsPerGallon.coerceAtLeast(0.5)
         val rel = (reliability / 100.0 * conditionFactor(point)).coerceIn(0.05, 1.0)
-        return K * power * economy * rel.pow(REL_EXP) * multiplier.coerceAtLeast(0.0)
+        return K * power * mpgScore * priceScore * rel.pow(REL_EXP) * multiplier.coerceAtLeast(0.0)
     }
 
     /** 1 when this rpm is inside thermal and knock limits, down toward 0.2 when it is not. */

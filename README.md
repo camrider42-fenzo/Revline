@@ -2,7 +2,7 @@
 
 An offline idle shop where the contract pays from a running engine model. You buy parts, study a tech tree, and occasionally scrap the long-block for Engineering Knowledge. Nothing here phones home. There are no ads and no API keys.
 
-The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a scrollable map. Each category is a node, and a part that waits on an earlier part is branched off it. Solid lines stay in the same bay. Dashed lines cross to a part in another bay that this one still depends on.
+The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a black bubble map you drag and pinch. Category bubbles sit in a grid, and the parts in that bay ring around them.
 
 ## Build
 
@@ -29,17 +29,19 @@ A copy is also written to `dist/revline-debug.apk` after a local release build f
 
 ## What the contract pays
 
-Income is the engine you have, at the rpm it is turning. The bench pedal is a throttle stop: press it down to open the throttle, and the crank chases that rpm. Horsepower, torque, and brake thermal efficiency are read off that operating point, not off the peak stickers.
+Income is the engine you have, at the rpm it is turning. The bench pedal is a throttle stop: press it down to open the throttle, and the crank chases that rpm. Horsepower, torque, and MPG are that operating point. MPG is the fuel this rpm is burning, scored as miles per gallon at a steady 60 mph, so a thirsty pull pays less even when the horsepower is up.
 
 ```
 powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
-economyScore    = (brakeThermalEfficiency / 0.30)^0.58
+economyScore    = (mpg / 28)^0.58 * (3.40 / dollarsPerGallon)
 durabilityScore = (reliability/100 * condition)^1.15
-dollars/second  = 0.0096 * powerScore * economyScore * durabilityScore * multiplier
+dollars/second  = 0.016 * powerScore * economyScore * durabilityScore * multiplier
 multiplier      = 1 + 0.12 * EngineeringKnowledge
 ```
 
-`condition` is 1 on a clean pull and falls when this rpm is hot (coolant, oil, or EGT), knocking, or out of fuel flow. Cruise MPG is still on the sheet, but it is a road-load number and it does not set the contract. Leaving the pedal near idle pays a thin contract. The rpm where this build actually makes power pays several times more, and that spot moves when the cam, the turbo, or the fuel changes.
+Pump 87 is $3.40/gal, 93 is $4.50, E85 is $4.10, and race fuel is $15. The same burn on a dearer gallon pays less. E85 also uses more gallons, so its live MPG drops on top of the price. `condition` is 1 on a clean pull and falls when this rpm is hot, knocking, or out of fuel flow. The rpm that pays best is a compromise between power and the fuel that pull drinks, and it moves when the cam, the turbo, or the fuel changes.
+
+A locked part on the bubble map names the upgrade you still have to buy, or the study if that is the only gate, instead of showing a price. Lines stay inside one bay.
 
 The throttle you set is saved. Offline pay uses that same stop, at 80% of the contract and 50% of passive research, capped at 8 hours. A rebuild puts the pedal back to a light opening so the next long-block gets its own pull.
 

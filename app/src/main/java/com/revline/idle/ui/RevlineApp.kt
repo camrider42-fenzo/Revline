@@ -192,11 +192,11 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Stat("HP", String.format(Locale.US, "%.0f", live.horsepower), Lime, Modifier.weight(1f))
             Stat("TQ", String.format(Locale.US, "%.0f", live.torqueLbFt), Amber, Modifier.weight(1f))
-            Stat("MPG", String.format(Locale.US, "%.1f", s.cruiseMpg), White, Modifier.weight(1f))
+            Stat("MPG", String.format(Locale.US, "%.1f", live.mpg), if (live.mpg < 12.0) Amber else White, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
         Text(
-            "At ${live.rpm.toInt()} rpm · peak ${s.peakHorsepower.toInt()} hp @ ${s.peakHorsepowerRpm.toInt()} · peak torque ${s.peakTorqueLbFt.toInt()} @ ${s.peakTorqueRpm.toInt()}",
+            "At ${live.rpm.toInt()} rpm · ${String.format(Locale.US, "%.1f", 60.0 / live.mpg.coerceAtLeast(0.8))} gal/h · fuel $${String.format(Locale.US, "%.2f", ui.sheet.params.fuel.dollarsPerGallon)}/gal · peak ${s.peakHorsepower.toInt()} hp",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

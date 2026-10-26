@@ -112,6 +112,16 @@ class EngineSimTest {
     }
 
     @Test
+    fun liveMpgFallsAsThePullUsesMoreFuel() {
+        val low = EngineSim.point(EngineParams(), 1800.0).mpg
+        val high = EngineSim.point(EngineParams(), 6000.0).mpg
+        assertTrue("mpg $low vs $high", high < low * 0.7)
+        val e85 = EngineSim.point(EngineParams(fuel = FuelKind.E85), 4000.0).mpg
+        val pump = EngineSim.point(EngineParams(), 4000.0).mpg
+        assertTrue("e85 $e85 vs pump $pump", e85 < pump * 0.85)
+    }
+
+    @Test
     fun highCompressionOn87KnocksHarderThanRaceFuel() {
         val pump = EngineParams(
             compressionRatio = 12.2,

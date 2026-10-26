@@ -22,11 +22,12 @@ enum class FuelKind(
     val kgPerGallon: Double,
     val stoichAfr: Double,
     val latentJPerKg: Double,
+    val dollarsPerGallon: Double,
 ) {
-    PUMP_87(87.0, 43.4e6, 2.80, 14.7, 350e3),
-    PREMIUM_93(93.0, 43.4e6, 2.80, 14.7, 340e3),
-    E85(105.0, 26.9e6, 2.96, 9.76, 850e3),
-    RACE_100(100.0, 43.0e6, 2.84, 14.6, 330e3),
+    PUMP_87(87.0, 43.4e6, 2.80, 14.7, 350e3, 3.40),
+    PREMIUM_93(93.0, 43.4e6, 2.80, 14.7, 340e3, 4.50),
+    E85(105.0, 26.9e6, 2.96, 9.76, 850e3, 4.10),
+    RACE_100(100.0, 43.0e6, 2.84, 14.6, 330e3, 15.00),
 }
 
 enum class Coolant { GLYCOL_50, WATERLESS }
@@ -101,6 +102,8 @@ data class OperatingPoint(
     val octaneDemand: Double,
     val unresolvedKnock: Double,
     val fuelLimited: Boolean,
+    /** Miles per gallon if this fuel flow were asked to hold 60 mph. Falls as the pull drinks more. */
+    val mpg: Double = 0.0,
 )
 
 data class EngineStats(
@@ -370,6 +373,8 @@ object EngineSim {
         if (afr < stoich) egt -= (stoich - afr) * 12.0
         if (afr > stoich + 0.4) egt += (afr - stoich) * 18.0
         val hp = pBrake / 745.7
+        val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon
+        val mpg = (60.0 / gallonsPerHour.coerceAtLeast(0.04)).coerceIn(0.8, 80.0)
         return OperatingPoint(
             rpm = rpm,
             horsepower = hp,
@@ -400,6 +405,7 @@ object EngineSim {
             octaneDemand = demand,
             unresolvedKnock = unresolved,
             fuelLimited = limited,
+            mpg = mpg,
         )
     }
 

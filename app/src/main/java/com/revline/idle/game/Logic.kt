@@ -46,8 +46,10 @@ object Logic {
         return IDLE_RPM + throttle.coerceIn(0.0, 1.0) * span
     }
 
-    fun incomeAt(params: EngineParams, rpm: Double, reliability: Double, multiplier: Double): Double =
-        Income.perSecond(EngineSim.point(params, rpm), reliability, multiplier)
+    fun incomeAt(params: EngineParams, rpm: Double, reliability: Double, multiplier: Double): Double {
+        val point = EngineSim.point(params, rpm)
+        return Income.perSecond(point, reliability, multiplier, params.fuel.dollarsPerGallon)
+    }
 
     /**
      * Throttle opening whose steady rpm pays the most on this build.
@@ -281,6 +283,17 @@ object Logic {
         return u.baseCost * u.growth.pow(level.toDouble()) * costMultiplier(state) * 0.5
     }
 
+    /**
+     * What to print instead of a price when the next level is closed.
+     * Names the upgrade you still have to buy. If the gate is only a study, names that study.
+     */
+    fun lockLabel(state: GameState, id: String): String? {
+        val research = lockReason(state, id) ?: return null
+        val unmet = UpgradeMap.parents(Upgrades.byId(id)).filter { (state.upgrades[it] ?: 0) <= 0 }
+        val names = if (unmet.isNotEmpty()) unmet.map { Upgrades.byId(it).name } else listOf(research)
+        return "Needs " + names.joinToString(" · ")
+    }
+
     fun lockReason(state: GameState, id: String): String? {
         val u = Upgrades.byId(id)
         val level = state.upgrades[id] ?: 0
@@ -316,16 +329,18 @@ object Logic {
         val u = Upgrades.all.find { it.id == id } ?: return null
         val level = state.upgrades[id] ?: 0
         if (level >= u.maxLevel) return null
-        val now = sheet(state).stats
-        val next = sheet(state.copy(upgrades = state.upgrades + (id to level + 1))).stats
+        val now = sheet(state)
+        val next = sheet(state.copy(upgrades = state.upgrades + (id to level + 1)))
+        val nowRpm = targetRpm(now.params.redlineRpm, state.throttle)
+        val nextRpm = targetRpm(next.params.redlineRpm, state.throttle)
         return StatDelta(
-            hp = next.peakHorsepower - now.peakHorsepower,
-            torque = next.peakTorqueLbFt - now.peakTorqueLbFt,
-            mpg = next.cruiseMpg - now.cruiseMpg,
-            reliability = next.reliability - now.reliability,
-            coolantC = next.peakCoolantC - now.peakCoolantC,
-            oilC = next.peakOilC - now.peakOilC,
-            egtC = next.peakEgtC - now.peakEgtC,
+            hp = next.stats.peakHorsepower - now.stats.peakHorsepower,
+            torque = next.stats.peakTorqueLbFt - now.stats.peakTorqueLbFt,
+            mpg = EngineSim.point(next.params, nextRpm).mpg - EngineSim.point(now.params, nowRpm).mpg,
+            reliability = next.stats.reliability - now.stats.reliability,
+            coolantC = next.stats.peakCoolantC - now.stats.peakCoolantC,
+            oilC = next.stats.peakOilC - now.stats.peakOilC,
+            egtC = next.stats.peakEgtC - now.stats.peakEgtC,
         )
     }
 

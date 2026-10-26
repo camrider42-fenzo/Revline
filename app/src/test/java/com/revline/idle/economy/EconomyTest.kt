@@ -18,19 +18,22 @@ import org.junit.Test
 class EconomyTest {
     @Test
     fun incomeMatchesThePublishedFormula() {
-        val point = point(100.0, 100.0, 0.30)
+        val point = point(100.0, 100.0, mpg = 28.0)
         val expected = Income.K * 100.0.pow(Income.HP_EXP) * (1.0 + 100.0 / 950.0)
         assertEquals(expected, Income.perSecond(point, 100.0, 1.0), 1e-6)
     }
 
     @Test
     fun incomeRisesWithPowerEconomyAndReliability() {
-        val base = Income.perSecond(point(140.0, 140.0, 0.30), 90.0, 1.0)
-        assertTrue(Income.perSecond(point(200.0, 140.0, 0.30), 90.0, 1.0) > base)
-        assertTrue(Income.perSecond(point(140.0, 140.0, 0.36), 90.0, 1.0) > base)
-        assertTrue(Income.perSecond(point(140.0, 140.0, 0.30), 60.0, 1.0) < base)
-        assertTrue(Income.perSecond(point(140.0, 140.0, 0.30, coolant = 122.0), 90.0, 1.0) < base)
-        assertEquals(base * 1.12, Income.perSecond(point(140.0, 140.0, 0.30), 90.0, 1.12), 1e-6)
+        val base = Income.perSecond(point(140.0, 140.0, mpg = 28.0), 90.0, 1.0)
+        assertTrue(Income.perSecond(point(200.0, 140.0, mpg = 28.0), 90.0, 1.0) > base)
+        assertTrue(Income.perSecond(point(140.0, 140.0, mpg = 36.0), 90.0, 1.0) > base)
+        assertTrue(Income.perSecond(point(140.0, 140.0, mpg = 28.0), 60.0, 1.0) < base)
+        assertTrue(Income.perSecond(point(140.0, 140.0, mpg = 28.0, coolant = 122.0), 90.0, 1.0) < base)
+        assertTrue(
+            Income.perSecond(point(140.0, 140.0, mpg = 28.0), 90.0, 1.0, dollarsPerGallon = 15.0) < base,
+        )
+        assertEquals(base * 1.12, Income.perSecond(point(140.0, 140.0, mpg = 28.0), 90.0, 1.12), 1e-6)
     }
 
     @Test
@@ -201,7 +204,7 @@ class EconomyTest {
     private fun point(
         hp: Double,
         tq: Double,
-        bte: Double,
+        mpg: Double = 28.0,
         coolant: Double = 90.0,
         oil: Double = 110.0,
         egt: Double = 720.0,
@@ -229,12 +232,13 @@ class EconomyTest {
         brakeKw = hp * 0.7457,
         frictionKw = 5.0,
         wallKw = 15.0,
-        brakeEfficiency = bte,
+        brakeEfficiency = 0.30,
         knockMargin = 5.0,
         octane = 87.0,
         octaneDemand = 82.0,
         unresolvedKnock = 0.0,
         fuelLimited = false,
+        mpg = mpg,
     )
 
 }
