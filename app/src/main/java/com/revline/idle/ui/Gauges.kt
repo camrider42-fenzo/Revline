@@ -233,7 +233,11 @@ fun ThrottlePedal(
             glowCircle(White, stroke * 1.5f, Offset(w * 0.5f, h * 0.93f), stroke, filled = true, gain = 0.7f)
         }
         Text(
-            if (enabled) "${(shown * 100).toInt()}%" else "ROLL",
+            when {
+                !enabled -> "ROLL"
+                shown < 0.015f -> "STALL"
+                else -> "${(shown * 100).toInt()}%"
+            },
             color = if (enabled) White else Olive,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

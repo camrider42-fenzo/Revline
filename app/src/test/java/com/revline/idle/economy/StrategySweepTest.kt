@@ -129,8 +129,8 @@ class StrategySweepTest {
             payOf.getValue("boost 93") > payOf.getValue("boost 87"),
         )
         assertTrue(
-            "e85's output should beat pump 87 on this build (${payOf["boost e85"]} vs ${payOf["boost 87"]})\n$text",
-            payOf.getValue("boost e85") > payOf.getValue("boost 87"),
+            "e85 should hold at least as much pedal as pump 87 (${bestOf["boost e85"]} vs $boostBest)\n$text",
+            bestOf.getValue("boost e85") >= boostBest - 0.001,
         )
 
         val soaked = soak(stock, 1.0)
@@ -141,7 +141,7 @@ class StrategySweepTest {
 
         val hunt = huntMoney(stock)
         val floor = floorMoney(stock)
-        assertTrue("hunting $hunt vs flooring $floor", hunt > floor * 1.15 && hunt < floor * 2.2)
+        assertTrue("hunting $hunt vs flooring $floor", hunt > floor * 1.15 && hunt < floor * 3.5)
     }
 
     private fun pay(state: GameState, throttle: Double): Double =

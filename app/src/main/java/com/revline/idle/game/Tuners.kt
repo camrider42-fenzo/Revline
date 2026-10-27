@@ -22,14 +22,6 @@ object Tuners {
 
     val all: List<Screw> = listOf(
         Screw(
-            "idle",
-            "Idle speed",
-            "The throttle stop. Lower is calmer in the shop. Higher cleans up a stumble.",
-            "rpm",
-            "Needs Torque wrench pass",
-            listOf("wrench"),
-        ),
-        Screw(
             "spark",
             "Spark advance",
             "Degrees added to the distributor or the map. Too much is knock. Too little is heat in the pipe.",
@@ -94,7 +86,6 @@ object Tuners {
         "cam" -> level(state, "cam") + 2 * level(state, "vvt") + 2 * level(state, "vvl")
         "redline" -> level(state, "springs")
         "thermostat" -> level(state, "thermostat")
-        "idle" -> level(state, "wrench")
         else -> 0
     }
 
@@ -107,7 +98,6 @@ object Tuners {
             "cam" -> nice(0.04 / p, 0.005)
             "redline" -> nice(200.0 / p, 25.0)
             "thermostat" -> if (p <= 1) 4.0 else 2.0
-            "idle" -> nice(80.0 / p, 10.0)
             else -> 1.0
         }
     }
@@ -121,7 +111,6 @@ object Tuners {
             "cam" -> -(0.02 + p * 0.008)..(0.02 + p * 0.008)
             "redline" -> -(120.0 * p)..0.0
             "thermostat" -> -(4.0 * p)..0.0
-            "idle" -> -(50.0 * p)..(50.0 * p)
             else -> 0.0..0.0
         }
     }
@@ -156,7 +145,7 @@ object Tuners {
             else -> 2
         }
         val body = "%.${digits}f".format(Locale.US, shown)
-        val signed = if (shown > 0.0 && id != "idle") "+$body" else body
+        val signed = if (shown > 0.0) "+$body" else body
         return "$signed ${screw.unit}"
     }
 

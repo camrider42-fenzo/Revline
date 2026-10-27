@@ -75,7 +75,9 @@ class EconomyTest {
 
     @Test
     fun holdingThePedalOnThePayingRpmBeatsIdle() {
-        val stock = GameState(savedAtEpochMs = 1L, throttle = 0.0, prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal)
+        val stock = GameState(savedAtEpochMs = 1L, throttle = 0.12, prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal)
+        assertEquals(0.0, Logic.targetRpm(6500.0, 0.0), 0.0)
+        assertEquals(0.0, Logic.sheet(stock.copy(throttle = 0.0)).incomePerSec, 0.0)
         val idle = Logic.sheet(stock).incomePerSec
         val best = Logic.bestThrottle(stock)
         val peaked = Logic.sheet(stock.copy(throttle = best)).incomePerSec

@@ -48,12 +48,16 @@ object Logic {
     const val IDLE_RPM = 820.0
     const val REST_THROTTLE = 0.18
 
-    /** Throttle stop to crank speed. 0 is idle, 1 is the redline this block can turn. */
+    /** Throttle stop to crank speed. 0 is a stall. Anything open is idle up to redline. */
     fun targetRpm(redline: Double, throttle: Double, idle: Double = IDLE_RPM): Double {
+        val t = throttle.coerceIn(0.0, 1.0)
+        if (t <= 0.0) return 0.0
         val floor = idle.coerceIn(500.0, redline - 300.0)
         val span = (redline - floor).coerceAtLeast(1.0)
-        return floor + throttle.coerceIn(0.0, 1.0) * span
+        return floor + t * span
     }
+
+    fun stalled(throttle: Double): Boolean = throttle <= 0.0
 
     /** Throttle plate. The last part of the pedal opens the engine into boost and a rich mixture. */
     fun loadFor(throttle: Double): Double {
@@ -69,6 +73,7 @@ object Logic {
         throttle: Double,
         stats: EngineStats,
     ): Double {
+        if (stalled(throttle) || rpm < 200.0) return 0.0
         val point = EngineSim.point(params, rpm, loadFor(throttle))
         val output = ContractOutput(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg)
         return Income.perSecond(point, reliability, multiplier, params.fuel.dollarsPerGallon, output)
@@ -296,7 +301,7 @@ object Logic {
             installedHp = installedHp(block, state),
             banks = block.banks,
             airCooled = block.airCooled && cai < 3,
-            idleRpm = (block.idleRpm + Tuners.value(state, "idle")).coerceIn(500.0, block.idleRpm + 600.0),
+            idleRpm = block.idleRpm,
             blockTitle = block.title,
             nitrousFraction = (0.34 * nitrous).coerceIn(0.0, 1.2),
             overboostPsi = (5.0 * overboost).coerceIn(0.0, 20.0),

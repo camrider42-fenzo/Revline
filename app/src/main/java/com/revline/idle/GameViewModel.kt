@@ -122,12 +122,16 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             DynoPhase.IDLE -> {
-                val target = Logic.targetRpm(redline, throttle, floor) + wobble * 0.35
-                val follow = 1.0 - exp(-dt / 0.42)
+                val target = if (throttle <= 0.0) {
+                    0.0
+                } else {
+                    Logic.targetRpm(redline, throttle, floor) + wobble * 0.35
+                }
+                val follow = 1.0 - exp(-dt / if (throttle <= 0.0) 0.55 else 0.42)
                 rpm += (target - rpm) * follow
             }
         }
-        return rpm.coerceIn(680.0, redline + 80.0)
+        return rpm.coerceIn(0.0, redline + 80.0)
     }
 
     fun setThrottle(position: Double) {

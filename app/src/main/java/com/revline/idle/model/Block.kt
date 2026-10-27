@@ -44,14 +44,14 @@ enum class Block(
      * less scale than a big one whose best stop is only part of the peak.
      */
     fun payScale(): Double = when (this) {
-        MOPED -> 0.69
-        THUMPER -> 0.74
-        TWIN -> 0.90
-        TRIPLE -> 0.94
-        INLINE_FOUR -> 1.0
-        V6 -> 1.87
-        V8 -> 2.71
-        V12 -> 5.25
+        MOPED -> 0.30
+        THUMPER -> 1.26
+        TWIN -> 1.31
+        TRIPLE -> 1.39
+        INLINE_FOUR -> 1.28
+        V6 -> 2.03
+        V8 -> 2.95
+        V12 -> 4.70
     }
 
     /**

@@ -471,8 +471,10 @@ object EngineSim {
         egt += shot * 180.0 + leanHit * 70.0
         val push = if (rpm > params.redlineRpm * 0.55) params.rpmPower else params.rpmPower * 0.25
         val hp = (pBrake / 745.7) * (1.0 + push) + params.installedHp * open.coerceIn(0.45, 1.0)
-        val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon
-        val mpg = (60.0 / gallonsPerHour.coerceAtLeast(0.04)).coerceIn(0.8, 80.0)
+        val richFraction = ((stoich - afr) / stoich).coerceAtLeast(0.0)
+        val gulp = if (plate) 1.0 + 1.8 * open.pow(5.0) * (0.65 + richFraction) else 1.0
+        val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon * gulp
+        val mpg = (60.0 / gallonsPerHour.coerceAtLeast(1e-5)).coerceIn(0.4, 400.0)
         return OperatingPoint(
             rpm = rpm,
             horsepower = hp,

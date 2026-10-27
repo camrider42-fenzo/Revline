@@ -29,7 +29,7 @@ A copy is also written to `dist/revline-debug.apk` after a local release build f
 
 ## What the contract pays
 
-The pedal is a large part of the contract. It is scored on how much of the engine's maximum output that stop is actually making, and on the mpg at that same stop. The maximum horsepower and torque set how big the check can be. A closed pedal leaves most of that output unused and pays like it. Rpm is not its own term: an engine that makes its peak at 4,000 rpm is paid in full there, and one that makes it at 7,000 is paid in full there. Current mpg pulls the other way, so a rich floor can pay less than a stop that is using the engine and still sipping. Heat soaks a wide-open pull and takes more off. A cold-air inlet, radiator, oil cooler, intercooler, or water-meth spray cuts that soak, so those parts let you hold more pedal.
+The pedal is a large part of the contract. It is scored on how much of the engine's maximum output that stop is actually making, and on the mpg at that same stop. The maximum horsepower and torque set how big the check can be. A closed pedal leaves most of that output unused and pays like it. Rpm is not its own term: an engine that makes its peak at 4,000 rpm is paid in full there, and one that makes it at 7,000 is paid in full there. Current mpg pulls the other way. The last of the pedal dumps fuel through a rich mixture, on a 50 cc single the same as on the V12, so a wide-open stop pays less than the one that is actually using the engine. Heat soaks a wide-open pull and takes more off. A cold-air inlet, radiator, oil cooler, intercooler, or water-meth spray cuts that soak, so those parts let you hold more pedal.
 
 ```
 use             = (hpAtStop / peakHp)^0.85 * (torqueAtStop / peakTq)^0.15
@@ -87,7 +87,7 @@ The engine runs a real four-stroke cycle at a slowed-down rate that follows the 
 
 DEV MODE at the bottom of the REBUILD tab makes every part level and every study free for testing. Study gates still apply. A red DEV tag sits next to the title while it is on, and the switch is saved and survives rebuilds.
 
-The Tune tab is the screws: idle speed, spark advance, mixture, cam center, wastegate, rev limiter, and thermostat. A screw stays locked until its part is on the engine. More of that part, and the parts that refine it (a mapped spark table, VVT, a boost controller), make the range wider and the clicks smaller. The position goes into the same engine model as the hardware, so the sheet and the contract move when you turn it. A rebuild throws the screws away with the parts.
+The Tune tab is the screws: spark advance, mixture, cam center, wastegate, rev limiter, and thermostat. There is no idle-speed screw. The bottom of the pedal is a stall: the crank stops and the contract pays nothing until you crack it open. A screw stays locked until its part is on the engine. More of that part, and the parts that refine it (a mapped spark table, VVT, a boost controller), make the range wider and the clicks smaller. The position goes into the same engine model as the hardware, so the sheet and the contract move when you turn it. A rebuild throws the screws away with the parts.
 
 Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Further rebuilds after the V12 stay on that block and only add knowledge.
 

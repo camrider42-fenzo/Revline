@@ -190,7 +190,16 @@ private fun Hud(ui: UiModel) {
                 }
             }
             Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 22.sp)
-            Text("${formatDollars(ui.sheet.incomePerSec)}/s contract", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text(
+                if (Logic.stalled(ui.game.throttle)) {
+                    "stalled"
+                } else {
+                    "${formatDollars(ui.sheet.incomePerSec)}/s contract"
+                },
+                color = if (Logic.stalled(ui.game.throttle)) Red else Lime,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+            )
             if (ui.game.breakdowns > 0) {
                 Text(
                     "Breakdowns ${ui.game.breakdowns}",
