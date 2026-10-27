@@ -11,10 +11,15 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -65,8 +70,16 @@ fun RevlineApp(vm: GameViewModel) {
     RevlineTheme {
         Scaffold(
             containerColor = Black,
+            contentWindowInsets = WindowInsets.systemBars.only(
+                WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+            ),
             bottomBar = {
-                Column(Modifier.background(Black)) {
+                Column(
+                    Modifier
+                        .background(Black)
+                        .navigationBarsPadding()
+                        .padding(bottom = 8.dp),
+                ) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(White))
                     Row(Modifier.fillMaxWidth()) {
                         Tab.entries.forEach { item ->
