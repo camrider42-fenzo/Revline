@@ -81,7 +81,12 @@ object Logic {
         if (stalled(throttle) || rpm < 200.0) return 0.0
         val point = EngineSim.point(params, rpm, loadFor(throttle), accumulatedSoakC)
         val output = ContractOutput(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg)
-        return Income.perSecond(point, reliability, multiplier, params.fuel.dollarsPerGallon, output)
+        val durability = if (params.induction == Induction.NA && params.overboostPsi < 0.2) {
+            reliability
+        } else {
+            EngineSim.payingReliability(params, point)
+        }
+        return Income.perSecond(point, durability, multiplier, params.fuel.dollarsPerGallon, output)
     }
 
     /**

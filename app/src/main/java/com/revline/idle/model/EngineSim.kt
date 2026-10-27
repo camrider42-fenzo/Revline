@@ -372,6 +372,13 @@ object EngineSim {
     }
 
     /**
+     * Reliability of the stop the contract is actually paying for. The dyno sheet
+     * still scores a full-throttle sweep. A cruise does not inherit that pull.
+     */
+    fun payingReliability(params: EngineParams, point: OperatingPoint): Double =
+        reliability(params, listOf(point)).first
+
+    /**
      * Manifold and underhood heat soak, °C added to the charge after the intercooler.
      * The head runs hotter than the coolant when the radiator is the bottleneck.
      * A cold-air inlet, a bigger core, an intercooler, and water-meth all cut it.
@@ -464,7 +471,9 @@ object EngineSim {
             params.octaneBonus
         val demand = 74.0 +
             4.6 * (cr - 8.5) +
-            1.12 * boost +
+            // Pressure itself is a mild octane cost. Compressor heat, above, is the
+            // rest, so an intercooler is what makes the same boost livable.
+            0.48 * boost +
             0.34 * max(0.0, params.timingDeg + gradeTiming - 12.0) +
             0.16 * max(0.0, tChargeC - 28.0) +
             12.0 * shot -
