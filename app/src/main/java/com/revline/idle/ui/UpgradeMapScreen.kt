@@ -63,6 +63,15 @@ import com.revline.idle.model.FuelKind
 import java.util.Locale
 import kotlin.math.hypot
 
+/**
+ * The map may move for a new focus request, and once when it first has a size.
+ * A later size change, such as the detail panel growing after a purchase, is not a request.
+ */
+internal fun cameraShouldMove(appliedTick: Int, requestTick: Int, width: Float, height: Float): Boolean {
+    if (width < 1f || height < 1f) return false
+    return appliedTick != requestTick
+}
+
 private fun effectColor(effect: Effect): Color = when (effect) {
     Effect.POWER -> Lime
     Effect.ECONOMY -> Amber
@@ -166,13 +175,14 @@ private fun BubbleMap(
     val density = LocalDensity.current.density
     var scale by remember { mutableFloatStateOf(0.9f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    var framed by remember { mutableStateOf(false) }
+    var appliedTick by remember { mutableIntStateOf(-1) }
     BoxWithConstraints(modifier) {
         val viewW = with(LocalDensity.current) { maxWidth.toPx() }
         val viewH = with(LocalDensity.current) { maxHeight.toPx() }
         androidx.compose.runtime.LaunchedEffect(viewW, viewH, focusTick) {
-            if (viewW < 1f || viewH < 1f) return@LaunchedEffect
-            if (framed && focusTick == 0) return@LaunchedEffect
+            // Buying a part changes the detail height, which restarts this effect.
+            // Only a new request (or the first layout) may move the camera.
+            if (!cameraShouldMove(appliedTick, focusTick, viewW, viewH)) return@LaunchedEffect
             val part = focusPart?.let { id -> layout.bubbles.firstOrNull { it.id == id } }
             if (part != null) {
                 val fit = (minOf(viewW, viewH) * 0.22f / (part.r * density)).coerceIn(0.55f, 1.7f)
@@ -193,7 +203,7 @@ private fun BubbleMap(
                     viewH / 2f - hub.cy * density * fit,
                 )
             }
-            framed = true
+            appliedTick = focusTick
         }
         Box(
             Modifier
