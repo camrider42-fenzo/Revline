@@ -11,6 +11,38 @@ import kotlin.math.sqrt
  * firing TDC: power to 180, exhaust to 360, intake to 540, compression to 720.
  */
 object EngineMotion {
+    /** Degrees of crank per second for each rpm. The drawing and the sound share this. */
+    const val VISUAL_CRANK = 0.20f
+
+    fun advanceCrank(angle: Float, rpm: Float, dtSec: Float): Float {
+        val next = angle + rpm * VISUAL_CRANK * dtSec
+        return ((next % 720f) + 720f) % 720f
+    }
+
+    /**
+     * Cycle position of every cylinder at this crank, in the same order the
+     * drawing uses. Inline engines use the firing order. A vee uses the
+     * front-view bank angle.
+     */
+    fun flameCycles(angle: Float, cylinders: Int, banks: Int): FloatArray {
+        val n = cylinders.coerceIn(1, 12)
+        if (banks < 2) {
+            val offsets = firingOffsets(n)
+            return FloatArray(n) { cycle(angle + offsets[it]) }
+        }
+        val rows = (n / 2).coerceAtLeast(1)
+        val half = if (n == 8) 45f else 30f
+        val out = FloatArray(rows * 2)
+        for (row in 0 until rows) {
+            val crankDeg = angle + row * 360f / rows
+            for (bank in 0..1) {
+                val beta = if (bank == 0) -half else half
+                out[row * 2 + bank] = cycle(crankDeg - beta + 360f * ((row + bank) % 2))
+            }
+        }
+        return out
+    }
+
     /** Per-cylinder cycle offsets. Their crank positions are the offset mod 360. */
     fun firingOffsets(count: Int): FloatArray = when (count) {
         1 -> floatArrayOf(0f)

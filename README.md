@@ -89,6 +89,8 @@ The engine runs a real four-stroke cycle at a slowed-down rate that follows the 
 
 DEV MODE at the bottom of the REBUILD tab makes every part level and every study free for testing. Study gates still apply. A red DEV tag sits next to the title while it is on, and the switch is saved and survives rebuilds.
 
+The engine is audible. The same crank that moves the pistons drives the speaker, at the same slowed rate, so a flame and its crack happen together. Bore sets the pitch: a 39 mm jug sits about an octave above a 94 mm bore. Compression sets the crack: a low ratio is a soft thump, a high ratio is a short bright pop. Closing the pedal all the way stalls the crank and the sound dies with it.
+
 The Tune tab is the screws: spark advance, mixture, cam center, wastegate, rev limiter, and thermostat. There is no idle-speed screw. The bottom of the pedal is a stall: the crank stops and the contract pays nothing until you crack it open. A screw stays locked until its part is on the engine. More of that part, and the parts that refine it (a mapped spark table, VVT, a boost controller), make the range wider and the clicks smaller. The position goes into the same engine model as the hardware, so the sheet and the contract move when you turn it. A rebuild throws the screws away with the parts.
 
 Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Further rebuilds after the V12 stay on that block and only add knowledge.
