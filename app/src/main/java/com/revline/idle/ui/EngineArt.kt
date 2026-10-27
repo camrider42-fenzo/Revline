@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
@@ -348,6 +349,9 @@ private fun DrawScope.drawEngine(
                 val grown = 1f + 0.16f * (turboLvl - 1).coerceAtLeast(0)
                 val rad = h * (if (count == 2) 0.048f else 0.064f) * grown
                 glowCircle(Cyan, rad, Offset(cx, cy), stroke, gain = 1.15f)
+                if (part("overboost") > 0) {
+                    glowCircle(Red, rad * (1.28f + 0.06f * part("overboost")), Offset(cx, cy), stroke * 0.65f, gain = 0.85f)
+                }
                 for (trail in 2 downTo 0) {
                     val spin = Math.toRadians((-(angle * 7f) - trail * 14f + t * 40f).toDouble())
                     val gain = if (trail == 0) 1.15f else 0.28f
@@ -416,6 +420,7 @@ private fun DrawScope.drawEngine(
         }
         }
 
+        abuseMarks(parts, w, h, stroke)
         if (params.banks >= 2) {
             drawVee(params, parts, stroke, angle, exhaust, exhaustGain, perBank)
             return@run
@@ -526,6 +531,39 @@ private fun DrawScope.drawEngine(
             glowLine(White, fly, Offset(fly.x + (sin(a) * flyR * 0.82f).toFloat(), fly.y - (cos(a) * flyR * 0.82f).toFloat()), stroke * 0.6f, 0.55f)
         }
         glowCircle(Lime, stroke * 0.9f, Offset(fly.x + (sin(turn) * flyR).toFloat(), fly.y - (cos(turn) * flyR).toFloat()), stroke, filled = true, gain = 1.1f)
+    }
+}
+
+/** Nitrous bottle and the red arc of a limiter that is no longer a limiter. */
+private fun DrawScope.abuseMarks(parts: Map<String, Int>, w: Float, h: Float, stroke: Float) {
+    val nitrous = parts["nitrous"] ?: 0
+    if (nitrous > 0) {
+        val bw = 8f + nitrous * 2.5f
+        val bh = 16f + nitrous * 6f
+        val x = w * 0.03f
+        val y = h * 0.62f
+        glowLine(Cyan, Offset(x, y), Offset(x + bw, y), stroke * 0.7f, 1.05f)
+        glowLine(Cyan, Offset(x + bw, y), Offset(x + bw, y + bh), stroke * 0.7f, 1.05f)
+        glowLine(Cyan, Offset(x + bw, y + bh), Offset(x, y + bh), stroke * 0.7f, 1.05f)
+        glowLine(Cyan, Offset(x, y + bh), Offset(x, y), stroke * 0.7f, 1.05f)
+        glowLine(White, Offset(x + bw * 0.5f, y), Offset(x + bw * 0.5f, y - 7f - nitrous), stroke * 0.6f)
+        glowLine(White, Offset(x + bw * 0.5f, y - 7f - nitrous), Offset(x + bw * 0.5f + 8f, y - 7f - nitrous), stroke * 0.6f)
+        val fill = (0.35f + 0.2f * nitrous).coerceAtMost(0.9f)
+        glowLine(Cyan, Offset(x + 2f, y + bh * (1f - fill)), Offset(x + bw - 2f, y + bh * (1f - fill)), stroke * 0.45f, 0.7f)
+    }
+    val limiter = parts["limiter"] ?: 0
+    if (limiter > 0) {
+        val arc = 54f + limiter * 18f
+        glowArc(Red, 210f, arc, Offset(w * 0.78f, h * 0.58f), Size(h * 0.22f, h * 0.22f), stroke * 0.8f, gain = 0.75f + 0.1f * limiter)
+    }
+    val lean = parts["dyno_fuel"] ?: 0
+    if (lean > 0) {
+        val x = w * 0.90f
+        val y = h * 0.50f
+        repeat(lean) { mark ->
+            val yy = y + mark * 5f
+            glowLine(Red, Offset(x, yy), Offset(x + 10f + lean * 2f, yy - 3f), stroke * 0.45f, 0.8f)
+        }
     }
 }
 

@@ -124,6 +124,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                 Column(Modifier.weight(1.1f)) {
                     Hud(ui)
                     Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    FailureLine(ui)
                     EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(280.dp))
                     Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(170.dp))
@@ -148,6 +149,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
             Column(Modifier.fillMaxSize().padding(12.dp)) {
                 Hud(ui)
                 Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                FailureLine(ui)
                 EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(200.dp))
                 Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(148.dp))
@@ -189,6 +191,14 @@ private fun Hud(ui: UiModel) {
             }
             Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 22.sp)
             Text("${formatDollars(ui.sheet.incomePerSec)}/s this rpm", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            if (ui.game.breakdowns > 0) {
+                Text(
+                    "Breakdowns ${ui.game.breakdowns}",
+                    color = Red,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                )
+            }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text("x${String.format(Locale.US, "%.2f", ui.sheet.multiplier)}", color = Cyan, fontFamily = FontFamily.Monospace)
@@ -196,6 +206,25 @@ private fun Hud(ui: UiModel) {
             Text("${formatCompact(ui.sheet.rpPerSec)}/s", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
         }
     }
+}
+
+@Composable
+private fun FailureLine(ui: UiModel) {
+    val left = ((ui.game.downUntilEpochMs - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
+    if (left <= 0L) return
+    Text(
+        ui.game.lastFailure.ifEmpty { "The engine let go." },
+        color = Red,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+    Text(
+        "Down ${left}s. The contract pays nothing until it fires again.",
+        color = Red,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+    )
 }
 
 @Composable
@@ -350,7 +379,7 @@ private fun DynoButton(ui: UiModel, onDyno: () -> Unit) {
     val label = when {
         busy -> "On the rollers"
         left > 0 -> "Rollers free in ${left}s"
-        else -> "Dyno pull  +${formatCompact(Logic.dynoReward(ui.sheet.stats))} RP"
+        else -> "Dyno pull  +${formatCompact(Logic.dynoReward(ui.sheet.stats, ui.sheet.params))} RP"
     }
     LineButton(label, !busy && left == 0L, onDyno, Modifier.fillMaxWidth().padding(top = 10.dp))
 }
@@ -369,7 +398,11 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
                     Text(node.detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                     val label = when (status) {
                         ResearchStatus.OWNED -> "In the notebook"
-                        ResearchStatus.LOCKED -> "Needs ${node.requires.joinToString { ResearchTree.byId(it).name }}"
+                        ResearchStatus.LOCKED -> if (node.minPrestige > ui.game.prestiges) {
+                            "Needs a ${Block.forPrestige(node.minPrestige).title}"
+                        } else {
+                            "Needs ${node.requires.joinToString { ResearchTree.byId(it).name }}"
+                        }
                         ResearchStatus.OPEN -> if (ui.game.devMode) "Study · free (dev)" else "${formatCompact(node.cost)} RP"
                     }
                     LineButton(label, Logic.canBuyResearch(ui.game, node.id), { onBuy(node.id) }, Modifier.padding(top = 6.dp))

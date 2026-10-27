@@ -74,6 +74,20 @@ data class EngineParams(
     val airCooled: Boolean = false,
     val idleRpm: Double = 820.0,
     val blockTitle: String = "2.0L inline-four",
+    /** Nitrous fraction applied on a deep pedal. Brings its own oxygen and fuel, and its own heat. */
+    val nitrousFraction: Double = 0.0,
+    /** Extra psi held in above mid-rpm. Only does anything once a compressor is fitted. */
+    val overboostPsi: Double = 0.0,
+    /** AFR points the wide-open map is leaned for the rollers. */
+    val leanPull: Double = 0.0,
+    /** Multiplier on wall heat. 1 is a normal map. */
+    val heatFactor: Double = 1.0,
+    /** Extra brake power from turning past the rpm the block was drawn for. */
+    val rpmPower: Double = 0.0,
+    /** Dyno-slip multiplier. The rollers pay for the abuse the contract does not. */
+    val dynoFactor: Double = 1.0,
+    /** How many past-the-limit parts are on the engine. */
+    val abuse: Int = 0,
     /**
      * Horsepower bolted on by parts whose other effect is latent on this engine
      * (a radiator on a cool moped, a pump that is not yet out of fuel).
@@ -309,6 +323,11 @@ object EngineSim {
             score -= 16.0
             notes += "Lean under boost"
         }
+        if (params.abuse > 0) {
+            score -= 7.0 * params.abuse
+            score -= (params.heatFactor - 1.0).coerceAtLeast(0.0) * 14.0
+            notes += "Past the limit"
+        }
         return score.coerceIn(5.0, 99.0) to notes
     }
 
@@ -345,11 +364,22 @@ object EngineSim {
         val t1 = AMBIENT_K + params.underhoodDeltaC
         val manifoldPsi = ATM_PSI * (0.30 + 0.70 * open)
         val pr = (manifoldPsi + boost) / ATM_PSI
-        val compressor = compressorTemp(t1, pr, boost, params.intercoolerEff)
+        val overShare = if (params.overboostPsi > 0.2 && boost > 0.4) {
+            (params.overboostPsi / (boost + 1.0)).coerceIn(0.0, 0.65)
+        } else {
+            0.0
+        }
+        val icEff = params.intercoolerEff * (1.0 - 0.50 * overShare)
+        val compressor = compressorTemp(t1, pr, boost, icEff)
         val tAfterCooler = compressor.second
         val mAirGuess = airMass(params, rpm, ve, tAfterCooler, pr)
         val wotMix = if (!plate) 0.0 else open.pow(1.55)
-        val target = cruiseAfr(params) + (wotAfr(params) - cruiseAfr(params)) * wotMix
+        val mixed = cruiseAfr(params) + (wotAfr(params) - cruiseAfr(params)) * wotMix
+        val target = if (plate && params.leanPull > 0.0) {
+            (mixed + params.leanPull * open.pow(1.4)).coerceAtMost(params.fuel.stoichAfr - 0.30)
+        } else {
+            mixed
+        }
         val maxFuel = 0.0096 * params.fuelFlowFactor
         val fuelGuess = minOf(mAirGuess / target, maxFuel)
         val portFrac = portEvapFraction(params)
@@ -374,7 +404,9 @@ object EngineSim {
             .coerceAtMost(1.26)
         val gradeTiming = (octanePoints * 0.62).coerceAtMost(14.0)
         val comb = (0.975 * params.ignitionQuality * gradeBurn).coerceIn(0.7, 0.995)
-        val released = burned * params.fuel.lhvJPerKg * comb
+        val shot = if (plate) params.nitrousFraction.coerceAtLeast(0.0) * open.pow(1.5) else 0.0
+        val leanHit = if (plate) params.leanPull.coerceAtLeast(0.0) * open.pow(1.4) else 0.0
+        val released = burned * params.fuel.lhvJPerKg * comb * (1.0 + 0.72 * shot) * (1.0 + 0.08 * leanHit)
         val pumped = mFuel * params.fuel.lhvJPerKg
         val cr = params.compressionRatio
         val etaOtto = ottoEfficiency(cr)
@@ -394,7 +426,8 @@ object EngineSim {
             4.6 * (cr - 8.5) +
             1.12 * boost +
             0.34 * max(0.0, params.timingDeg + gradeTiming - 12.0) +
-            0.16 * max(0.0, tChargeC - 28.0) -
+            0.16 * max(0.0, tChargeC - 28.0) +
+            12.0 * shot -
             (if (params.mixture == Mixture.DIRECT) 3.5 + diCool * 0.15 else 0.0)
         val margin = octane - demand
         val pull = if (margin < 0.0) {
@@ -423,8 +456,9 @@ object EngineSim {
         val moved = params.exhaustWrap.coerceIn(0.0, 1.0) * 0.10 * qWalls
         qWalls -= moved
         qExhaust += moved
-        val qOil = qWalls * 0.16 + pFric * 0.42
-        val qCool = qWalls * 0.78 + pFric * 0.50
+        val heat = params.heatFactor.coerceIn(1.0, 3.2)
+        val qOil = (qWalls * 0.16 + pFric * 0.42) * heat
+        val qCool = (qWalls * 0.78 + pFric * 0.50) * heat * (1.0 + 0.35 * shot)
         val qBay = qWalls * 0.06 + pFric * 0.08
         val temps = thermalTemps(params, qCool, qOil)
         val transfer = OIL_GALLERY_UA * (temps.second - temps.first)
@@ -434,7 +468,9 @@ object EngineSim {
         var egt = tChargeC + (qExhaust * SENSIBLE_EXHAUST) / (mEx * CP_EXHAUST)
         if (afr < stoich) egt -= (stoich - afr) * 12.0
         if (afr > stoich + 0.4) egt += (afr - stoich) * 18.0
-        val hp = pBrake / 745.7 + params.installedHp * open.coerceIn(0.45, 1.0)
+        egt += shot * 180.0 + leanHit * 70.0
+        val push = if (rpm > params.redlineRpm * 0.55) params.rpmPower else params.rpmPower * 0.25
+        val hp = (pBrake / 745.7) * (1.0 + push) + params.installedHp * open.coerceIn(0.45, 1.0)
         val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon
         val mpg = (60.0 / gallonsPerHour.coerceAtLeast(0.04)).coerceIn(0.8, 80.0)
         return OperatingPoint(
@@ -496,15 +532,21 @@ object EngineSim {
     }
 
     private fun boostAt(params: EngineParams, rpm: Double): Double {
+        if (params.induction == Induction.NA) return 0.0
         val maxB = params.maxBoostPsi + params.boostControllerPsi
-        if (params.induction == Induction.NA || maxB <= 0.0) return 0.0
         val x = (rpm / params.redlineRpm).coerceIn(0.0, 1.0)
-        return when (params.induction) {
-            Induction.SUPERCHARGER -> maxB * (0.38 + 0.62 * x)
-            Induction.TURBO -> maxB / (1.0 + exp(-(rpm - params.spoolRpm) / 420.0))
-            Induction.TWIN_TURBO -> maxB / (1.0 + exp(-(rpm - params.spoolRpm * 0.66) / 340.0))
-            Induction.NA -> 0.0
+        val base = if (maxB <= 0.0) {
+            0.0
+        } else {
+            when (params.induction) {
+                Induction.SUPERCHARGER -> maxB * (0.38 + 0.62 * x)
+                Induction.TURBO -> maxB / (1.0 + exp(-(rpm - params.spoolRpm) / 420.0))
+                Induction.TWIN_TURBO -> maxB / (1.0 + exp(-(rpm - params.spoolRpm * 0.66) / 340.0))
+                Induction.NA -> 0.0
+            }
         }
+        val gate = ((rpm / params.redlineRpm) - 0.62) / 0.30
+        return base + params.overboostPsi.coerceAtLeast(0.0) * gate.coerceIn(0.0, 1.0)
     }
 
     /** Returns compressor-out Kelvin and post-intercooler Kelvin. */

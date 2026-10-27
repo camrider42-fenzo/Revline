@@ -70,13 +70,21 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
             val block = Block.forPrestige(ui.game.prestiges)
             val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening) * block.payScale()
-            val game = Logic.accrue(ui.game, dt, System.currentTimeMillis(), pay, ui.sheet.rpPerSec)
+            val nowMs = System.currentTimeMillis()
+            val down = nowMs < ui.game.downUntilEpochMs
+            var game = Logic.accrue(ui.game, dt, nowMs, if (down) 0.0 else pay, ui.sheet.rpPerSec)
+            if (!down && ui.sheet.params.abuse > 0) {
+                val chance = 1.0 - exp(-Logic.failurePerSec(ui.game, ui.sheet.stats) * dt)
+                if (chance > 0.0 && kotlin.random.Random.nextDouble() < chance) {
+                    game = Logic.breakDown(game, nowMs)
+                }
+            }
             publish(
                 ui.copy(
                     game = game,
                     rpm = spun,
                     phase = phase,
-                    sheet = ui.sheet.copy(incomePerSec = pay),
+                    sheet = ui.sheet.copy(incomePerSec = if (nowMs < game.downUntilEpochMs) 0.0 else pay),
                 ),
             )
             sinceSave += dt
@@ -133,7 +141,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (phase != DynoPhase.IDLE) return
         val now = System.currentTimeMillis()
         if (now < ui.game.dynoReadyAtEpochMs) return
-        val reward = Logic.dynoReward(ui.sheet.stats)
+        val reward = Logic.dynoReward(ui.sheet.stats, ui.sheet.params)
         val game = ui.game.copy(
             researchPoints = ui.game.researchPoints + reward,
             dynoReadyAtEpochMs = now + 35_000L,

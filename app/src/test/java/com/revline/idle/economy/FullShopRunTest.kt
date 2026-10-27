@@ -63,7 +63,7 @@ class FullShopRunTest {
         val notes = StringBuilder()
         val horizon = 240.0 * 3600.0
         var guard = 0
-        while (seconds < horizon && guard < 20_000) {
+        while (seconds < horizon && guard < 100_000) {
             guard++
             checkSanity(state, sheet, seconds)
             if (complete(state)) {
@@ -87,8 +87,12 @@ class FullShopRunTest {
                 }
                 continue
             }
-            if (prestiges < 2 && Logic.canPrestige(state)) {
-                val rebuilt = tune(Logic.prestige(state))
+            val ready = FuelKind.entries
+                .filter { Logic.fuelUnlocked(state, it) }
+                .map { state.copy(fuel = it) }
+                .firstOrNull { Logic.canPrestige(it) }
+            if (prestiges < Block.V8.ordinal && ready != null) {
+                val rebuilt = tune(Logic.prestige(ready))
                 val nextSheet = Logic.sheet(rebuilt)
                 notes.append(
                     String.format(
@@ -122,7 +126,7 @@ class FullShopRunTest {
             )
             sinceDyno += step
             if (sinceDyno >= 35.0) {
-                state = state.copy(researchPoints = state.researchPoints + Logic.dynoReward(sheet.stats))
+                state = state.copy(researchPoints = state.researchPoints + Logic.dynoReward(sheet.stats, sheet.params))
                 sinceDyno = 0.0
             }
             seconds += step

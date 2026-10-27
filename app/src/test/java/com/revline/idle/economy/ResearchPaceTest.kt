@@ -55,11 +55,14 @@ class ResearchPaceTest {
         }
         println(lines.joinToString("\n"))
         val total = ResearchTree.all.size
+        val ordinary = ResearchTree.all.count { it.minPrestige == 0 }
         val report = lines.joinToString("\n")
-        assertTrue("moped should study the basics\n$report", owned[0] in 8..total / 2)
-        assertTrue("thumper should still be studying\n$report", owned[1] < total)
-        assertTrue("the twin should not finish the notebook\n$report", owned[2] < total)
-        assertTrue("the notebook should close by the V6\n$report", owned[5] == total)
+        assertTrue("moped should study the basics\n$report", owned[0] in 8..ordinary / 2)
+        assertTrue("thumper should still be studying\n$report", owned[1] < ordinary)
+        assertTrue("the twin should not finish the notebook\n$report", owned[2] < ordinary)
+        assertTrue("the ordinary notebook should close by the V6\n$report", owned[5] == ordinary)
+        assertTrue("the V8 should open the past-the-limit branch\n$report", owned[6] > ordinary)
+        assertTrue("the branch should be finished on the V12\n$report", owned[7] == total)
     }
 
     private fun play(start: GameState): Run {

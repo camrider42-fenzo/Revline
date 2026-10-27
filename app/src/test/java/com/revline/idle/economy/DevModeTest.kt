@@ -27,6 +27,15 @@ class DevModeTest {
     }
 
     @Test
+    fun pastTheLimitStaysLockedUntilTheV8EvenInDevMode() {
+        val early = GameState(devMode = true, researchPoints = 1e9, researched = setOf("billet_node", "forged", "hyper", "turbo_node", "exhaust_fab"))
+        assertFalse(Logic.canBuyResearch(early, "overlimit"))
+        val v8 = early.copy(prestiges = com.revline.idle.model.Block.V8.ordinal)
+        assertTrue(Logic.canBuyResearch(v8, "overlimit"))
+        assertEquals(0.0, Logic.researchCost(v8, "overlimit"), 0.0)
+    }
+
+    @Test
     fun studiesAreFreeButGatesStillApply() {
         val state = GameState(devMode = true)
         assertTrue(Logic.canBuyResearch(state, "heat_basics"))

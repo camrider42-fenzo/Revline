@@ -1,5 +1,7 @@
 package com.revline.idle.game
 
+import com.revline.idle.model.Block
+
 enum class Category(val title: String) {
     INTAKE("Intake"),
     EXHAUST("Exhaust"),
@@ -40,6 +42,8 @@ data class ResearchNode(
     val detail: String,
     val cost: Double,
     val requires: List<String> = emptyList(),
+    /** Prestige index this study waits for. 0 is the moped. The V8 is the past-the-limit gate. */
+    val minPrestige: Int = 0,
 )
 
 data class Perk(
@@ -109,6 +113,10 @@ object Upgrades {
         Upgrade("waterless", Category.COOLING, "Waterless coolant", "Boiling point near 191°C. Heat transfer is worse, so UA drops about 16%.", 1, 200.0, 1.0, requires = "waterless_science"),
         Upgrade("afr_map", Category.ECU, "AFR map", "WOT mixture walks toward the power AFR. Cruise is allowed to lean out. Deeper levels need a real ECU.", 6, 200.0, 1.15, levelRequires = mapOf(3 to "piggyback", 4 to "piggyback", 5 to "standalone", 6 to "standalone")),
         Upgrade("torque_model", Category.ECU, "Torque-model ECU", "Spark, fuel, and knock control close around a torque target instead of open-loop guesses.", 1, 2000.0, 1.0, requires = "torque_node"),
+        Upgrade("nitrous", Category.INDUCTION, "Nitrous shot", "A plate on the intake. Each level is a bigger hit of oxygen and fuel, and a bigger slug of heat the radiator did not agree to. Failures get likely.", 3, 8000.0, 1.35, requires = "nitrous_node"),
+        Upgrade("overboost", Category.INDUCTION, "Wastegate shim", "Holds the gate shut at the top of the pull. Boost climbs past what the rods were sized for, the charge leaves the cooler hot, and the dyno slip gets louder.", 3, 9000.0, 1.40, requires = "overboost_node"),
+        Upgrade("limiter", Category.VALVETRAIN, "Limiter delete", "The rev limiter moves up, then goes away. Power follows the tach. Piston speed and the bearings follow it.", 3, 7000.0, 1.35, requires = "limiter_node"),
+        Upgrade("dyno_fuel", Category.FUEL, "Dyno fuel cut", "The wide-open map leans toward stoich for the rollers. Horsepower climbs. EGT climbs faster, and so does the chance the valve gives up.", 3, 6000.0, 1.30, requires = "lean_node"),
     )
 
     fun byId(id: String): Upgrade = all.first { it.id == id }
@@ -145,6 +153,11 @@ object ResearchTree {
         ResearchNode("hyper", "Internals", "Hypereutectic pistons", "Tighter clearance than a plain cast piston. A step toward rpm and bore.", 60.0),
         ResearchNode("forged", "Internals", "Forged internals", "Pistons and cranks that survive the pressure spike.", 1700.0, listOf("hyper")),
         ResearchNode("billet_node", "Internals", "Billet bottom end", "When the forging still isn't the limit you were looking for.", 11000.0, listOf("forged")),
+        ResearchNode("overlimit", "Past the limit", "Past the limit", "The safe map is a suggestion. Cylinder pressure, rpm, and mixture can all go further. The block is the one that says when they have. Opens once a V8 is on the stand.", 16000.0, listOf("billet_node"), minPrestige = Block.V8.ordinal),
+        ResearchNode("lean_node", "Past the limit", "Dyno fuel cut", "The pull is leaned toward stoich so more of the burn reaches the rollers. The exhaust valve gets what the dyno does not.", 10000.0, listOf("overlimit"), minPrestige = Block.V8.ordinal),
+        ResearchNode("nitrous_node", "Past the limit", "Nitrous oxide", "A shot adds oxygen the intake never measured, and fuel to match. The hit shows up on the dyno slip immediately. So does the heat in the chamber.", 12000.0, listOf("overlimit"), minPrestige = Block.V8.ordinal),
+        ResearchNode("limiter_node", "Past the limit", "Rev limiter delete", "The tach keeps climbing. Mean piston speed does not care what number used to be the limiter.", 14000.0, listOf("overlimit"), minPrestige = Block.V8.ordinal),
+        ResearchNode("overboost_node", "Past the limit", "Wastegate delete", "The wastegate spring is a limit, not a law. Past it the compressor, the charge temperature, and the rods are all guessing.", 18000.0, listOf("overlimit", "turbo_node"), minPrestige = Block.V8.ordinal),
     )
 
     fun byId(id: String): ResearchNode = all.first { it.id == id }

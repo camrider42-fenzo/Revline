@@ -23,6 +23,10 @@ data class GameState(
     val tune: Map<String, Double> = emptyMap(),
     /** Testing switch: parts and studies cost nothing. Gates still apply. */
     val devMode: Boolean = false,
+    /** Epoch ms until which a blown engine pays no contract. */
+    val downUntilEpochMs: Long = 0L,
+    val breakdowns: Int = 0,
+    val lastFailure: String = "",
     val savedAtEpochMs: Long = 0L,
     val dynoReadyAtEpochMs: Long = 0L,
     val version: Int = 1,

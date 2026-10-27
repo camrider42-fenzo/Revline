@@ -170,6 +170,11 @@ object Logic {
         val synthetic = lvl("synthetic") > 0
         val inconel = lvl("inconel") > 0
         val waterless = lvl("waterless") > 0
+        val nitrous = lvl("nitrous")
+        val overboost = lvl("overboost")
+        val limiter = lvl("limiter")
+        val dynoFuel = lvl("dyno_fuel")
+        val abuse = listOf(nitrous, overboost, limiter, dynoFuel).count { it > 0 }
 
         val induction = when {
             twin > 0 -> Induction.TWIN_TURBO
@@ -214,6 +219,12 @@ object Logic {
             0.012 * (state.perks["flow"] ?: 0)
         var frac = block.vePeakFraction + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
             0.018 * longTube + 0.040 * cam + 0.015 * vvl + Tuners.value(state, "cam")
+        if (limiter > 0) {
+            val breathing = block.redlineRpm + 180.0 * springs + if (vvl > 0) 150.0 else 0.0
+            val extended = breathing + 450.0 * limiter
+            val capped = frac.coerceIn(0.35, 0.92)
+            frac = capped * breathing / extended
+        }
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
         var strength = 1.0 + 0.035 * springs + 0.08 * studs + 0.18 * pistons +
             0.11 * rods + 0.08 * crank + 0.25 * billet + 0.015 * wrench + 0.06 * (state.perks["fixtures"] ?: 0)
@@ -249,7 +260,7 @@ object Logic {
             peakVe = ve.coerceIn(0.55, 1.35),
             vePeakFraction = frac.coerceIn(0.35, 0.92),
             veWidthRpm = width.coerceIn(900.0, 6500.0),
-            redlineRpm = (block.redlineRpm + 180.0 * springs + Tuners.value(state, "redline") + if (vvl > 0) 150.0 else 0.0).coerceIn(4500.0, 14000.0),
+            redlineRpm = (block.redlineRpm + 180.0 * springs + 450.0 * limiter + Tuners.value(state, "redline") + if (vvl > 0) 150.0 else 0.0).coerceIn(4500.0, 14000.0),
             backpressure = bp.coerceIn(0.30, 1.40),
             timingDeg = timing.coerceIn(6.0, 38.0),
             knockControl = knock.coerceIn(0.05, 0.95),
@@ -284,6 +295,13 @@ object Logic {
             airCooled = block.airCooled && cai < 3,
             idleRpm = (block.idleRpm + Tuners.value(state, "idle")).coerceIn(500.0, block.idleRpm + 600.0),
             blockTitle = block.title,
+            nitrousFraction = (0.34 * nitrous).coerceIn(0.0, 1.2),
+            overboostPsi = (5.0 * overboost).coerceIn(0.0, 20.0),
+            leanPull = (0.55 * dynoFuel).coerceIn(0.0, 2.0),
+            heatFactor = (1.0 + 0.28 * nitrous + 0.16 * overboost + 0.14 * dynoFuel + 0.10 * limiter).coerceIn(1.0, 3.2),
+            rpmPower = (0.06 * limiter).coerceIn(0.0, 0.25),
+            dynoFactor = (1.0 + 0.45 * nitrous + 0.28 * overboost + 0.22 * dynoFuel + 0.18 * limiter).coerceIn(1.0, 6.0),
+            abuse = abuse,
         )
     }
 
@@ -299,7 +317,49 @@ object Logic {
         return Sheet(params, stats, pay, rp, mult)
     }
 
-    fun dynoReward(stats: EngineStats): Double = 4.0 + 0.6 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)
+    fun dynoReward(stats: EngineStats, params: EngineParams? = null): Double {
+        val base = 4.0 + 0.6 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)
+        return base * (params?.dynoFactor ?: 1.0).coerceAtLeast(1.0)
+    }
+
+    /**
+     * Failures per second with the past-the-limit parts on. A cool cruise still
+     * breaks. A hot, floored pull breaks much sooner. Nothing is fitted, nothing breaks.
+     */
+    fun failurePerSec(state: GameState, stats: EngineStats): Double {
+        val params = paramsFrom(state)
+        if (params.abuse <= 0) return 0.0
+        val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
+        val live = EngineSim.point(params, rpm, loadFor(state.throttle))
+        val cool = ((live.coolantTempC - 100.0) / 30.0).coerceIn(0.0, 1.0)
+        val oil = ((live.oilTempC - 140.0) / 40.0).coerceIn(0.0, 1.0)
+        val egt = ((live.egtC - 880.0) / 180.0).coerceIn(0.0, 1.0)
+        val hot = maxOf(cool, oil, egt)
+        val weak = ((70.0 - stats.reliability) / 70.0).coerceIn(0.0, 1.0)
+        val load = state.throttle.coerceIn(0.0, 1.0)
+        return 0.00018 * params.abuse + 0.0042 * hot * (0.30 + 0.70 * load) + 0.0015 * weak * (0.25 + 0.75 * load)
+    }
+
+    /** A blown part, a repair bill, and a short stretch where the contract pays nothing. */
+    fun breakDown(state: GameState, nowMs: Long): GameState {
+        val current = sheet(state)
+        val bill = (current.incomePerSec * 6.0 * 60.0).coerceAtLeast(50.0)
+        val notes = current.stats.reliabilityNotes
+        val why = when {
+            notes.any { it.startsWith("Coolant") } -> "The head lifted. Coolant on the floor."
+            notes.any { it.startsWith("EGT") } -> "An exhaust valve gave up in the heat."
+            notes.any { it.startsWith("Oil") } -> "A bearing spun."
+            notes.any { it.contains("Boost") || it.contains("Piston") } -> "A rod let go at the top of the pull."
+            notes.any { it == "Knock" } -> "Detonation peppered a piston."
+            else -> "Something in the bottom end let go."
+        }
+        return state.copy(
+            money = (state.money - bill).coerceAtLeast(0.0),
+            downUntilEpochMs = nowMs + 40_000L,
+            breakdowns = state.breakdowns + 1,
+            lastFailure = "$why Repair ${formatDollars(bill)}. The contract is quiet for 40 seconds.",
+        )
+    }
 
     fun accrue(state: GameState, dtSec: Double, nowMs: Long, incomePerSec: Double, rpPerSec: Double): GameState {
         if (dtSec <= 0.0) return state.copy(savedAtEpochMs = nowMs)
@@ -414,6 +474,7 @@ object Logic {
     fun researchStatus(state: GameState, id: String): ResearchStatus {
         val node = ResearchTree.byId(id)
         if (id in state.researched) return ResearchStatus.OWNED
+        if (node.minPrestige > state.prestiges) return ResearchStatus.LOCKED
         if (node.requires.any { it !in state.researched }) return ResearchStatus.LOCKED
         return ResearchStatus.OPEN
     }
@@ -483,6 +544,8 @@ object Logic {
             tune = emptyMap(),
             fuel = FuelKind.PUMP_87,
             throttle = REST_THROTTLE,
+            downUntilEpochMs = 0L,
+            lastFailure = "",
         )
     }
 

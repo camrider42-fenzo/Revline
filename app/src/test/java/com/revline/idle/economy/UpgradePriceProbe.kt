@@ -22,6 +22,8 @@ class UpgradePriceProbe {
             val delta = benefit(upgrade, 0)
             val target = priceFor(delta)
             if (upgrade.baseCost < 80.0) continue
+            // Priced for a V8 that is willing to break, not for twelve minutes of a cool street car.
+            if (upgrade.id in setOf("nitrous", "overboost", "limiter", "dyno_fuel")) continue
             val actual = upgrade.baseCost
             val low = target * 0.5
             val high = target * 2.2
