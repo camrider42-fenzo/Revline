@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.revline.idle.DynoPhase
 import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
+import com.revline.idle.game.Bottleneck
 import com.revline.idle.game.Effect
 import com.revline.idle.game.Logic
 import com.revline.idle.game.StatDelta
@@ -95,7 +97,18 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
     val live = remember(ui.sheet.params, bucket, liveLoad, soakBucket) {
         EngineSim.point(ui.sheet.params, bucket.toDouble(), liveLoad, ui.game.soakC)
     }
+    val opening = if (ui.phase == DynoPhase.IDLE) ui.game.throttle else 1.0
+    val soakRate = EngineSim.soakPer10s(ui.sheet.params, ui.rpm, opening)
+    val suggestion = remember(ui.sheet.stats, live.heatSoakC, live.fuelLimited, soakRate, ui.game.upgrades, ui.game.prestiges) {
+        Bottleneck.suggest(ui.game, ui.sheet.stats, live, soakRate)
+    }
+    var focusTick by remember { mutableIntStateOf(0) }
+    var pinned by remember { mutableStateOf<Effect?>(null) }
     Column(Modifier.fillMaxSize().background(Black).padding(horizontal = 8.dp, vertical = 4.dp)) {
+        BottleneckBar(suggestion) {
+            pinned = suggestion.effect
+            focusTick++
+        }
         PartsStatus(ui, live)
         FuelRow(ui, onFuel)
         BubbleMap(
@@ -103,6 +116,8 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
             ui = ui,
             selected = selected.value,
             pulse = pulse,
+            focus = pinned ?: suggestion.effect,
+            focusTick = focusTick,
             onSelect = { selected.value = it },
             modifier = Modifier.weight(1f).fillMaxWidth(),
         )
@@ -120,6 +135,8 @@ private fun BubbleMap(
     ui: UiModel,
     selected: String?,
     pulse: Float,
+    focus: Effect,
+    focusTick: Int,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -130,17 +147,18 @@ private fun BubbleMap(
     BoxWithConstraints(modifier) {
         val viewW = with(LocalDensity.current) { maxWidth.toPx() }
         val viewH = with(LocalDensity.current) { maxHeight.toPx() }
-        androidx.compose.runtime.LaunchedEffect(viewW, viewH) {
-            if (framed || viewW < 1f || viewH < 1f) return@LaunchedEffect
-            val focus = layout.bubbles.first { it.id == Effect.BOOST.name }
+        androidx.compose.runtime.LaunchedEffect(viewW, viewH, focusTick) {
+            if (viewW < 1f || viewH < 1f) return@LaunchedEffect
+            if (framed && focusTick == 0) return@LaunchedEffect
+            val hub = layout.bubbles.first { it.id == focus.name }
             val reach = layout.bubbles
-                .filter { it.effect == Effect.BOOST }
-                .maxOf { hypot((it.cx - focus.cx).toDouble(), (it.cy - focus.cy).toDouble()).toFloat() + it.r }
+                .filter { it.effect == focus }
+                .maxOf { hypot((it.cx - hub.cx).toDouble(), (it.cy - hub.cy).toDouble()).toFloat() + it.r }
             val fit = (minOf(viewW, viewH) / (2f * reach * density * 1.12f)).coerceIn(0.42f, 1.35f)
             scale = fit
             offset = Offset(
-                viewW / 2f - focus.cx * density * fit,
-                viewH / 2f - focus.cy * density * fit,
+                viewW / 2f - hub.cx * density * fit,
+                viewH / 2f - hub.cy * density * fit,
             )
             framed = true
         }
@@ -344,6 +362,35 @@ private fun UpgradeBubble(
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun BottleneckBar(suggestion: com.revline.idle.game.Suggestion, onShow: () -> Unit) {
+    val color = effectColor(suggestion.effect)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+            .border(1.dp, color)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onShow,
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        Text("BOTTLENECK  ·  ${suggestion.headline.uppercase(Locale.US)}", color = color, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+        Text(
+            suggestion.detail,
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text("Show this bay", color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
