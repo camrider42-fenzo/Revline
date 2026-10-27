@@ -1,6 +1,7 @@
 package com.revline.idle.game
 
 import com.revline.idle.data.GameState
+import com.revline.idle.economy.ContractOutput
 import com.revline.idle.economy.Income
 import com.revline.idle.economy.Offline
 import com.revline.idle.economy.Prestige
@@ -66,9 +67,11 @@ object Logic {
         reliability: Double,
         multiplier: Double,
         throttle: Double,
+        stats: EngineStats,
     ): Double {
         val point = EngineSim.point(params, rpm, loadFor(throttle))
-        return Income.perSecond(point, reliability, multiplier, params.fuel.dollarsPerGallon)
+        val output = ContractOutput(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg)
+        return Income.perSecond(point, reliability, multiplier, params.fuel.dollarsPerGallon, output)
     }
 
     /**
@@ -84,7 +87,7 @@ object Logic {
         var t = 0.05
         while (t <= 1.001) {
             val rpm = targetRpm(params.redlineRpm, t, params.idleRpm)
-            val pay = incomeAt(params, rpm, stats.reliability, mult, t)
+            val pay = incomeAt(params, rpm, stats.reliability, mult, t, stats)
             if (pay > bestPay) {
                 bestPay = pay
                 bestT = t
@@ -313,7 +316,7 @@ object Logic {
         val rp = (0.05 + 0.035 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)) * (1.0 + 0.22 * notebook) * mult
         val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
         val block = Block.forPrestige(state.prestiges)
-        val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle) * block.payScale()
+        val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle, stats) * block.payScale()
         return Sheet(params, stats, pay, rp, mult)
     }
 

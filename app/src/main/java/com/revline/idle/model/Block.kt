@@ -37,12 +37,21 @@ enum class Block(
     V12("6.5L V12", 12, 2, 89.0, 87.0, 10.6, 8000.0, 900.0, 1.06, 0.62, 3800.0, 22.0, 4.20, false, 50.77, 690.0, 520.0, 18.0),
     ;
 
-    /** Bigger jobs pay more than the raw fuel bill would allow. The ladder still has to climb. */
+    /**
+     * Holds each stock engine's best-pedal contract on the anchor in [stockPay]
+     * now that the check is peak output and cruise economy rather than rpm.
+     * A moped's peak was already what the pedal held. A V12's peak is far
+     * above the rpm the old check was scoring, so its scale comes back down.
+     */
     fun payScale(): Double = when (this) {
-        V6 -> 1.65
-        V8 -> 2.30
-        V12 -> 4.40
-        else -> 1.0
+        MOPED -> 7.98
+        THUMPER -> 5.34
+        TWIN -> 2.64
+        TRIPLE -> 1.79
+        INLINE_FOUR -> 1.0
+        V6 -> 0.92
+        V8 -> 1.00
+        V12 -> 1.34
     }
 
     /**

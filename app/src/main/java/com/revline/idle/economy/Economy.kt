@@ -7,8 +7,18 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.pow
 
+/**
+ * The engine's output and its cruise economy. The rpm on the tach only leans these.
+ * When the live point is the whole story, pass nothing and the point is used as both.
+ */
+data class ContractOutput(
+    val peakHorsepower: Double,
+    val peakTorqueLbFt: Double,
+    val cruiseMpg: Double,
+)
+
 object Income {
-    const val K = 0.035
+    const val K = 0.00535
     const val HP_EXP = 1.62
     const val ECONOMY_EXP = 0.72
     const val PRICE_EXP = 0.42
@@ -16,14 +26,19 @@ object Income {
     const val MPG_REF = 28.0
 
     /**
-     * Contract dollars per second at the rpm the crank is turning.
-     * powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
-     * economyScore    = (mpg / 28)^0.72 * (3.40 / dollarsPerGallon)^0.42
-     * durabilityScore = (reliability/100 * condition)^1.15
-     * $/s = 0.035 * powerScore * economyScore * durabilityScore * multiplier
+     * Contract dollars per second.
+     * paidHp   = peakHp * (0.90 + 0.10 * hpAtStop / peakHp)
+     * paidTq   = peakTq * (0.75 + 0.25 * torqueAtStop / peakTq)
+     * paidMpg  = cruiseMpg * (0.94 + 0.06 * min(1, mpgAtStop / cruiseMpg))
+     * powerScore      = paidHp^1.62 * (1 + paidTq / 950)
+     * economyScore    = (paidMpg / 28)^0.72 * (3.40 / dollarsPerGallon)^0.42
+     * durabilityScore = (reliability/100)^1.15
+     * heat            = 0.84 + 0.16 * condition
+     * $/s = 0.00535 * powerScore * economyScore * durabilityScore * heat * multiplier
      *
-     * mpg is this pedal's fuel flow scored as miles per gallon at 60 mph.
-     * condition falls when the pull is hot, knocking, or heat-soaked.
+     * Peak horsepower, peak torque, and cruise mpg set the check. The stop can
+     * only lean them, and idling does not improve the economy term. Heat can
+     * take 16% off a pull that is already past its limits.
      * The price exponent is gentle. Octane has to earn its keep as power, not as a tax.
      */
     fun perSecond(
@@ -31,16 +46,21 @@ object Income {
         reliability: Double,
         multiplier: Double,
         dollarsPerGallon: Double = FuelKind.PUMP_87.dollarsPerGallon,
+        output: ContractOutput? = null,
     ): Double {
-        val hp = point.horsepower.coerceAtLeast(0.2)
-        val tq = point.torqueLbFt.coerceAtLeast(0.2)
+        val peakHp = (output?.peakHorsepower ?: point.horsepower).coerceAtLeast(0.2)
+        val peakTq = (output?.peakTorqueLbFt ?: point.torqueLbFt).coerceAtLeast(0.2)
+        val cruise = (output?.cruiseMpg ?: point.mpg).coerceAtLeast(0.8)
+        val hp = peakHp * (0.90 + 0.10 * (point.horsepower / peakHp).coerceIn(0.0, 1.0))
+        val tq = peakTq * (0.75 + 0.25 * (point.torqueLbFt / peakTq).coerceIn(0.0, 1.0))
+        val mpg = cruise * (0.94 + 0.06 * (point.mpg / cruise).coerceIn(0.0, 1.0))
         val power = hp.pow(HP_EXP) * (1.0 + tq / 950.0)
-        val mpgScore = (point.mpg.coerceAtLeast(0.8) / MPG_REF).pow(ECONOMY_EXP)
+        val mpgScore = (mpg / MPG_REF).pow(ECONOMY_EXP)
         val pump = FuelKind.PUMP_87.dollarsPerGallon
         val priceScore = (pump / dollarsPerGallon.coerceAtLeast(0.5)).pow(PRICE_EXP)
         val health = (reliability / 100.0).coerceIn(0.42, 1.0)
-        val rel = (health * conditionFactor(point)).coerceIn(0.12, 1.0)
-        return K * power * mpgScore * priceScore * rel.pow(REL_EXP) * multiplier.coerceAtLeast(0.0)
+        val heat = 0.84 + 0.16 * conditionFactor(point)
+        return K * power * mpgScore * priceScore * health.pow(REL_EXP) * heat * multiplier.coerceAtLeast(0.0)
     }
 
     /** 1 when this rpm is inside thermal and knock limits, down toward 0.2 when it is not. */

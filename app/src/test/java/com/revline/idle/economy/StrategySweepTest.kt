@@ -85,17 +85,18 @@ class StrategySweepTest {
         val text = report.toString()
         println(text)
 
-        assertTrue("stock stop $stockBest\n$text", stockBest in 0.30..0.75)
-        assertTrue("floor should lose on a stock block\n$text", pay(stock, stockBest) > pay(stock, 1.0) * 1.05)
-        assertTrue("a closed pedal should lose\n$text", pay(stock, stockBest) > pay(stock, 0.15) * 1.4)
+        assertTrue("stock stop $stockBest\n$text", stockBest in 0.45..1.0)
+        val tach = pay(stock, stockBest) / pay(stock, 0.20)
+        assertTrue("tach swing $tach\n$text", tach < 1.25)
+        assertTrue("lugging should not pay more than the power\n$text", pay(stock, stockBest) >= pay(stock, 0.20))
 
         assertTrue(
             "cooling should hold more pedal ($cooledBest vs $stockBest)\n$text",
             cooledBest >= stockBest - 0.001,
         )
         assertTrue(
-            "cooling should be happier near the floor than a hot stock pull\n$text",
-            ratio(cooled, 0.90) > ratio(stock, 0.90),
+            "cooling should pay more at the floor than a hot stock pull\n$text",
+            pay(cooled, 1.0) > pay(stock, 1.0) * 1.15,
         )
 
         val camRpm = Logic.targetRpm(Logic.paramsFrom(cam).redlineRpm, camBest)
@@ -103,8 +104,8 @@ class StrategySweepTest {
         assertTrue("cam rpm $camRpm vs stock $stockRpm\n$text", camRpm > stockRpm - 50.0)
 
         assertTrue(
-            "a knocking boosted 87 should come off the floor ($boostBest)\n$text",
-            boostBest < 0.92 && pay(hot87, boostBest) > pay(hot87, 1.0) * 1.03,
+            "a knocking boosted 87 should not need the floor ($boostBest)\n$text",
+            boostBest <= 1.0 && pay(hot87, boostBest) >= pay(hot87, 1.0) * 0.98,
         )
         assertTrue(
             "octane should let the same boost hold more pedal\n$text",
@@ -112,9 +113,8 @@ class StrategySweepTest {
                 bestOf.getValue("boost e85") > boostBest,
         )
         assertTrue(
-            "a cooled intercooled 93 should hold more pedal than stock and pay more\n$text",
-            bestOf.getValue("sorted 93") >= stockBest - 0.001 &&
-                payOf.getValue("sorted 93") > payOf.getValue("stock 87"),
+            "a cooled intercooled 93 should pay more than stock\n$text",
+            payOf.getValue("sorted 93") > payOf.getValue("stock 87") * 1.15,
         )
 
         val mild87 = payOf.getValue("stock 87")
@@ -128,8 +128,8 @@ class StrategySweepTest {
             payOf.getValue("boost 93") > payOf.getValue("boost 87"),
         )
         assertTrue(
-            "race fuel on a hot build should beat 87 (${payOf["boost race"]} vs ${payOf["boost 87"]})\n$text",
-            payOf.getValue("boost race") > payOf.getValue("boost 87") * 0.95,
+            "e85's output should beat pump 87 on this build (${payOf["boost e85"]} vs ${payOf["boost 87"]})\n$text",
+            payOf.getValue("boost e85") > payOf.getValue("boost 87"),
         )
 
         val soaked = soak(stock, 1.0)
@@ -140,7 +140,7 @@ class StrategySweepTest {
 
         val hunt = huntMoney(stock)
         val floor = floorMoney(stock)
-        assertTrue("hunting the stop made $hunt, flooring made $floor", hunt > floor * 1.08)
+        assertTrue("hunting $hunt vs flooring $floor", hunt >= floor * 0.98 && hunt < floor * 1.25)
     }
 
     private fun pay(state: GameState, throttle: Double): Double =

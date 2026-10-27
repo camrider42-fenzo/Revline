@@ -131,7 +131,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                         ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
                     }
                     Text(
-                        "The stop is a load, not a free rev. Heat soak and fuel use punish the floor. Cooling, octane, and the cam move the pedal that pays.",
+                        "The contract is peak output and cruise economy. The stop only leans it. Heat still taxes a floored pedal.",
                         color = White,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
@@ -156,7 +156,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                     ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))
                 }
                 Text(
-                    "Heat soak and a rich mixture tax a floored pedal. The cyan mark is the stop. Pay follows this load.",
+                    "Peak power and cruise economy set the check. The cyan mark leans it. Heat taxes the floor.",
                     color = White,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
@@ -190,7 +190,7 @@ private fun Hud(ui: UiModel) {
                 }
             }
             Text(formatDollars(ui.game.money), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 22.sp)
-            Text("${formatDollars(ui.sheet.incomePerSec)}/s this rpm", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text("${formatDollars(ui.sheet.incomePerSec)}/s contract", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
             if (ui.game.breakdowns > 0) {
                 Text(
                     "Breakdowns ${ui.game.breakdowns}",

@@ -6,6 +6,7 @@ import com.revline.idle.data.SaveRepository
 import com.revline.idle.game.Logic
 import com.revline.idle.game.ResearchTree
 import com.revline.idle.game.Upgrades
+import com.revline.idle.economy.ContractOutput
 import com.revline.idle.model.FuelKind
 import com.revline.idle.model.OperatingPoint
 import java.io.File
@@ -37,6 +38,25 @@ class EconomyTest {
     }
 
     @Test
+    fun outputAndCruiseEconomyMoveTheCheckMoreThanRpm() {
+        val sheet = ContractOutput(peakHorsepower = 180.0, peakTorqueLbFt = 160.0, cruiseMpg = 30.0)
+        val idle = point(hp = 22.0, tq = 70.0, mpg = 48.0, rpm = 900.0)
+        val redline = point(hp = 175.0, tq = 130.0, mpg = 9.0, rpm = 6800.0)
+        val atIdle = Income.perSecond(idle, 95.0, 1.0, output = sheet)
+        val atRedline = Income.perSecond(redline, 95.0, 1.0, output = sheet)
+        val tach = kotlin.math.max(atIdle, atRedline) / kotlin.math.min(atIdle, atRedline)
+        assertTrue("tach swing $tach ($atIdle vs $atRedline)", tach < 1.45)
+
+        val stronger = sheet.copy(peakHorsepower = 180.0 * 1.25, peakTorqueLbFt = 160.0 * 1.10)
+        val thirstier = sheet.copy(cruiseMpg = 30.0 * 1.20)
+        val fromOutput = Income.perSecond(idle, 95.0, 1.0, output = stronger) / atIdle
+        val fromEconomy = Income.perSecond(idle, 95.0, 1.0, output = thirstier) / atIdle
+        assertTrue("output $fromOutput vs tach $tach", fromOutput > tach)
+        assertTrue("economy $fromEconomy vs tach $tach", fromEconomy > tach - 0.15)
+        assertTrue(fromEconomy > 1.08)
+    }
+
+    @Test
     fun researchingTurboOpensTheTurboAndBuyingItMakesBoost() {
         val studied = Logic.buyResearch(
             GameState(researchPoints = 1e6, money = 1e9, researched = setOf("exhaust_fab")),
@@ -61,10 +81,11 @@ class EconomyTest {
         val idle = Logic.sheet(stock).incomePerSec
         val best = Logic.bestThrottle(stock)
         val peaked = Logic.sheet(stock.copy(throttle = best)).incomePerSec
-        assertTrue("idle $idle best $peaked at $best", peaked > idle * 1.8)
+        assertTrue("idle $idle best $peaked at $best", peaked > idle)
+        assertTrue("tach swing ${peaked / idle}", peaked < idle * 1.25)
         val floored = Logic.sheet(stock.copy(throttle = 1.0)).incomePerSec
-        assertTrue("best $peaked at $best should beat wide open $floored", peaked > floored * 1.04)
-        assertTrue("best pedal $best", best in 0.25..0.80)
+        assertTrue("best $peaked at $best vs wide open $floored", peaked >= floored * 0.98)
+        assertTrue("best pedal $best", best in 0.45..1.0)
     }
 
     @Test
@@ -162,8 +183,9 @@ class EconomyTest {
         coolant: Double = 90.0,
         oil: Double = 110.0,
         egt: Double = 720.0,
+        rpm: Double = 4000.0,
     ) = OperatingPoint(
-        rpm = 4000.0,
+        rpm = rpm,
         horsepower = hp,
         torqueLbFt = tq,
         boostPsi = 0.0,

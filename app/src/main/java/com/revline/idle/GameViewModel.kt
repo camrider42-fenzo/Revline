@@ -69,7 +69,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle, ui.sheet.params.idleRpm)
             val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
             val block = Block.forPrestige(ui.game.prestiges)
-            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening) * block.payScale()
+            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening, ui.sheet.stats) * block.payScale()
             val nowMs = System.currentTimeMillis()
             val down = nowMs < ui.game.downUntilEpochMs
             var game = Logic.accrue(ui.game, dt, nowMs, if (down) 0.0 else pay, ui.sheet.rpPerSec)

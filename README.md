@@ -29,19 +29,23 @@ A copy is also written to `dist/revline-debug.apk` after a local release build f
 
 ## What the contract pays
 
-Income is the pedal you are holding, after the intake has heat-soaked. The stop sets rpm and throttle-plate load together. Part throttle is vacuum, a leaner mixture, less boost, and less heat in the runners. Wide open is a rich pull, and the head soaks the charge: coolant and oil warm the manifold, a small radiator lets the head run away from the coolant, and that soak costs density and octane. A cold-air inlet, radiator, oil cooler, intercooler, or water-meth spray cuts the soak, so those parts move the pedal opening that pays.
+The contract pays the engine's output and its fuel economy. Peak horsepower and peak torque are the output. Cruise mpg, a 60 mph road load, is the economy. The pedal still sets rpm and load, but that stop only leans the check: most of the horsepower term stays on the peak, most of the economy term stays on the cruise number. Rpm is not the paycheck. Heat still is. Part throttle is vacuum, a leaner mixture, less boost, and less heat. Wide open soaks the charge, and that soak costs the condition term. A cold-air inlet, radiator, oil cooler, intercooler, or water-meth spray cuts the soak, so those parts let you hold more pedal.
 
 ```
-powerScore      = HP^1.62 * (1 + torqueLbFt / 950)
-economyScore    = (mpg / 28)^0.72 * (3.40 / dollarsPerGallon)^0.42
-durabilityScore = (reliability/100 * condition)^1.15
-dollars/second  = 0.035 * powerScore * economyScore * durabilityScore * multiplier
+paidHp          = peakHp * (0.90 + 0.10 * hpAtStop / peakHp)
+paidTq          = peakTq * (0.75 + 0.25 * torqueAtStop / peakTq)
+paidMpg         = cruiseMpg * (0.94 + 0.06 * min(1, mpgAtStop / cruiseMpg))
+powerScore      = paidHp^1.62 * (1 + paidTq / 950)
+economyScore    = (paidMpg / 28)^0.72 * (3.40 / dollarsPerGallon)^0.42
+durabilityScore = (reliability/100)^1.15
+heat            = 0.84 + 0.16 * condition
+dollars/second  = 0.00535 * powerScore * economyScore * durabilityScore * heat * multiplier
 multiplier      = 1 + 0.12 * EngineeringKnowledge
 ```
 
-Horsepower, torque, MPG, and soak are the operating point at this pedal, not the peak dyno stickers. MPG is that fuel flow scored at a steady 60 mph. `condition` falls when the pull is hot, knocking, fuel-limited, or heat-soaked past about 7°C.
+`condition` falls when the pull is hot, knocking, fuel-limited, or heat-soaked past about 7°C. That heat term can take 16% off the check. It does not replace the output.
 
-Pump 87 is $3.40/gal, 93 is $4.50, E85 is $4.10, and race fuel is $15. The price exponent is mild. The grade earns its price as burn speed and timing: each 6 octane over 87 is about 9% more of the fuel's energy and about 3.7° of timing, until knock. On a mild engine, 93 lands near 87. On a hot or boosted engine, 87 gives the timing back and 93 or race pulls ahead. E85 still drinks more gallons. Flooring a stock long-block is not the contract. The best stop moves up with cooling, cam, boost, and octane.
+Pump 87 is $3.40/gal, 93 is $4.50, E85 is $4.10, and race fuel is $15. The price exponent is mild. The grade earns its price as burn speed and timing: each 6 octane over 87 is about 9% more of the fuel's energy and about 3.7° of timing, until knock. On a mild engine, 93 lands near 87. On a hot or boosted engine, 87 gives the timing back and 93 or E85 pulls ahead on output. Race fuel's price can cost more than the power it adds. Moving the pedal across the tach changes the check by a small lean. Cooling and a bigger peak move it by more.
 
 A locked part on the bubble map names the upgrade you still have to buy, or the study if that is the only gate, instead of showing a price. Lines stay inside one bay.
 
