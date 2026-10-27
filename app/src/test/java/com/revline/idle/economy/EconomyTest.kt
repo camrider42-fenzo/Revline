@@ -166,6 +166,27 @@ class EconomyTest {
     }
 
     @Test
+    fun aNewEngineStartsWithTheFourCheapestTools() {
+        val fresh = Logic.newGame()
+        val costs = Upgrades.all
+            .filter { Logic.lockReason(fresh, it.id) == null }
+            .map { Logic.upgradeCost(fresh, it.id) }
+            .sorted()
+        assertEquals(costs.take(4).sum(), fresh.money, 0.001)
+        assertTrue(fresh.money > costs.first())
+        val ready = fresh.copy(
+            money = 1.0e7,
+            researched = setOf("exhaust_fab", "perf_cam", "wasted_spark", "tbi", "ic_node", "premium"),
+            upgrades = com.revline.idle.model.BlockPaceTest.sixty,
+            fuel = FuelKind.PREMIUM_93,
+        )
+        val rebuilt = Logic.prestige(ready)
+        assertEquals(1, rebuilt.prestiges)
+        assertEquals(Logic.startingMoney(1), rebuilt.money, 0.001)
+        assertTrue(rebuilt.upgrades.isEmpty())
+    }
+
+    @Test
     fun theOpeningToolOnEveryEngineIsACoupleOfMinutes() {
         for (index in com.revline.idle.model.Block.entries.indices) {
             val state = GameState(prestiges = index, knowledge = index)

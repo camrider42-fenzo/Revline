@@ -48,7 +48,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         val now = System.currentTimeMillis()
-        val (loaded, msg) = Logic.applyOffline(repo.load(), now)
+        val (loaded, msg) = Logic.applyOffline(openOrNew(), now)
         val sheet = Logic.sheet(loaded)
         rpm = Logic.targetRpm(sheet.params.redlineRpm, loaded.throttle, sheet.params.idleRpm)
         ui = UiModel(loaded, sheet, rpm, DynoPhase.IDLE, msg)
@@ -198,8 +198,19 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         super.onCleared()
     }
 
+    private fun openOrNew(): GameState {
+        val saved = repo.load()
+        val untouched = saved.savedAtEpochMs == 0L &&
+            saved.money == 0.0 &&
+            saved.prestiges == 0 &&
+            saved.knowledge == 0 &&
+            saved.upgrades.isEmpty() &&
+            saved.researched.isEmpty()
+        return if (untouched) Logic.newGame() else saved
+    }
+
     private fun blank(): UiModel {
-        val game = GameState()
+        val game = Logic.newGame()
         return UiModel(game, Logic.sheet(game), 820.0, DynoPhase.IDLE, null)
     }
 }

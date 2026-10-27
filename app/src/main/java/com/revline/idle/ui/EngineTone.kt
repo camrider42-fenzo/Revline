@@ -26,10 +26,10 @@ object EngineTone {
         if (throttle <= 0.0) return 0.0
         val open = throttle.coerceIn(0.0, 1.0).pow(1.35)
         val kind = when (induction) {
-            Induction.NA -> 0.018
-            Induction.SUPERCHARGER -> 0.028
-            Induction.TURBO -> 0.035
-            Induction.TWIN_TURBO -> 0.031
+            Induction.NA -> 0.014
+            Induction.SUPERCHARGER -> 0.022
+            Induction.TURBO -> 0.028
+            Induction.TWIN_TURBO -> 0.025
         }
         return kind * open
     }
@@ -134,7 +134,7 @@ class EngineVoice {
             gulp += sin(Math.PI * charge)
         }
         val breath = 0.62 + 0.38 * (gulp / cycles.size)
-        return (airLp * 0.85 + tone * 0.72) * gain * breath * 2.6
+        return (airLp * 0.85 + tone * 0.72) * gain * breath * 2.3
     }
 
     private fun nextNoise(): Double {

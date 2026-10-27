@@ -574,6 +574,19 @@ object Logic {
         return Prestige.meets(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, Block.forPrestige(state.prestiges))
     }
 
+    /** Cash on a fresh long-block: the four cheapest tools that block can buy. */
+    fun startingMoney(prestiges: Int): Double {
+        val probe = GameState(prestiges = prestiges.coerceAtLeast(0))
+        return Upgrades.all
+            .filter { lockReason(probe, it.id) == null }
+            .map { upgradeCost(probe, it.id) }
+            .sorted()
+            .take(4)
+            .sum()
+    }
+
+    fun newGame(): GameState = GameState(money = startingMoney(0))
+
     fun prestige(state: GameState): GameState {
         val stats = sheet(state).stats
         val gain = Prestige.knowledgeGain(
@@ -584,7 +597,7 @@ object Logic {
         )
         if (gain <= 0) return state
         return state.copy(
-            money = 0.0,
+            money = startingMoney(state.prestiges + 1),
             runEarnings = 0.0,
             researchPoints = state.researchPoints * 0.20,
             knowledge = state.knowledge + gain,

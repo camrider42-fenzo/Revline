@@ -514,9 +514,9 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
         Text(block.title.uppercase(Locale.US), color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp))
         Text(
             if (onLast) {
-                "Another rebuild stays on the ${block.title}. Parts and money go back to stock. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
+                "Another rebuild stays on the ${block.title}. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
             } else {
-                "The next rebuild is a ${next.title}. Parts and money go back to stock. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
+                "The next rebuild is a ${next.title}. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
             },
             color = White,
             fontFamily = FontFamily.Monospace,
