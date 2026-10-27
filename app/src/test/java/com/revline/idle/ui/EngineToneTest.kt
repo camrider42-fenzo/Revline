@@ -1,5 +1,6 @@
 package com.revline.idle.ui
 
+import com.revline.idle.model.Induction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,6 +23,19 @@ class EngineToneTest {
         val loud = loudness(ear, 0f)
         val quiet = loudness(ear, 160f)
         assertTrue("on the flame $loud vs between fires $quiet", loud > quiet * 2.0)
+    }
+
+    @Test
+    fun intakeAirFollowsThePedalAndTheCharger() {
+        assertEquals(0.0, EngineTone.airGain(Induction.TURBO, 0.0), 0.0)
+        assertTrue(EngineTone.airGain(Induction.NA, 1.0) > EngineTone.airGain(Induction.NA, 0.25) * 2.0)
+        assertTrue(EngineTone.airGain(Induction.TURBO, 1.0) > EngineTone.airGain(Induction.NA, 1.0))
+        assertTrue(EngineTone.airGain(Induction.SUPERCHARGER, 1.0) > EngineTone.airGain(Induction.NA, 1.0))
+        val quiet = loudness(EngineEar(86.0, 10.0, 4, 1, 0.25, true, Induction.NA), 160f)
+        val open = loudness(EngineEar(86.0, 10.0, 4, 1, 1.0, true, Induction.NA), 160f)
+        val blown = loudness(EngineEar(86.0, 10.0, 4, 1, 1.0, true, Induction.TURBO), 160f)
+        assertTrue("open intake $open vs cracked $quiet", open > quiet)
+        assertTrue("turbo $blown vs open intake $open", blown > open)
     }
 
     @Test

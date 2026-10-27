@@ -1,6 +1,8 @@
 package com.revline.idle.ui
 
+import com.revline.idle.model.Induction
 import kotlin.math.PI
+import kotlin.math.pow
 import kotlin.math.sin
 
 /**
@@ -15,6 +17,22 @@ object EngineTone {
     /** 0 is a soft low-compression thump. 1 is a sharp high-compression crack. */
     fun brightness(compression: Double): Double =
         ((compression - 7.6) / 6.4).coerceIn(0.0, 1.0)
+
+    /**
+     * How much intake rush to mix in. Closed is silent. Wide open is still
+     * small next to the crack. A turbo whooshes more than an open intake.
+     */
+    fun airGain(induction: Induction, throttle: Double): Double {
+        if (throttle <= 0.0) return 0.0
+        val open = throttle.coerceIn(0.0, 1.0).pow(1.35)
+        val kind = when (induction) {
+            Induction.NA -> 0.040
+            Induction.SUPERCHARGER -> 0.062
+            Induction.TURBO -> 0.078
+            Induction.TWIN_TURBO -> 0.070
+        }
+        return kind * open
+    }
 }
 
 /**
@@ -24,6 +42,8 @@ class EngineVoice {
     private var p1 = 0.2
     private var p2 = 1.1
     private var p3 = 2.4
+    private var whine = 0.4
+    private var airLp = 0.0
     private var noise = 0x27BB2EE
     private var level = 0.0
 
@@ -62,9 +82,44 @@ class EngineVoice {
             }
         }
         val share = 1.0 / kotlin.math.sqrt(cycles.size.toDouble())
-        val mixed = (crack * 0.72 + exhaust * 0.10) * share
+        val mixed = (crack * 0.72 + exhaust * 0.10) * share + air(ear, cycles, sampleRate)
         val out = mixed * level * (0.85 + 0.15 * (1.0 - bright))
         return out.coerceIn(-1.0, 1.0).toFloat()
+    }
+
+    /** A little intake rush. Throttle sets the amount. The charger sets the color. */
+    private fun air(ear: EngineEar, cycles: FloatArray, sampleRate: Int): Double {
+        val gain = EngineTone.airGain(ear.induction, ear.throttle)
+        if (gain <= 0.0) return 0.0
+        val open = ear.throttle.coerceIn(0.0, 1.0)
+        val raw = nextNoise()
+        val cutoff = when (ear.induction) {
+            Induction.NA -> 0.16 + 0.22 * open
+            Induction.SUPERCHARGER -> 0.07 + 0.08 * open
+            Induction.TURBO -> 0.035 + 0.05 * open
+            Induction.TWIN_TURBO -> 0.05 + 0.07 * open
+        }
+        airLp += (raw - airLp) * cutoff
+        val whineHz = when (ear.induction) {
+            Induction.NA -> 0.0
+            Induction.SUPERCHARGER -> 280.0 + 1600.0 * open
+            Induction.TURBO -> 90.0 + 420.0 * open
+            Induction.TWIN_TURBO -> 140.0 + 640.0 * open
+        }
+        var tone = 0.0
+        if (whineHz > 0.0) {
+            whine += 2.0 * PI * whineHz / sampleRate
+            if (whine > 1e6) whine %= 2.0 * PI
+            val bite = if (ear.induction == Induction.SUPERCHARGER) 0.55 else 0.28
+            tone = sin(whine) * bite
+        }
+        var gulp = 0.0
+        for (cycle in cycles) {
+            val charge = EngineMotion.charge(cycle) ?: continue
+            gulp += sin(Math.PI * charge)
+        }
+        val breath = 0.62 + 0.38 * (gulp / cycles.size)
+        return (airLp * 0.85 + tone) * gain * breath * 6.0
     }
 
     private fun nextNoise(): Double {
@@ -81,4 +136,5 @@ data class EngineEar(
     val banks: Int,
     val throttle: Double,
     val running: Boolean,
+    val induction: Induction = Induction.NA,
 )

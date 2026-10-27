@@ -4,6 +4,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import com.revline.idle.model.EngineParams
+import com.revline.idle.model.Induction
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -19,6 +20,7 @@ class EngineCrank {
     private val banks = AtomicInteger(1)
     private val throttleBits = AtomicInteger(0.18f.toRawBits())
     private val running = AtomicInteger(1)
+    private val induction = AtomicInteger(Induction.NA.ordinal)
 
     var angle: Float
         get() = Float.fromBits(angleBits.get())
@@ -37,6 +39,7 @@ class EngineCrank {
         banks.set(params.banks)
         throttleBits.set(throttle.toRawBits())
         running.set(if (live) 1 else 0)
+        induction.set(params.induction.ordinal)
     }
 
     fun ear(): EngineEar = EngineEar(
@@ -46,6 +49,7 @@ class EngineCrank {
         banks = banks.get(),
         throttle = Float.fromBits(throttleBits.get()).toDouble(),
         running = running.get() == 1,
+        induction = Induction.entries[induction.get().coerceIn(0, Induction.entries.lastIndex)],
     )
 }
 
