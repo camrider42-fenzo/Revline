@@ -569,7 +569,14 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
             onPrestige,
             Modifier.fillMaxWidth(),
         )
-        Text("PERKS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+        Text("PERKS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+        Text(
+            "These stay with the shop. Each rank spends Engineering Knowledge and applies to every long-block after it.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
         Perks.all.forEach { perk ->
             val rank = ui.game.perks[perk.id] ?: 0
             val next = perk.costs.getOrNull(rank)

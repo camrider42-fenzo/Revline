@@ -170,6 +170,13 @@ object Perks {
         Perk("octane", "Octane schooling", "Each rank is worth about 1.2 octane of knock resistance, on top of the fuel.", listOf(2, 3)),
         Perk("tooling", "Fixture credit", "Each rank takes 5% off part prices, to a floor of 18% off.", listOf(1, 2, 4)),
         Perk("fixtures", "Pattern strength", "Each rank leaves a little more bottom-end strength in the next stock block.", listOf(2, 4)),
+        Perk("breakin", "Break-in sheet", "Each rank takes 1.2% off the friction of a fresh long-block.", listOf(1, 2)),
+        Perk("bay_air", "Bay thermometer", "Each rank drops the air in the engine bay by 1.5°C.", listOf(1, 2)),
+        Perk("cores", "Radiator notes", "Each rank adds a tenth of cooling headroom, so the head soaks more slowly.", listOf(2, 3)),
+        Perk("readers", "Plug reading", "Each rank is a slightly cleaner spark, before any coil is on the engine.", listOf(1, 2)),
+        Perk("spool", "Spool notes", "Each rank brings a charger's boost in 160 rpm sooner. An unboosted engine does not use it.", listOf(2, 4)),
+        Perk("slips", "Dyno slips", "Each rank adds 10% to the research a dyno pull pays. The contract does not change.", listOf(1, 3)),
+        Perk("pump", "Pump margin", "Each rank adds a little fuel flow the block was not sold with, so a hard pull leans out later.", listOf(2, 3)),
     )
 
     fun byId(id: String): Perk = all.first { it.id == id }
