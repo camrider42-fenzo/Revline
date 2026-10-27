@@ -49,7 +49,7 @@ Pump 87 is $3.40/gal, 93 is $4.50, E85 is $4.10, and race fuel is $15. The price
 
 A locked part on the bubble map names the upgrade you still have to buy, or the study if that is the only gate, instead of showing a price. Lines stay inside one bay.
 
-The throttle you set is saved. Offline pay uses that same stop, at 80% of the contract and 50% of passive research, capped at 8 hours. A rebuild puts the pedal back to a light opening so the next long-block gets its own pull.
+The throttle you set is saved. Offline pay uses that same stop, at 80% of the contract and 20% of passive research, capped at 8 hours. A rebuild puts the pedal back to a light opening so the next long-block gets its own pull.
 
 Research points tick from peak horsepower (`0.05 + 0.035 × HP^0.8` per second, times the knowledge multiplier, more with the Dyno habit perk). A dyno pull sweeps the tach on its own, adds `4 + 0.6 × HP^0.8`, and then waits 35 seconds. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
 
@@ -95,7 +95,7 @@ The Tune tab is the screws: spark advance, mixture, cam center, wastegate, rev l
 
 Part prices on later engines include the smallest knowledge multiplier you can have when you arrive, and most of that engine's larger contract versus the moped. The paycheck's multiplier is in the price too, so it does not make the next engine a sprint. Further rebuilds after the V12 stay on that block and only add knowledge.
 
-Offline earnings pay 80% of the contract and 50% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
+Offline earnings pay 80% of the contract and 20% of passive research, capped at 8 hours. The save is a JSON file in app storage and writes every few seconds.
 
 ## Tests
 

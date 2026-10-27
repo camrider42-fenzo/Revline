@@ -107,6 +107,9 @@ class EconomyTest {
         val (paid, msg) = Logic.applyOffline(saved, now)
         assertTrue(paid.money > 0.0)
         assertTrue(msg != null)
+        val sheet = Logic.sheet(saved)
+        assertEquals(sheet.rpPerSec * 3600.0 * Offline.RESEARCH_FACTOR, paid.researchPoints, 0.01)
+        assertEquals(0.20, Offline.RESEARCH_FACTOR, 0.0)
         val eight = Logic.applyOffline(saved.copy(savedAtEpochMs = now - Offline.CAP_MS), now).first.money
         val ten = Logic.applyOffline(saved.copy(savedAtEpochMs = now - Offline.CAP_MS - 3_600_000L), now).first.money
         assertEquals(eight, ten, 0.01)

@@ -418,7 +418,7 @@ object Logic {
         )
         val msg = "The contract kept paying with the bay dark. ${formatDollars(money)} and " +
             "${formatCompact(rp)} research, over ${formatDuration(elapsed)}. " +
-            "Nobody was here to make a dyno pull, so research is only the passive half."
+            "Nobody was here to make a dyno pull, so research is only a fifth of the passive rate."
         return next to msg
     }
 

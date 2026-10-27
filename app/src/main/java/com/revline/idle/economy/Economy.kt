@@ -103,7 +103,7 @@ object Offline {
     const val CAP_MS = 8L * 60L * 60L * 1000L
     const val MIN_MS = 20_000L
     const val MONEY_FACTOR = 0.80
-    const val RESEARCH_FACTOR = 0.50
+    const val RESEARCH_FACTOR = 0.20
 }
 
 fun formatCompact(value: Double): String {
