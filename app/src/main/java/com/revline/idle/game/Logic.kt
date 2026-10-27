@@ -120,9 +120,12 @@ object Logic {
             "thermostat", "afr_map", "oil_cooler", "electric_pump", "inconel",
             "waterless", "ceramic", "knock_box", "boost_controller", "torque_model", "meth",
         ).sumOf { lvl(it) }
-        if (latent <= 0) return 0.0
+        val tools = listOf(
+            "lap", "gap", "boot", "tip", "needle", "oil_service", "fins", "wrench",
+        ).sumOf { lvl(it) }
         val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders).coerceAtLeast(40.0)
-        return latent * 0.22 * (50.0 / cc).coerceIn(0.05, 1.0)
+        val fade = (160.0 / cc).coerceIn(1.0, 1.8)
+        return (latent * 0.45 + tools * 1.15) * fade
     }
 
     fun paramsFrom(state: GameState): EngineParams {
@@ -225,11 +228,11 @@ object Logic {
         }
         val fuel = allowedFuel(state, state.fuel)
         var ve = block.peakVe +
-            0.012 * filter + 0.015 * cai + 0.012 * manifold + 0.018 * itb +
-            0.006 * catback + 0.010 * headers + 0.012 * longTube +
-            0.020 * cam + 0.012 * vvt + 0.030 * vvl +
-            0.004 * lap + 0.004 * boot + 0.003 * tip + 0.003 * gap + 0.002 * fins +
-            0.012 * (state.perks["flow"] ?: 0)
+            0.020 * filter + 0.024 * cai + 0.020 * manifold + 0.028 * itb +
+            0.010 * catback + 0.018 * headers + 0.020 * longTube +
+            0.032 * cam + 0.020 * vvt + 0.046 * vvl +
+            0.022 * lap + 0.018 * boot + 0.014 * tip + 0.012 * gap + 0.010 * fins +
+            0.018 * (state.perks["flow"] ?: 0)
         var frac = block.vePeakFraction + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
             0.018 * longTube + 0.040 * cam + 0.015 * vvl + Tuners.value(state, "cam")
         if (limiter > 0) {
@@ -239,10 +242,10 @@ object Logic {
             frac = capped * breathing / extended
         }
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
-        var strength = 1.0 + 0.035 * springs + 0.08 * studs + 0.18 * pistons +
-            0.11 * rods + 0.08 * crank + 0.25 * billet + 0.015 * wrench + 0.06 * (state.perks["fixtures"] ?: 0)
-        var flow = block.fuelFlow + 0.12 * jets + 0.04 * needle + 0.28 * pump + 0.22 * tbi + 0.42 * injectors + 0.70 * hpfp
-        var timing = block.timingDeg + 1.15 * baseTiming + 1.30 * mapped + 0.40 * coils + 0.28 * gap
+        var strength = 1.0 + 0.055 * springs + 0.12 * studs + 0.26 * pistons +
+            0.16 * rods + 0.12 * crank + 0.36 * billet + 0.045 * wrench + 0.08 * (state.perks["fixtures"] ?: 0)
+        var flow = block.fuelFlow + 0.18 * jets + 0.10 * needle + 0.40 * pump + 0.32 * tbi + 0.60 * injectors + 0.95 * hpfp
+        var timing = block.timingDeg + 1.6 * baseTiming + 1.8 * mapped + 0.55 * coils + 0.85 * gap
         if (torque) timing += 1.4
         timing += Tuners.value(state, "spark")
         var knock = 0.18 + if (knockBox > 0) 0.60 else 0.0
@@ -264,12 +267,12 @@ object Logic {
             1 -> 16.0
             else -> 20.0
         }
-        val friction = (1.0 - 0.04 * crank - 0.012 * oilService - 0.01 * wrench - if (synthetic) 0.025 else 0.0).coerceIn(0.78, 1.2)
+        val friction = (1.0 - 0.05 * crank - 0.035 * oilService - 0.028 * wrench - if (synthetic) 0.04 else 0.0).coerceIn(0.72, 1.2)
         return EngineParams(
             cylinders = block.cylinders,
-            boreMm = (block.boreMm + block.boreMm * 0.025 * bore).coerceIn(block.boreMm * 0.9, block.boreMm * 1.2),
+            boreMm = (block.boreMm + block.boreMm * 0.038 * bore).coerceIn(block.boreMm * 0.9, block.boreMm * 1.25),
             strokeMm = block.strokeMm,
-            compressionRatio = (block.compression + 0.38 * compression).coerceIn(7.5, 14.5),
+            compressionRatio = (block.compression + 0.48 * compression).coerceIn(7.5, 14.5),
             peakVe = ve.coerceIn(0.55, 1.35),
             vePeakFraction = frac.coerceIn(0.35, 0.92),
             veWidthRpm = width.coerceIn(900.0, 6500.0),

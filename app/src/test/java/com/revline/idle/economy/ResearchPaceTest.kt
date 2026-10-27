@@ -57,7 +57,7 @@ class ResearchPaceTest {
         val total = ResearchTree.all.size
         val ordinary = ResearchTree.all.count { it.minPrestige == 0 }
         val report = lines.joinToString("\n")
-        assertTrue("moped should study the basics\n$report", owned[0] in 8..ordinary / 2)
+        assertTrue("moped should study the basics\n$report", owned[0] in 8..20 && owned[0] < ordinary)
         assertTrue("thumper should still be studying\n$report", owned[1] < ordinary)
         assertTrue("the twin should not finish the notebook\n$report", owned[2] < ordinary)
         assertTrue("the ordinary notebook should close by the V6\n$report", owned[5] == ordinary)

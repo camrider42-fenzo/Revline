@@ -223,7 +223,13 @@ object EngineSim {
         if (accumulatedSoakC != null) {
             val soak = accumulatedSoakC.coerceIn(0.0, 80.0)
             val result = once(params, safeRpm, open, soak, plate = true)
-            return result.copy(load = open, heatSoakC = soak)
+            return result.copy(
+                load = open,
+                heatSoakC = soak,
+                coolantTempC = result.coolantTempC + soak * 0.72,
+                oilTempC = result.oilTempC + soak * 0.90,
+                egtC = result.egtC + soak * 0.55,
+            )
         }
         var extra = 0.0
         var result = once(params, safeRpm, open, extra, plate = true)
@@ -504,7 +510,7 @@ object EngineSim {
         if (afr > stoich + 0.4) egt += (afr - stoich) * 18.0
         egt += shot * 180.0 + leanHit * 70.0
         val push = if (rpm > params.redlineRpm * 0.55) params.rpmPower else params.rpmPower * 0.25
-        val hp = (pBrake / 745.7) * (1.0 + push) + params.installedHp * open.coerceIn(0.45, 1.0)
+        val hp = (pBrake / 745.7) * (1.0 + push) + params.installedHp * open
         val richFraction = ((stoich - afr) / stoich).coerceAtLeast(0.0)
         val gulp = if (plate) 1.0 + 1.8 * open.pow(5.0) * (0.65 + richFraction) else 1.0
         val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon * gulp

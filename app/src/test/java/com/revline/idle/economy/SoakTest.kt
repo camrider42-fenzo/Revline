@@ -49,6 +49,12 @@ class SoakTest {
         val fresh = Logic.incomeAt(stock, rpmHeld, stats.reliability, 1.0, 0.7, stats, 0.0)
         val soaked = Logic.incomeAt(stock, rpmHeld, stats.reliability, 1.0, 0.7, stats, 40.0)
         assertTrue("soaked $soaked vs fresh $fresh", soaked < fresh)
+        val cool = EngineSim.point(stock, rpmHeld, Logic.loadFor(0.7), 0.0)
+        val head = EngineSim.point(stock, rpmHeld, Logic.loadFor(0.7), 40.0)
+        assertTrue("coolant ${cool.coolantTempC} -> ${head.coolantTempC}", head.coolantTempC > cool.coolantTempC + 20.0)
+        assertTrue("oil ${cool.oilTempC} -> ${head.oilTempC}", head.oilTempC > cool.oilTempC + 25.0)
+        assertTrue("egt ${cool.egtC} -> ${head.egtC}", head.egtC > cool.egtC + 15.0)
+        assertTrue("charge ${cool.chargeTempC} -> ${head.chargeTempC}", head.chargeTempC > cool.chargeTempC + 25.0)
     }
 
     @Test
