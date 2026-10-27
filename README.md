@@ -14,18 +14,20 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ./gradlew assembleDebug testDebugUnitTest
 ```
 
-The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
+The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and release use the same key in `app/sideload.keystore`, so a later build can install over this one.
 
 ## Install on a phone
 
-`adb sideload` is a recovery command. It will not install this app. With USB debugging on (the Fold included):
+Tap-to-install the release APK. If Revline is already on the phone from an older build signed somewhere else, uninstall that copy first. Android will not replace an app when the signing key changed, and the installer often says only that the app was not installed. Uninstalling clears the save in app storage.
+
+`adb sideload` is a recovery command. It will not install this app. With USB debugging on:
 
 ```bash
 adb devices
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-A copy is also written to `dist/revline-debug.apk` after a local release build from this repo's scripts, and the same file is the CI artifact `revline-debug-apk`.
+A copy is also written to `dist/revline.apk`.
 
 ## What the contract pays
 

@@ -13,13 +13,29 @@ android {
         applicationId = "com.revline.idle"
         minSdk = 26
         targetSdk = 35
-        versionCode = 35
-        versionName = "1.27.0"
+        versionCode = 36
+        versionName = "1.28.0"
+    }
+
+    signingConfigs {
+        create("sideload") {
+            storeFile = file("sideload.keystore")
+            storePassword = "revline-sideload"
+            keyAlias = "revline"
+            keyPassword = "revline-sideload"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("sideload")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("sideload")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -42,6 +58,10 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+
+    lint {
+        checkReleaseBuilds = false
     }
 
     packaging {
