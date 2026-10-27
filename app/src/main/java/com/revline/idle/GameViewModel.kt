@@ -169,6 +169,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissOffline() = publish(ui.copy(offline = null))
 
     fun buy(id: String) = mutate { Logic.buyUpgrade(it, id) }
+    fun remove(id: String) = mutate { Logic.removeUpgrade(it, id) }
     fun research(id: String) = mutate { Logic.buyResearch(it, id) }
     fun perk(id: String) = mutate { Logic.buyPerk(it, id) }
     fun fuel(kind: FuelKind) = mutate { Logic.selectFuel(it, kind) }

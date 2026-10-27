@@ -49,9 +49,11 @@ import androidx.compose.ui.unit.sp
 import com.revline.idle.DynoPhase
 import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
+import com.revline.idle.game.Aim
 import com.revline.idle.game.Bottleneck
 import com.revline.idle.game.Effect
 import com.revline.idle.game.Logic
+import com.revline.idle.game.SheetAim
 import com.revline.idle.game.StatDelta
 import com.revline.idle.game.Upgrade
 import com.revline.idle.game.UpgradeMap
@@ -70,7 +72,7 @@ private fun effectColor(effect: Effect): Color = when (effect) {
 }
 
 @Composable
-fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit) {
+fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit, onFuel: (FuelKind) -> Unit) {
     val selected = remember { mutableStateOf<String?>(null) }
     val layout = remember { UpgradeMap.bubbles() }
     val pedalBucket = (ui.game.throttle * 20.0).toInt()
@@ -102,11 +104,30 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
     val suggestion = remember(ui.sheet.stats, live.heatSoakC, live.fuelLimited, soakRate, ui.game.upgrades, ui.game.prestiges) {
         Bottleneck.suggest(ui.game, ui.sheet.stats, live, soakRate)
     }
+    val aim = remember(
+        ui.game.upgrades,
+        ui.game.researched,
+        ui.game.prestiges,
+        ui.game.fuel,
+        ui.game.tune,
+        ui.game.perks,
+    ) {
+        SheetAim.recommend(ui.game)
+    }
     var focusTick by remember { mutableIntStateOf(0) }
     var pinned by remember { mutableStateOf<Effect?>(null) }
+    var focusPart by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(Black).padding(horizontal = 8.dp, vertical = 4.dp)) {
         BottleneckBar(suggestion) {
             pinned = suggestion.effect
+            focusPart = null
+            focusTick++
+        }
+        AimBar(aim) {
+            val id = aim.upgradeId ?: return@AimBar
+            selected.value = id
+            pinned = UpgradeMap.effectOf(id)
+            focusPart = id
             focusTick++
         }
         PartsStatus(ui, live)
@@ -117,6 +138,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
             selected = selected.value,
             pulse = pulse,
             focus = pinned ?: suggestion.effect,
+            focusPart = focusPart,
             focusTick = focusTick,
             onSelect = { selected.value = it },
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -124,7 +146,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
         if (selected.value == null) {
             PartsStatus(ui, live)
         } else {
-            PartDetail(ui, selected.value!!, previews[selected.value], onBuy)
+            PartDetail(ui, selected.value!!, previews[selected.value], onBuy, onRemove)
         }
     }
 }
@@ -136,6 +158,7 @@ private fun BubbleMap(
     selected: String?,
     pulse: Float,
     focus: Effect,
+    focusPart: String?,
     focusTick: Int,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -150,16 +173,26 @@ private fun BubbleMap(
         androidx.compose.runtime.LaunchedEffect(viewW, viewH, focusTick) {
             if (viewW < 1f || viewH < 1f) return@LaunchedEffect
             if (framed && focusTick == 0) return@LaunchedEffect
-            val hub = layout.bubbles.first { it.id == focus.name }
-            val reach = layout.bubbles
-                .filter { it.effect == focus }
-                .maxOf { hypot((it.cx - hub.cx).toDouble(), (it.cy - hub.cy).toDouble()).toFloat() + it.r }
-            val fit = (minOf(viewW, viewH) / (2f * reach * density * 1.12f)).coerceIn(0.42f, 1.35f)
-            scale = fit
-            offset = Offset(
-                viewW / 2f - hub.cx * density * fit,
-                viewH / 2f - hub.cy * density * fit,
-            )
+            val part = focusPart?.let { id -> layout.bubbles.firstOrNull { it.id == id } }
+            if (part != null) {
+                val fit = (minOf(viewW, viewH) * 0.22f / (part.r * density)).coerceIn(0.55f, 1.7f)
+                scale = fit
+                offset = Offset(
+                    viewW / 2f - part.cx * density * fit,
+                    viewH / 2f - part.cy * density * fit,
+                )
+            } else {
+                val hub = layout.bubbles.first { it.id == focus.name }
+                val reach = layout.bubbles
+                    .filter { it.effect == focus }
+                    .maxOf { hypot((it.cx - hub.cx).toDouble(), (it.cy - hub.cy).toDouble()).toFloat() + it.r }
+                val fit = (minOf(viewW, viewH) / (2f * reach * density * 1.12f)).coerceIn(0.42f, 1.35f)
+                scale = fit
+                offset = Offset(
+                    viewW / 2f - hub.cx * density * fit,
+                    viewH / 2f - hub.cy * density * fit,
+                )
+            }
             framed = true
         }
         Box(
@@ -394,6 +427,38 @@ private fun BottleneckBar(suggestion: com.revline.idle.game.Suggestion, onShow: 
     }
 }
 
+@Composable
+private fun AimBar(aim: Aim, onShow: () -> Unit) {
+    val color = aim.upgradeId?.let { effectColor(UpgradeMap.effectOf(it)) } ?: Amber
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+            .border(1.dp, color)
+            .clickable(
+                enabled = aim.upgradeId != null,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onShow,
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        Text("NEXT  ·  ${aim.headline.uppercase(Locale.US)}", color = color, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            aim.detail,
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        if (aim.upgradeId != null) {
+            Text("Show this part", color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
+        }
+    }
+}
+
 private fun soakRate(ui: UiModel): String {
     val opening = if (ui.phase == DynoPhase.IDLE) ui.game.throttle else 1.0
     val per10s = EngineSim.soakPer10s(ui.sheet.params, ui.rpm, opening)
@@ -461,6 +526,7 @@ private fun PartDetail(
     id: String,
     delta: com.revline.idle.game.StatDelta?,
     onBuy: (String) -> Unit,
+    onRemove: (String) -> Unit,
 ) {
     val upgrade = Upgrades.byId(id)
     val level = ui.game.upgrades[id] ?: 0
@@ -492,12 +558,12 @@ private fun PartDetail(
             ui.game.devMode -> "Fit it · free (dev)"
             else -> formatDollars(cost)
         }
-        LineButton(
-            label,
-            Logic.canBuyUpgrade(ui.game, id),
-            { onBuy(id) },
-            Modifier.padding(top = 6.dp),
-        )
+        val refund = if (level > 0) Logic.upgradeRefund(ui.game, id) else 0.0
+        val pull = if (ui.game.devMode) "Pull one" else "Pull one · ${formatDollars(refund)}"
+        LineButton(label, Logic.canBuyUpgrade(ui.game, id), { onBuy(id) }, Modifier.padding(top = 6.dp))
+        if (level > 0) {
+            LineButton(pull, true, { onRemove(id) }, Modifier.padding(top = 6.dp))
+        }
     }
 }
 

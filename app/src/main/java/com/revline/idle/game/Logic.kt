@@ -475,6 +475,25 @@ object Logic {
         )
     }
 
+    /** What the fitted level cost, at today's prices. Dev mode refunds nothing. */
+    fun upgradeRefund(state: GameState, id: String): Double {
+        val level = state.upgrades[id] ?: 0
+        if (level <= 0) return 0.0
+        val prior = if (level == 1) state.upgrades - id else state.upgrades + (id to level - 1)
+        return upgradeCost(state.copy(upgrades = prior), id)
+    }
+
+    fun canRemoveUpgrade(state: GameState, id: String): Boolean =
+        Upgrades.all.any { it.id == id } && (state.upgrades[id] ?: 0) > 0
+
+    fun removeUpgrade(state: GameState, id: String): GameState {
+        if (!canRemoveUpgrade(state, id)) return state
+        val level = state.upgrades[id] ?: 0
+        val refund = upgradeRefund(state, id)
+        val next = if (level == 1) state.upgrades - id else state.upgrades + (id to level - 1)
+        return state.copy(money = state.money + refund, upgrades = next)
+    }
+
     fun preview(state: GameState, id: String): StatDelta? {
         val u = Upgrades.all.find { it.id == id } ?: return null
         val level = state.upgrades[id] ?: 0

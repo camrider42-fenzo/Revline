@@ -93,7 +93,7 @@ fun RevlineApp(vm: GameViewModel) {
             Box(Modifier.fillMaxSize().padding(padding).background(Black)) {
                 when (tab.value) {
                     Tab.BENCH -> BenchScreen(ui, crank, vm::startDyno, vm::setThrottle)
-                    Tab.PARTS -> PartsScreen(ui, vm::buy, vm::fuel)
+                    Tab.PARTS -> PartsScreen(ui, vm::buy, vm::remove, vm::fuel)
                     Tab.TUNE -> TuneScreen(ui, vm::nudgeTune)
                     Tab.STUDY -> StudyScreen(ui, vm::research)
                     Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
