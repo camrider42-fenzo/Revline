@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-Tap-to-install the release APK. If Revline is already on the phone from an older build signed somewhere else, uninstall that copy first. Android will not replace an app when the signing key changed, and the installer often says only that the app was not installed. Uninstalling clears the save in app storage.
+Tap-to-install `dist/revline.apk` (version 1.29.0 or newer). The file should be about 6.5 MB and start as a normal APK. If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
 `adb sideload` is a recovery command. It will not install this app. With USB debugging on:
 

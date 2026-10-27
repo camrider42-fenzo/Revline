@@ -13,8 +13,8 @@ android {
         applicationId = "com.revline.idle"
         minSdk = 26
         targetSdk = 35
-        versionCode = 36
-        versionName = "1.28.0"
+        versionCode = 37
+        versionName = "1.29.0"
     }
 
     signingConfigs {
@@ -25,7 +25,7 @@ android {
             keyPassword = "revline-sideload"
             enableV1Signing = true
             enableV2Signing = true
-            enableV3Signing = true
+            enableV3Signing = false
         }
     }
 
@@ -65,6 +65,9 @@ android {
     }
 
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
