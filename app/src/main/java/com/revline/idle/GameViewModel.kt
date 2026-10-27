@@ -12,6 +12,7 @@ import com.revline.idle.game.Logic
 import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
 import com.revline.idle.model.Block
+import com.revline.idle.model.EngineSim
 import com.revline.idle.model.FuelKind
 import java.io.File
 import kotlin.math.exp
@@ -69,10 +70,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle, ui.sheet.params.idleRpm)
             val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
             val block = Block.forPrestige(ui.game.prestiges)
-            val pay = Logic.incomeAt(ui.sheet.params, spun, ui.sheet.stats.reliability, ui.sheet.multiplier, opening, ui.sheet.stats) * block.payScale()
+            val soakRate = EngineSim.soakPer10s(ui.sheet.params, spun, opening)
+            val soaked = Logic.stepSoak(ui.game.soakC, soakRate, dt)
+            val pay = Logic.incomeAt(
+                ui.sheet.params,
+                spun,
+                ui.sheet.stats.reliability,
+                ui.sheet.multiplier,
+                opening,
+                ui.sheet.stats,
+                soaked,
+            ) * block.payScale()
             val nowMs = System.currentTimeMillis()
             val down = nowMs < ui.game.downUntilEpochMs
-            var game = Logic.accrue(ui.game, dt, nowMs, if (down) 0.0 else pay, ui.sheet.rpPerSec)
+            var game = Logic.accrue(ui.game.copy(soakC = soaked), dt, nowMs, if (down) 0.0 else pay, ui.sheet.rpPerSec)
             if (!down && ui.sheet.params.abuse > 0) {
                 val chance = 1.0 - exp(-Logic.failurePerSec(ui.game, ui.sheet.stats) * dt)
                 if (chance > 0.0 && kotlin.random.Random.nextDouble() < chance) {

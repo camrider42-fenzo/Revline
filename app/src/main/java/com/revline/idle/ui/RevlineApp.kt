@@ -114,7 +114,15 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
     val stats = ui.sheet.stats
     val bucket = (ui.rpm / 50.0).toInt() * 50
     val liveLoad = if (ui.phase == DynoPhase.IDLE) Logic.loadFor(ui.game.throttle) else 1.0
-    val live = remember(params, bucket, liveLoad) { EngineSim.point(params, bucket.toDouble(), liveLoad) }
+    val soakBucket = (ui.game.soakC * 2.0).toInt()
+    val live = remember(params, bucket, liveLoad, soakBucket) {
+        val point = EngineSim.point(params, bucket.toDouble(), liveLoad, ui.game.soakC)
+        if (Logic.stalled(ui.game.throttle) && ui.phase == DynoPhase.IDLE) {
+            point.copy(horsepower = 0.0, torqueLbFt = 0.0, mpg = 0.0)
+        } else {
+            point
+        }
+    }
     val target = Logic.targetRpm(params.redlineRpm, ui.game.throttle, params.idleRpm)
     val pedalEnabled = ui.phase == DynoPhase.IDLE
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -236,6 +244,12 @@ private fun FailureLine(ui: UiModel) {
     )
 }
 
+private fun soakReadout(soakC: Double, per10s: Double): String {
+    val sign = if (per10s >= 0.0) "+" else "−"
+    val rate = String.format(Locale.US, "%.1f", kotlin.math.abs(per10s))
+    return "soak ${soakC.toInt()}°C $sign$rate°/10s"
+}
+
 @Composable
 private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
     val s = ui.sheet.stats
@@ -248,7 +262,7 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
         Text(
-            "At ${live.rpm.toInt()} rpm · load ${(live.load * 100).toInt()}% · soak ${live.heatSoakC.toInt()}°C · " +
+            "At ${live.rpm.toInt()} rpm · load ${(live.load * 100).toInt()}% · ${soakReadout(ui.game.soakC, EngineSim.soakPer10s(ui.sheet.params, live.rpm, if (ui.phase == DynoPhase.IDLE) ui.game.throttle else 1.0))} · " +
                 (if (ui.sheet.params.induction != com.revline.idle.model.Induction.NA && live.boostPsi < 0.4) "below spool · " else "") +
                 "${String.format(Locale.US, "%.1f", 60.0 / live.mpg.coerceAtLeast(0.8))} gal/h · $${String.format(Locale.US, "%.2f", ui.sheet.params.fuel.dollarsPerGallon)}/gal",
             color = White,
@@ -315,7 +329,7 @@ fun EngineStrip(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Stat("RPM", live.rpm.toInt().toString(), White, Modifier.weight(1f))
             Stat("LOAD", "${(live.load * 100).toInt()}%", White, Modifier.weight(1f))
-            Stat("SOAK", "${live.heatSoakC.toInt()}°", if (live.heatSoakC > 18) Red else Cyan, Modifier.weight(1f))
+            Stat("SOAK", "${ui.game.soakC.toInt()}°", if (ui.game.soakC > 18.0) Red else Cyan, Modifier.weight(1f))
             Stat("COOL", "${live.coolantTempC.toInt()}°", if (live.coolantTempC > 110) Red else Cyan, Modifier.weight(1f))
             Stat("OIL", "${live.oilTempC.toInt()}°", if (live.oilTempC > 140) Red else Amber, Modifier.weight(1f))
             Stat("EGT", "${live.egtC.toInt()}°", if (live.egtC > 900) Red else Amber, Modifier.weight(1f))

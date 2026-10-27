@@ -91,8 +91,9 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onFuel: (FuelKind) -> Unit
     )
     val bucket = (ui.rpm / 50.0).toInt() * 50
     val liveLoad = if (ui.phase == DynoPhase.IDLE) Logic.loadFor(ui.game.throttle) else 1.0
-    val live = remember(ui.sheet.params, bucket, liveLoad) {
-        EngineSim.point(ui.sheet.params, bucket.toDouble(), liveLoad)
+    val soakBucket = (ui.game.soakC * 2.0).toInt()
+    val live = remember(ui.sheet.params, bucket, liveLoad, soakBucket) {
+        EngineSim.point(ui.sheet.params, bucket.toDouble(), liveLoad, ui.game.soakC)
     }
     Column(Modifier.fillMaxSize().background(Black).padding(horizontal = 8.dp, vertical = 4.dp)) {
         PartsStatus(ui, live)
@@ -346,6 +347,13 @@ private fun UpgradeBubble(
     }
 }
 
+private fun soakRate(ui: UiModel): String {
+    val opening = if (ui.phase == DynoPhase.IDLE) ui.game.throttle else 1.0
+    val per10s = EngineSim.soakPer10s(ui.sheet.params, ui.rpm, opening)
+    val sign = if (per10s >= 0.0) "+" else "−"
+    return sign + String.format(java.util.Locale.US, "%.1f", kotlin.math.abs(per10s)) + "°/10s"
+}
+
 @Composable
 private fun PartsStatus(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
     val stats = ui.sheet.stats
@@ -360,7 +368,7 @@ private fun PartsStatus(ui: UiModel, live: com.revline.idle.model.OperatingPoint
     )
     Text(
         "${live.rpm.toInt()} rpm   load ${(live.load * 100).toInt()}%   " +
-            "cool ${live.coolantTempC.toInt()}°   oil ${live.oilTempC.toInt()}°   egt ${live.egtC.toInt()}°   " +
+            "soak ${ui.game.soakC.toInt()}° ${soakRate(ui)}   cool ${live.coolantTempC.toInt()}°   oil ${live.oilTempC.toInt()}°   egt ${live.egtC.toInt()}°   " +
             "afr ${String.format(Locale.US, "%.1f", live.afr)}",
         color = White,
         fontFamily = FontFamily.Monospace,

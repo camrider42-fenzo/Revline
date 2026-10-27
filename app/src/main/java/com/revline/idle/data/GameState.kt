@@ -27,6 +27,8 @@ data class GameState(
     val downUntilEpochMs: Long = 0L,
     val breakdowns: Int = 0,
     val lastFailure: String = "",
+    /** Charge heat soaked into the head, °C above a cold start. Climbs with rpm. */
+    val soakC: Double = 0.0,
     val savedAtEpochMs: Long = 0L,
     val dynoReadyAtEpochMs: Long = 0L,
     val version: Int = 1,

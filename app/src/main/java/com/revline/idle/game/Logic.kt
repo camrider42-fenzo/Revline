@@ -59,6 +59,10 @@ object Logic {
 
     fun stalled(throttle: Double): Boolean = throttle <= 0.0
 
+    /** Head temperature. It climbs at [per10s] and will not go past 80°C of soak. */
+    fun stepSoak(soakC: Double, per10s: Double, dtSec: Double): Double =
+        (soakC + per10s * (dtSec / 10.0)).coerceIn(0.0, 80.0)
+
     /** Throttle plate. The last part of the pedal opens the engine into boost and a rich mixture. */
     fun loadFor(throttle: Double): Double {
         val t = throttle.coerceIn(0.0, 1.0)
@@ -72,9 +76,10 @@ object Logic {
         multiplier: Double,
         throttle: Double,
         stats: EngineStats,
+        accumulatedSoakC: Double? = null,
     ): Double {
         if (stalled(throttle) || rpm < 200.0) return 0.0
-        val point = EngineSim.point(params, rpm, loadFor(throttle))
+        val point = EngineSim.point(params, rpm, loadFor(throttle), accumulatedSoakC)
         val output = ContractOutput(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg)
         return Income.perSecond(point, reliability, multiplier, params.fuel.dollarsPerGallon, output)
     }
@@ -310,6 +315,20 @@ object Logic {
             rpmPower = (0.06 * limiter).coerceIn(0.0, 0.25),
             dynoFactor = (1.0 + 0.45 * nitrous + 0.28 * overboost + 0.22 * dynoFuel + 0.18 * limiter).coerceIn(1.0, 6.0),
             abuse = abuse,
+            coolingHeadroom = (1.0
+                + 0.20 * radiator
+                + 0.08 * duct
+                + 0.07 * waterPump
+                + (if (electric) 0.10 else 0.0)
+                + 0.16 * oil
+                + 0.10 * cai
+                + 0.05 * boot
+                + 0.12 * ic
+                + 0.14 * meth
+                + 0.05 * thermostat
+                + 0.08 * fins
+                + (if (waterless) -0.06 else 0.0)
+                ).coerceIn(0.7, 5.0),
         )
     }
 
@@ -554,6 +573,7 @@ object Logic {
             throttle = REST_THROTTLE,
             downUntilEpochMs = 0L,
             lastFailure = "",
+            soakC = 0.0,
         )
     }
 

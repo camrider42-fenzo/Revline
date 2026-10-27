@@ -94,6 +94,11 @@ data class EngineParams(
      * Scales down on larger blocks. Applied with throttle so the pull sees all of it.
      */
     val installedHp: Double = 0.0,
+    /**
+     * Cooling system versus a stock core. 1 holds a mild stop. Higher can
+     * hold a harder rpm without the head soaking away.
+     */
+    val coolingHeadroom: Double = 1.0,
 )
 
 data class OperatingPoint(
@@ -207,9 +212,19 @@ object EngineSim {
      * manifold vacuum, less boost, and a leaner mixture. The result is heat-soaked,
      * the equilibrium of holding that pedal rather than a cold first fire.
      */
-    fun point(params: EngineParams, rpm: Double, load: Double = 1.0): OperatingPoint {
+    fun point(
+        params: EngineParams,
+        rpm: Double,
+        load: Double = 1.0,
+        accumulatedSoakC: Double? = null,
+    ): OperatingPoint {
         val safeRpm = rpm.coerceAtLeast(400.0)
         val open = load.coerceIn(0.12, 1.0)
+        if (accumulatedSoakC != null) {
+            val soak = accumulatedSoakC.coerceIn(0.0, 80.0)
+            val result = once(params, safeRpm, open, soak, plate = true)
+            return result.copy(load = open, heatSoakC = soak)
+        }
         var extra = 0.0
         var result = once(params, safeRpm, open, extra, plate = true)
         repeat(3) {
@@ -217,6 +232,25 @@ object EngineSim {
             result = once(params, safeRpm, open, extra, plate = true)
         }
         return result.copy(load = open, heatSoakC = extra)
+    }
+
+    /**
+     * How fast the head is soaking at this rpm and pedal, in °C per 10 seconds.
+     * Positive keeps climbing. Negative is the cooling system catching up,
+     * which takes a dropped throttle or a bigger core.
+     */
+    fun soakPer10s(params: EngineParams, rpm: Double, throttle: Double): Double {
+        val cool = params.coolingHeadroom.coerceIn(0.6, 5.0)
+        if (throttle <= 0.0 || rpm < 250.0) {
+            return -(1.6 + 1.3 * cool)
+        }
+        val spun = (rpm / params.redlineRpm.coerceAtLeast(800.0)).coerceIn(0.0, 1.2)
+        val open = throttle.coerceIn(0.0, 1.0)
+        val pulled = spun.pow(1.15) * (0.18 + 0.82 * open.pow(1.25))
+        val dropped = ((0.28 - open) / 0.28).coerceIn(0.0, 1.0)
+        val heating = 4.2 * (pulled - 0.22 * cool).coerceAtLeast(0.0)
+        val shedding = (2.4 + 2.2 * cool) * dropped
+        return (heating - shedding).coerceIn(-12.0, 8.0)
     }
 
     fun evaluate(params: EngineParams): EngineStats {
