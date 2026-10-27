@@ -13,8 +13,8 @@ android {
         applicationId = "com.revline.idle"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.18.0"
+        versionCode = 27
+        versionName = "1.19.0"
     }
 
     buildTypes {
