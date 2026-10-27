@@ -85,10 +85,10 @@ class StrategySweepTest {
         val text = report.toString()
         println(text)
 
-        assertTrue("stock stop $stockBest\n$text", stockBest in 0.45..1.0)
+        assertTrue("stock stop $stockBest\n$text", stockBest in 0.55..0.90)
         val tach = pay(stock, stockBest) / pay(stock, 0.20)
-        assertTrue("tach swing $tach\n$text", tach < 1.25)
-        assertTrue("lugging should not pay more than the power\n$text", pay(stock, stockBest) >= pay(stock, 0.20))
+        assertTrue("pedal swing $tach\n$text", tach > 2.0 && tach < 4.5)
+        assertTrue("the floor should lose on a stock block\n$text", pay(stock, stockBest) > pay(stock, 1.0) * 1.15)
 
         assertTrue(
             "cooling should hold more pedal ($cooledBest vs $stockBest)\n$text",
@@ -104,8 +104,8 @@ class StrategySweepTest {
         assertTrue("cam rpm $camRpm vs stock $stockRpm\n$text", camRpm > stockRpm - 50.0)
 
         assertTrue(
-            "a knocking boosted 87 should not need the floor ($boostBest)\n$text",
-            boostBest <= 1.0 && pay(hot87, boostBest) >= pay(hot87, 1.0) * 0.98,
+            "a knocking boosted 87 should come off the floor ($boostBest)\n$text",
+            boostBest < 0.65 && pay(hot87, boostBest) > pay(hot87, 1.0) * 2.0,
         )
         assertTrue(
             "octane should let the same boost hold more pedal\n$text",
@@ -113,8 +113,9 @@ class StrategySweepTest {
                 bestOf.getValue("boost e85") > boostBest,
         )
         assertTrue(
-            "a cooled intercooled 93 should pay more than stock\n$text",
-            payOf.getValue("sorted 93") > payOf.getValue("stock 87") * 1.15,
+            "a sorted 93 should hold more pedal and pay more than a knocking 87\n$text",
+            bestOf.getValue("sorted 93") > boostBest &&
+                payOf.getValue("sorted 93") > payOf.getValue("boost 87") * 1.5,
         )
 
         val mild87 = payOf.getValue("stock 87")
@@ -140,7 +141,7 @@ class StrategySweepTest {
 
         val hunt = huntMoney(stock)
         val floor = floorMoney(stock)
-        assertTrue("hunting $hunt vs flooring $floor", hunt >= floor * 0.98 && hunt < floor * 1.25)
+        assertTrue("hunting $hunt vs flooring $floor", hunt > floor * 1.15 && hunt < floor * 2.2)
     }
 
     private fun pay(state: GameState, throttle: Double): Double =

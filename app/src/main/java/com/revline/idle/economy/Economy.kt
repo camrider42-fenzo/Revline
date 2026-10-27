@@ -8,8 +8,8 @@ import kotlin.math.abs
 import kotlin.math.pow
 
 /**
- * The engine's output and its cruise economy. The rpm on the tach only leans these.
- * When the live point is the whole story, pass nothing and the point is used as both.
+ * The engine's maximum output. The pedal is scored against it.
+ * Cruise mpg is not the paycheck. When this is omitted, the live point is the maximum.
  */
 data class ContractOutput(
     val peakHorsepower: Double,
@@ -18,28 +18,26 @@ data class ContractOutput(
 )
 
 object Income {
-    const val K = 0.00535
+    const val K = 0.0397
     const val HP_EXP = 1.62
-    const val ECONOMY_EXP = 0.72
+    const val USE_EXP = 1.85
+    const val ECONOMY_EXP = 1.0
     const val PRICE_EXP = 0.42
     const val REL_EXP = 1.15
     const val MPG_REF = 28.0
 
     /**
-     * Contract dollars per second.
-     * paidHp   = peakHp * (0.90 + 0.10 * hpAtStop / peakHp)
-     * paidTq   = peakTq * (0.75 + 0.25 * torqueAtStop / peakTq)
-     * paidMpg  = cruiseMpg * (0.94 + 0.06 * min(1, mpgAtStop / cruiseMpg))
-     * powerScore      = paidHp^1.62 * (1 + paidTq / 950)
-     * economyScore    = (paidMpg / 28)^0.72 * (3.40 / dollarsPerGallon)^0.42
-     * durabilityScore = (reliability/100)^1.15
-     * heat            = 0.84 + 0.16 * condition
-     * $/s = 0.00535 * powerScore * economyScore * durabilityScore * heat * multiplier
+     * Contract dollars per second at this pedal.
+     * use        = (hpAtStop / peakHp)^0.85 * (torqueAtStop / peakTq)^0.15
+     * powerScore = peakHp^1.62 * (1 + peakTq / 950) * use^1.85
+     * economyScore = (mpgAtStop / 28)^1.0 * (3.40 / dollarsPerGallon)^0.42
+     * heat       = condition^0.75
+     * $/s = 0.0397 * powerScore * economyScore * (reliability/100)^1.15 * heat * multiplier
      *
-     * Peak horsepower, peak torque, and cruise mpg set the check. The stop can
-     * only lean them, and idling does not improve the economy term. Heat can
-     * take 16% off a pull that is already past its limits.
-     * The price exponent is gentle. Octane has to earn its keep as power, not as a tax.
+     * The maximum sets how big the check can be. The pedal collects the share of
+     * that maximum the engine is making right now, and the mpg at that same stop.
+     * Rpm is not a separate term. A closed pedal leaves most of the output on the
+     * table. A rich, hot floor spends the mpg and the heat.
      */
     fun perSecond(
         point: OperatingPoint,
@@ -50,16 +48,15 @@ object Income {
     ): Double {
         val peakHp = (output?.peakHorsepower ?: point.horsepower).coerceAtLeast(0.2)
         val peakTq = (output?.peakTorqueLbFt ?: point.torqueLbFt).coerceAtLeast(0.2)
-        val cruise = (output?.cruiseMpg ?: point.mpg).coerceAtLeast(0.8)
-        val hp = peakHp * (0.90 + 0.10 * (point.horsepower / peakHp).coerceIn(0.0, 1.0))
-        val tq = peakTq * (0.75 + 0.25 * (point.torqueLbFt / peakTq).coerceIn(0.0, 1.0))
-        val mpg = cruise * (0.94 + 0.06 * (point.mpg / cruise).coerceIn(0.0, 1.0))
-        val power = hp.pow(HP_EXP) * (1.0 + tq / 950.0)
-        val mpgScore = (mpg / MPG_REF).pow(ECONOMY_EXP)
+        val hpUse = (point.horsepower / peakHp).coerceIn(0.0, 1.0)
+        val tqUse = (point.torqueLbFt / peakTq).coerceIn(0.0, 1.0)
+        val use = (hpUse.pow(0.85) * tqUse.pow(0.15)).coerceIn(0.04, 1.0)
+        val power = peakHp.pow(HP_EXP) * (1.0 + peakTq / 950.0) * use.pow(USE_EXP)
+        val mpgScore = (point.mpg.coerceAtLeast(0.8) / MPG_REF).pow(ECONOMY_EXP)
         val pump = FuelKind.PUMP_87.dollarsPerGallon
         val priceScore = (pump / dollarsPerGallon.coerceAtLeast(0.5)).pow(PRICE_EXP)
         val health = (reliability / 100.0).coerceIn(0.42, 1.0)
-        val heat = 0.84 + 0.16 * conditionFactor(point)
+        val heat = conditionFactor(point).pow(0.75)
         return K * power * mpgScore * priceScore * health.pow(REL_EXP) * heat * multiplier.coerceAtLeast(0.0)
     }
 

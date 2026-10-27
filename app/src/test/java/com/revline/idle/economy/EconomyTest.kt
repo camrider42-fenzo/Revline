@@ -38,22 +38,20 @@ class EconomyTest {
     }
 
     @Test
-    fun outputAndCruiseEconomyMoveTheCheckMoreThanRpm() {
+    fun thePedalPaysForOutputUsedAndForMpg() {
         val sheet = ContractOutput(peakHorsepower = 180.0, peakTorqueLbFt = 160.0, cruiseMpg = 30.0)
-        val idle = point(hp = 22.0, tq = 70.0, mpg = 48.0, rpm = 900.0)
-        val redline = point(hp = 175.0, tq = 130.0, mpg = 9.0, rpm = 6800.0)
-        val atIdle = Income.perSecond(idle, 95.0, 1.0, output = sheet)
-        val atRedline = Income.perSecond(redline, 95.0, 1.0, output = sheet)
-        val tach = kotlin.math.max(atIdle, atRedline) / kotlin.math.min(atIdle, atRedline)
-        assertTrue("tach swing $tach ($atIdle vs $atRedline)", tach < 1.45)
-
-        val stronger = sheet.copy(peakHorsepower = 180.0 * 1.25, peakTorqueLbFt = 160.0 * 1.10)
-        val thirstier = sheet.copy(cruiseMpg = 30.0 * 1.20)
-        val fromOutput = Income.perSecond(idle, 95.0, 1.0, output = stronger) / atIdle
-        val fromEconomy = Income.perSecond(idle, 95.0, 1.0, output = thirstier) / atIdle
-        assertTrue("output $fromOutput vs tach $tach", fromOutput > tach)
-        assertTrue("economy $fromEconomy vs tach $tach", fromEconomy > tach - 0.15)
-        assertTrue(fromEconomy > 1.08)
+        val lugging = point(hp = 28.0, tq = 80.0, mpg = 40.0, rpm = 1400.0)
+        val onThePeak = point(hp = 170.0, tq = 150.0, mpg = 24.0, rpm = 5200.0)
+        val rich = point(hp = 170.0, tq = 150.0, mpg = 11.0, rpm = 6400.0)
+        val closed = Income.perSecond(lugging, 95.0, 1.0, output = sheet)
+        val open = Income.perSecond(onThePeak, 95.0, 1.0, output = sheet)
+        val wasted = Income.perSecond(rich, 95.0, 1.0, output = sheet)
+        assertTrue("using the output $open vs lugging $closed", open > closed * 2.2)
+        assertTrue("current mpg $open vs rich $wasted", open > wasted * 1.5)
+        val bigger = sheet.copy(peakHorsepower = 180.0 * 1.30, peakTorqueLbFt = 160.0 * 1.10)
+        val biggerPoint = point(hp = 170.0 * 1.30, tq = 150.0 * 1.10, mpg = 24.0, rpm = 5200.0)
+        val grown = Income.perSecond(biggerPoint, 95.0, 1.0, output = bigger)
+        assertTrue("a larger maximum $grown vs $open", grown > open * 1.25)
     }
 
     @Test
@@ -81,11 +79,10 @@ class EconomyTest {
         val idle = Logic.sheet(stock).incomePerSec
         val best = Logic.bestThrottle(stock)
         val peaked = Logic.sheet(stock.copy(throttle = best)).incomePerSec
-        assertTrue("idle $idle best $peaked at $best", peaked > idle)
-        assertTrue("tach swing ${peaked / idle}", peaked < idle * 1.25)
+        assertTrue("idle $idle best $peaked at $best", peaked > idle * 1.7)
         val floored = Logic.sheet(stock.copy(throttle = 1.0)).incomePerSec
-        assertTrue("best $peaked at $best vs wide open $floored", peaked >= floored * 0.98)
-        assertTrue("best pedal $best", best in 0.45..1.0)
+        assertTrue("best $peaked at $best should beat wide open $floored", peaked > floored * 1.15)
+        assertTrue("best pedal $best", best in 0.55..0.90)
     }
 
     @Test

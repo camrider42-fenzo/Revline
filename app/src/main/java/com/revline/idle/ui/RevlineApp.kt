@@ -131,7 +131,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                         ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
                     }
                     Text(
-                        "The contract is peak output and cruise economy. The stop only leans it. Heat still taxes a floored pedal.",
+                        "The pedal pays for how much of the engine's output you are using, and the mpg at that stop. Heat still taxes the floor.",
                         color = White,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
@@ -156,7 +156,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                     ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))
                 }
                 Text(
-                    "Peak power and cruise economy set the check. The cyan mark leans it. Heat taxes the floor.",
+                    "Pay follows output used and mpg at the cyan mark. A closed pedal leaves power on the table. Heat taxes the floor.",
                     color = White,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,

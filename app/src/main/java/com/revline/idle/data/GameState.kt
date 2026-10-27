@@ -17,7 +17,7 @@ data class GameState(
     val researched: Set<String> = emptySet(),
     val perks: Map<String, Int> = emptyMap(),
     val fuel: FuelKind = FuelKind.PUMP_87,
-    /** Dyno throttle stop, 0 at idle and 1 at redline. The contract is output and economy; this stop only leans it. */
+    /** Dyno throttle stop, 0 at idle and 1 at redline. Pay follows output used and mpg here. */
     val throttle: Double = 0.18,
     /** Screw positions. Missing keys are the stock stop. Locked screws are ignored. */
     val tune: Map<String, Double> = emptyMap(),

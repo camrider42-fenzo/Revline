@@ -38,20 +38,20 @@ enum class Block(
     ;
 
     /**
-     * Holds each stock engine's best-pedal contract on the anchor in [stockPay]
-     * now that the check is peak output and cruise economy rather than rpm.
-     * A moped's peak was already what the pedal held. A V12's peak is far
-     * above the rpm the old check was scoring, so its scale comes back down.
+     * Puts each stock engine's best pedal back on the [stockPay] anchor.
+     * The check is maximum output times the share of it this stop is using,
+     * times current mpg, so a small engine that lives near its peak needs
+     * less scale than a big one whose best stop is only part of the peak.
      */
     fun payScale(): Double = when (this) {
-        MOPED -> 7.98
-        THUMPER -> 5.34
-        TWIN -> 2.64
-        TRIPLE -> 1.79
+        MOPED -> 0.69
+        THUMPER -> 0.74
+        TWIN -> 0.90
+        TRIPLE -> 0.94
         INLINE_FOUR -> 1.0
-        V6 -> 0.92
-        V8 -> 1.00
-        V12 -> 1.34
+        V6 -> 1.87
+        V8 -> 2.71
+        V12 -> 5.25
     }
 
     /**
