@@ -98,6 +98,9 @@ class EconomyTest {
         assertEquals(13, Prestige.knowledgeGain(block.hpGoal * 2, block.torqueGoal * 2, block.mpgGoal * 2, block))
         assertEquals(16, Prestige.knowledgeGain(block.hpGoal * 6, block.torqueGoal * 6, block.mpgGoal * 2, block))
         assertEquals(1.12, Prestige.multiplier(1), 1e-9)
+        val dyno = Logic.sheet(GameState())
+        val pull = Logic.dynoReward(dyno.stats, dyno.params)
+        assertEquals(pull * Prestige.multiplier(5), Logic.dynoReward(dyno.stats, dyno.params, Prestige.multiplier(5)), 1e-6)
     }
 
     @Test

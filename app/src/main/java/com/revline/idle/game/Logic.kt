@@ -356,9 +356,9 @@ object Logic {
         return Sheet(params, stats, pay, rp, mult)
     }
 
-    fun dynoReward(stats: EngineStats, params: EngineParams? = null): Double {
+    fun dynoReward(stats: EngineStats, params: EngineParams? = null, multiplier: Double = 1.0): Double {
         val base = 4.0 + 0.6 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)
-        return base * (params?.dynoFactor ?: 1.0).coerceAtLeast(1.0)
+        return base * (params?.dynoFactor ?: 1.0).coerceAtLeast(1.0) * multiplier.coerceAtLeast(0.0)
     }
 
     /**

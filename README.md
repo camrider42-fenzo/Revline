@@ -51,7 +51,7 @@ A locked part on the bubble map names the upgrade you still have to buy, or the 
 
 The throttle you set is saved. Offline pay uses that same stop, at 80% of the contract and 20% of passive research, capped at 8 hours. A rebuild puts the pedal back to a light opening so the next long-block gets its own pull.
 
-Research points tick from peak horsepower (`0.05 + 0.035 × HP^0.8` per second, times the knowledge multiplier, more with the Dyno habit perk). A dyno pull sweeps the tach on its own, adds `4 + 0.6 × HP^0.8`, and then waits 35 seconds. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
+Research points tick from peak horsepower (`0.05 + 0.035 × HP^0.8` per second, times the knowledge multiplier, more with the Dyno habit perk). A dyno pull sweeps the tach on its own, adds `4 + 0.6 × HP^0.8` times the same knowledge multiplier as passive research, and then waits 35 seconds. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
 
 ## The engine model
 

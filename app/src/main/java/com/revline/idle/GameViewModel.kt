@@ -156,7 +156,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (phase != DynoPhase.IDLE) return
         val now = System.currentTimeMillis()
         if (now < ui.game.dynoReadyAtEpochMs) return
-        val reward = Logic.dynoReward(ui.sheet.stats, ui.sheet.params)
+        val reward = Logic.dynoReward(ui.sheet.stats, ui.sheet.params, ui.sheet.multiplier)
         val game = ui.game.copy(
             researchPoints = ui.game.researchPoints + reward,
             dynoReadyAtEpochMs = now + 35_000L,
