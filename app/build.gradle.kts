@@ -13,8 +13,8 @@ android {
         applicationId = "com.revline.idle"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.29.0"
+        versionCode = 38
+        versionName = "1.30.0"
     }
 
     signingConfigs {
@@ -70,6 +70,11 @@ android {
         }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/assets/dexopt/**"
+            excludes += "/assets/dexopt/baseline.prof"
+            excludes += "/assets/dexopt/baseline.profm"
+            excludes += "**/*.prof"
+            excludes += "**/*.profm"
         }
     }
 }
@@ -89,4 +94,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+tasks.configureEach {
+    if (name.contains("ArtProfile") || name.contains("StartupProfile")) {
+        enabled = false
+    }
 }
