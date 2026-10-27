@@ -257,7 +257,7 @@ object Logic {
         timing += Tuners.value(state, "spark")
         var knock = 0.18 + if (knockBox > 0) 0.60 else 0.0
         if (torque) knock += 0.10
-        var ign = 0.95 + 0.012 * plugs + 0.015 * coils + 0.008 * gap + 0.012 * (state.perks["readers"] ?: 0)
+        var ign = 0.95 + 0.025 * plugs + 0.015 * coils + 0.008 * gap + 0.012 * (state.perks["readers"] ?: 0)
         var trim = 0.10 * afr
         if (torque) trim += 0.12
         trim += Tuners.value(state, "mixture")

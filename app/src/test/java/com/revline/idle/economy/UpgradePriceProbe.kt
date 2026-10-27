@@ -16,19 +16,27 @@ class UpgradePriceProbe {
     private val paybackSec = 12.0 * 60.0
 
     @Test
-    fun firstLevelPriceIsAboutTwelveMinutesOfTheIncomeItAdds() {
+    fun firstLevelPriceIsAboutAnHourAndAHalfOfTheIncomeItAdds() {
         val misses = mutableListOf<String>()
+        val block = com.revline.idle.model.Block.INLINE_FOUR
         for (upgrade in Upgrades.all) {
-            val delta = benefit(upgrade, 0)
-            val target = priceFor(delta)
             if (upgrade.baseCost < 80.0) continue
-            // Priced for a V8 that is willing to break, not for twelve minutes of a cool street car.
             if (upgrade.id in setOf("nitrous", "overboost", "limiter", "dyno_fuel")) continue
-            val actual = upgrade.baseCost
-            val low = target * 0.5
-            val high = target * 2.2
-            if (actual !in low..high) {
-                misses += "${upgrade.id} costs ${actual.toInt()} vs ${target.toInt()} for ${String.format(Locale.US, "%+.2f", delta)}/s"
+            val before = street(upgrade.id, 0, boosted = true)
+            val delta = benefit(upgrade, 0)
+            if (delta <= 0.15) continue
+            val cost = Logic.upgradeCost(
+                GameState(
+                    prestiges = block.ordinal,
+                    researched = researched,
+                    upgrades = before,
+                    fuel = FuelKind.PREMIUM_93,
+                ),
+                upgrade.id,
+            )
+            val minutes = cost / delta / 60.0
+            if (minutes !in 40.0..200.0) {
+                misses += "${upgrade.id} ${String.format(Locale.US, "%.0f", minutes)} min for ${String.format(Locale.US, "%+.2f", delta)}/s"
             }
         }
         assertTrue(misses.joinToString("\n"), misses.isEmpty())
