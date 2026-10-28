@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.UiModel
+import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.Tuners
 import com.revline.idle.model.EngineSim
 import java.util.Locale
@@ -41,8 +42,14 @@ fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit) {
         )
         Text(
             "Sheet ${formatPower(stats.peakHorsepower)} hp   ${formatPower(stats.peakTorqueLbFt)} lb-ft   " +
-                "${String.format(Locale.US, "%.1f", stats.cruiseMpg)} mpg   " +
-                "WOT AFR ${String.format(Locale.US, "%.2f", EngineSim.wotAfr(params))}",
+                "${String.format(Locale.US, "%.1f", stats.cruiseMpg)} mpg   ${formatDollars(ui.sheet.incomePerSec)}/s",
+            color = Lime,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        Text(
+            "WOT AFR ${String.format(Locale.US, "%.2f", EngineSim.wotAfr(params))}   " +
+                "cruise AFR ${String.format(Locale.US, "%.2f", EngineSim.cruiseAfr(params))}",
             color = Lime,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,

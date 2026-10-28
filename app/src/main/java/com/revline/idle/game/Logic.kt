@@ -260,7 +260,8 @@ object Logic {
         var ign = 0.95 + 0.025 * plugs + 0.015 * coils + 0.008 * gap + 0.012 * (state.perks["readers"] ?: 0)
         var trim = 0.10 * afr
         if (torque) trim += 0.12
-        trim += Tuners.value(state, "mixture")
+        val mixtureScrew = Tuners.value(state, "mixture")
+        trim += mixtureScrew
         val pumpFlow = 1.0 + 0.07 * waterPump + if (electric) 0.08 else 0.0
         var ua = (block.radiatorUa + 260.0 * radiator) * (1.0 + 0.10 * duct) * (0.92 + 0.08 * pumpFlow)
         if (waterless) ua *= 0.84
@@ -293,6 +294,7 @@ object Logic {
             ignitionQuality = ign.coerceIn(0.70, 0.995),
             fuelFlowFactor = flow.coerceIn(0.4, 12.0),
             afrTrim = trim.coerceIn(-1.5, 2.6),
+            mixtureScrew = mixtureScrew,
             jetQuality = ((jets + 0.35 * needle) / 4.0).coerceIn(0.0, 1.0),
             mixture = mixture,
             fuel = fuel,

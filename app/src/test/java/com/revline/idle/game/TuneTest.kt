@@ -47,6 +47,27 @@ class TuneTest {
     }
 
     @Test
+    fun mixtureTrimMovesPowerAndCruiseEconomy() {
+        val fitted = GameState(upgrades = mapOf("needle" to 1), prestiges = com.revline.idle.model.Block.INLINE_FOUR.ordinal)
+        val richer = Tuners.nudge(fitted, "mixture", 1)
+        val leaner = Tuners.nudge(fitted, "mixture", -1)
+        val base = Logic.sheet(fitted)
+        val fat = Logic.sheet(richer)
+        val thin = Logic.sheet(leaner)
+        assertTrue(
+            "hp ${base.stats.peakHorsepower} -> ${fat.stats.peakHorsepower}",
+            fat.stats.peakHorsepower > base.stats.peakHorsepower * 1.02,
+        )
+        assertTrue(
+            "cruise ${base.stats.cruiseMpg} -> ${fat.stats.cruiseMpg}",
+            fat.stats.cruiseMpg > base.stats.cruiseMpg + 0.4,
+        )
+        assertTrue(thin.stats.peakHorsepower < base.stats.peakHorsepower)
+        assertTrue(thin.stats.cruiseMpg < base.stats.cruiseMpg)
+        assertTrue(Logic.sheet(richer).incomePerSec != Logic.sheet(fitted).incomePerSec)
+    }
+
+    @Test
     fun aChargerUnlocksTheWastegateAndTheControllerTightensIt() {
         assertFalse(Tuners.unlocked(GameState(), "boost"))
         val turbo = GameState(upgrades = mapOf("turbo" to 1))

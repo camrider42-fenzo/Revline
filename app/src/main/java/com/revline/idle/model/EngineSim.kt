@@ -47,6 +47,8 @@ data class EngineParams(
     val ignitionQuality: Double = 0.95,
     val fuelFlowFactor: Double = 1.25,
     val afrTrim: Double = 0.0,
+    /** The mixture screw alone, already included in [afrTrim]. Zero leaves the map where the parts set it. */
+    val mixtureScrew: Double = 0.0,
     val jetQuality: Double = 0.0,
     val mixture: Mixture = Mixture.CARB,
     val fuel: FuelKind = FuelKind.PUMP_87,
@@ -314,7 +316,10 @@ object EngineSim {
         val eta = (etaInd * camPen).coerceIn(0.12, 0.50)
         val fuelW = (ROAD_LOAD_W + pFric + pPump) / eta
         val comb = (0.975 * params.ignitionQuality).coerceIn(0.7, 0.99)
-        val mFuel = fuelW / (params.fuel.lhvJPerKg * comb)
+        val cruiseLambda = (cruiseAfr(params) / params.fuel.stoichAfr).coerceIn(0.70, 1.40)
+        val mapLambda = (cruiseAfr(params.copy(afrTrim = params.afrTrim - params.mixtureScrew, mixtureScrew = 0.0)) /
+            params.fuel.stoichAfr).coerceIn(0.70, 1.40)
+        val mFuel = fuelW / (params.fuel.lhvJPerKg * comb * (cruiseEconomyFactor(cruiseLambda) / cruiseEconomyFactor(mapLambda)))
         val mpg = 60.0 / (mFuel * 3600.0 / params.fuel.kgPerGallon)
         return mpg.coerceIn(8.0, 70.0)
     }
@@ -453,7 +458,9 @@ object EngineSim {
         val comb = (0.975 * params.ignitionQuality * gradeBurn).coerceIn(0.7, 0.995)
         val shot = if (plate) params.nitrousFraction.coerceAtLeast(0.0) * open.pow(1.5) else 0.0
         val leanHit = if (plate) params.leanPull.coerceAtLeast(0.0) * open.pow(1.4) else 0.0
-        val released = burned * params.fuel.lhvJPerKg * comb * (1.0 + 0.72 * shot) * (1.0 + 0.08 * leanHit)
+        val lambda = (afr / stoich).coerceIn(0.62, 1.40)
+        val released = burned * params.fuel.lhvJPerKg * comb * mixtureScrewPower(params, wotMix, lambda) *
+            (1.0 + 0.72 * shot) * (1.0 + 0.08 * leanHit)
         val pumped = mFuel * params.fuel.lhvJPerKg
         val cr = params.compressionRatio
         val etaOtto = ottoEfficiency(cr)
@@ -646,7 +653,46 @@ object EngineSim {
         val slop = mixtureSlop(params)
         val rich = if (params.fuel == FuelKind.E85) 8.6 else 13.6
         val lean = if (params.fuel == FuelKind.E85) 12.0 else 16.8
-        return (base + params.afrTrim * 0.45 - slop * 0.7).coerceIn(rich, lean)
+        val screw = params.mixtureScrew
+        val mapTrim = params.afrTrim - screw
+        return (base + mapTrim * 0.45 + screw - slop * 0.7).coerceIn(rich, lean)
+    }
+
+    /**
+     * Power relative to the mixture the parts command. The screw at zero is 1.
+     * Richer than that, toward the power mixture, makes more. Leaner makes less.
+     */
+    private fun mixtureScrewPower(params: EngineParams, wotMix: Double, lambda: Double): Double {
+        if (kotlin.math.abs(params.mixtureScrew) < 1e-9) return 1.0
+        val map = params.copy(afrTrim = params.afrTrim - params.mixtureScrew, mixtureScrew = 0.0)
+        val mapAfr = cruiseAfr(map) + (wotAfr(map) - cruiseAfr(map)) * wotMix
+        val mapLambda = (mapAfr / params.fuel.stoichAfr).coerceIn(0.62, 1.40)
+        return (mixturePowerFactor(lambda) / mixturePowerFactor(mapLambda)).coerceIn(0.70, 1.18)
+    }
+
+    /**
+     * Best power is richer than stoich. 1 at a typical wide-open gasoline mixture,
+     * so the stock map does not move and the mixture screw does.
+     */
+    private fun mixturePowerFactor(lambda: Double): Double {
+        val peak = 0.86
+        val width = 0.13
+        fun hill(value: Double): Double {
+            val x = (value - peak) / width
+            return 1.0 - 0.42 * x * x
+        }
+        return (hill(lambda) / hill(0.94)).coerceIn(0.70, 1.18)
+    }
+
+    /** Best cruise economy is slightly lean. 1 near the stock cruise mixture. */
+    private fun cruiseEconomyFactor(lambda: Double): Double {
+        val best = 1.06
+        val width = 0.10
+        fun hill(value: Double): Double {
+            val x = (value - best) / width
+            return (1.0 - 0.35 * x * x).coerceAtLeast(0.45)
+        }
+        return (hill(lambda) / hill(1.02)).coerceIn(0.72, 1.22)
     }
 
     private fun mixtureSlop(params: EngineParams): Double {
