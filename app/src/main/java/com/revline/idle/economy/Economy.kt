@@ -38,6 +38,9 @@ object Income {
      * that maximum the engine is making right now, and the mpg at that same stop.
      * Rpm is not a separate term. A closed pedal leaves most of the output on the
      * table. A rich, hot floor spends the mpg and the heat.
+     *
+     * [ideal] is that same stop with a sound engine: reliability does not cut the
+     * check, and temperature, knock, and a lean mixture do not either.
      */
     fun perSecond(
         point: OperatingPoint,
@@ -45,6 +48,7 @@ object Income {
         multiplier: Double,
         dollarsPerGallon: Double = FuelKind.PUMP_87.dollarsPerGallon,
         output: ContractOutput? = null,
+        ideal: Boolean = false,
     ): Double {
         val peakHp = (output?.peakHorsepower ?: point.horsepower).coerceAtLeast(0.2)
         val peakTq = (output?.peakTorqueLbFt ?: point.torqueLbFt).coerceAtLeast(0.2)
@@ -55,8 +59,8 @@ object Income {
         val mpgScore = (point.mpg.coerceAtLeast(0.8) / MPG_REF).pow(ECONOMY_EXP)
         val pump = FuelKind.PUMP_87.dollarsPerGallon
         val priceScore = (pump / dollarsPerGallon.coerceAtLeast(0.5)).pow(PRICE_EXP)
-        val health = (reliability / 100.0).coerceIn(0.42, 1.0)
-        val heat = conditionFactor(point).pow(0.75)
+        val health = if (ideal) 1.0 else (reliability / 100.0).coerceIn(0.42, 1.0)
+        val heat = if (ideal) 1.0 else conditionFactor(point).pow(0.75)
         return K * power * mpgScore * priceScore * health.pow(REL_EXP) * heat * multiplier.coerceAtLeast(0.0)
     }
 

@@ -84,10 +84,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val nowMs = System.currentTimeMillis()
             val down = nowMs < ui.game.downUntilEpochMs
             var game = Logic.accrue(ui.game.copy(soakC = soaked), dt, nowMs, if (down) 0.0 else pay, ui.sheet.rpPerSec)
-            if (!down && ui.sheet.params.abuse > 0) {
-                val chance = 1.0 - exp(-Logic.failurePerSec(ui.game, ui.sheet.stats) * dt)
+            if (!down) {
+                val hazard = Logic.failurePerSec(ui.game, ui.sheet.stats, opening, spun)
+                val chance = 1.0 - exp(-hazard * dt)
                 if (chance > 0.0 && kotlin.random.Random.nextDouble() < chance) {
-                    game = Logic.breakDown(game, nowMs)
+                    game = Logic.breakDown(game, nowMs, opening, spun)
                 }
             }
             publish(

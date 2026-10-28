@@ -374,43 +374,122 @@ object Logic {
     fun dynoReward(rpPerSec: Double, dynoFactor: Double = 1.0): Double =
         rpPerSec.coerceAtLeast(0.0) * DYNO_PULL_SECONDS * dynoFactor.coerceAtLeast(1.0)
 
+    /** First repair is this share of ten minutes of ideal income at the stop that broke. */
+    const val REPAIR_FIRST_SHARE = 0.30
+
+    /** Each later repair on this long-block is this many times the one before it. */
+    const val REPAIR_GROWTH = 1.5
+
+    const val REPAIR_WINDOW_SEC = 10.0 * 60.0
+    const val DOWNTIME_MS = 40_000L
+
+    fun repairShare(priorFailures: Int): Double =
+        REPAIR_FIRST_SHARE * REPAIR_GROWTH.pow(priorFailures.coerceAtLeast(0).toDouble())
+
     /**
-     * Failures per second with the past-the-limit parts on. A cool cruise still
-     * breaks. A hot, floored pull breaks much sooner. Nothing is fitted, nothing breaks.
+     * What this stop would pay with a sound engine. Reliability and temperature
+     * do not cut it. The repair bill is a share of ten minutes of this rate.
      */
-    fun failurePerSec(state: GameState, stats: EngineStats): Double {
+    fun idealIncomePerSec(
+        state: GameState,
+        stats: EngineStats,
+        throttle: Double = state.throttle,
+        rpm: Double? = null,
+    ): Double {
+        if (stalled(throttle)) return 0.0
         val params = paramsFrom(state)
-        if (params.abuse <= 0) return 0.0
-        val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
-        val live = EngineSim.point(params, rpm, loadFor(state.throttle))
-        val cool = ((live.coolantTempC - 100.0) / 30.0).coerceIn(0.0, 1.0)
-        val oil = ((live.oilTempC - 140.0) / 40.0).coerceIn(0.0, 1.0)
-        val egt = ((live.egtC - 880.0) / 180.0).coerceIn(0.0, 1.0)
-        val hot = maxOf(cool, oil, egt)
-        val weak = ((70.0 - stats.reliability) / 70.0).coerceIn(0.0, 1.0)
-        val load = state.throttle.coerceIn(0.0, 1.0)
-        return 0.00018 * params.abuse + 0.0042 * hot * (0.30 + 0.70 * load) + 0.0015 * weak * (0.25 + 0.75 * load)
+        val spun = rpm ?: targetRpm(params.redlineRpm, throttle, params.idleRpm)
+        if (spun < 200.0) return 0.0
+        val live = EngineSim.point(params, spun, loadFor(throttle), state.soakC)
+        val output = ContractOutput(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg)
+        val mult = Prestige.multiplier(state.knowledge)
+        return Income.perSecond(
+            live,
+            100.0,
+            mult,
+            params.fuel.dollarsPerGallon,
+            output,
+            ideal = true,
+        ) * Block.forPrestige(state.prestiges).payScale()
     }
 
-    /** A blown part, a repair bill, and a short stretch where the contract pays nothing. */
-    fun breakDown(state: GameState, nowMs: Long): GameState {
+    /**
+     * Failures per second at this pedal. Heat does most of the work: coolant, oil,
+     * exhaust, and soak. A short reliability number and a floored pedal make that
+     * heat count. A cool stop on a sound engine does not let go.
+     */
+    fun failurePerSec(
+        state: GameState,
+        stats: EngineStats,
+        throttle: Double = state.throttle,
+        rpm: Double? = null,
+    ): Double = strainAt(state, stats, throttle, rpm).perSec
+
+    /** A blown part, a rising repair bill, and a short stretch where the contract pays nothing. */
+    fun breakDown(
+        state: GameState,
+        nowMs: Long,
+        throttle: Double = state.throttle,
+        rpm: Double? = null,
+    ): GameState {
         val current = sheet(state)
-        val bill = (current.incomePerSec * 6.0 * 60.0).coerceAtLeast(50.0)
-        val notes = current.stats.reliabilityNotes
-        val why = when {
-            notes.any { it.startsWith("Coolant") } -> "The head lifted. Coolant on the floor."
-            notes.any { it.startsWith("EGT") } -> "An exhaust valve gave up in the heat."
-            notes.any { it.startsWith("Oil") } -> "A bearing spun."
-            notes.any { it.contains("Boost") || it.contains("Piston") } -> "A rod let go at the top of the pull."
-            notes.any { it == "Knock" } -> "Detonation peppered a piston."
-            else -> "Something in the bottom end let go."
-        }
+        val ideal = idealIncomePerSec(state, current.stats, throttle, rpm)
+        val bill = ideal * REPAIR_WINDOW_SEC * repairShare(state.breakdowns)
+        val why = strainAt(state, current.stats, throttle, rpm).reason
         return state.copy(
             money = (state.money - bill).coerceAtLeast(0.0),
-            downUntilEpochMs = nowMs + 40_000L,
+            downUntilEpochMs = nowMs + DOWNTIME_MS,
             breakdowns = state.breakdowns + 1,
             lastFailure = "$why Repair ${formatDollars(bill)}. The contract is quiet for 40 seconds.",
         )
+    }
+
+    private data class Strain(
+        val perSec: Double,
+        val reason: String,
+    )
+
+    private fun strainAt(
+        state: GameState,
+        stats: EngineStats,
+        throttle: Double,
+        rpm: Double?,
+    ): Strain {
+        if (stalled(throttle)) return Strain(0.0, "The crank was already stopped.")
+        val params = paramsFrom(state)
+        val spun = rpm ?: targetRpm(params.redlineRpm, throttle, params.idleRpm)
+        val live = EngineSim.point(params, spun, loadFor(throttle), state.soakC)
+        val rel = minOf(stats.reliability, EngineSim.payingReliability(params, live))
+        val boil = EngineSim.coolantBoilingPointC(params)
+        val oilLimit = if (params.syntheticOil) 160.0 else 145.0
+        val egtLimit = if (params.inconelValves) 980.0 else 900.0
+        val coolant = rise(live.coolantTempC, boil - 24.0, boil - 4.0)
+        val oil = rise(live.oilTempC, oilLimit - 22.0, oilLimit)
+        val egt = rise(live.egtC, egtLimit - 80.0, egtLimit)
+        val soak = rise(live.heatSoakC, 6.0, 28.0)
+        val knock = (live.unresolvedKnock / 6.0).coerceAtLeast(0.0)
+        val hottest = maxOf(coolant, oil, egt, soak)
+        val temp = 0.46 * coolant + 0.28 * oil + 0.24 * egt + 0.42 * soak + 0.08 * knock
+        val weak = ((80.0 - rel) / 80.0).coerceAtLeast(0.0)
+        val push = throttle.coerceIn(0.0, 1.0).pow(1.5)
+        if (push < 0.12 && hottest < 0.80) return Strain(0.0, "The pedal was not asking for it.")
+        val thermal = 0.0022 * temp.pow(1.25) * (0.28 + weak) * (0.06 + 0.94 * push)
+        val mechanical = 0.00022 * weak * push * (0.20 + temp)
+        val reason = when {
+            hottest >= 0.35 && coolant >= hottest -> "The head lifted. Coolant on the floor."
+            hottest >= 0.35 && oil >= hottest -> "A bearing spun in hot oil."
+            hottest >= 0.35 && egt >= hottest -> "An exhaust valve gave up in the heat."
+            hottest >= 0.35 && soak >= hottest -> "The head was heat-soaked and let go."
+            knock >= 0.45 -> "Detonation peppered a piston."
+            else -> "The bottom end let go under the load."
+        }
+        return Strain(thermal + mechanical, reason)
+    }
+
+    private fun rise(value: Double, calm: Double, hard: Double): Double {
+        if (value <= calm) return 0.0
+        val u = (value - calm) / (hard - calm).coerceAtLeast(1.0)
+        return (u / (1.0 + 0.45 * u)).coerceAtMost(2.2)
     }
 
     fun accrue(state: GameState, dtSec: Double, nowMs: Long, incomePerSec: Double, rpPerSec: Double): GameState {
@@ -629,6 +708,7 @@ object Logic {
             fuel = FuelKind.PUMP_87,
             throttle = REST_THROTTLE,
             downUntilEpochMs = 0L,
+            breakdowns = 0,
             lastFailure = "",
             soakC = 0.0,
         )
