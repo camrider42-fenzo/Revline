@@ -19,17 +19,18 @@ object EngineTone {
         ((compression - 7.6) / 6.4).coerceIn(0.0, 1.0)
 
     /**
-     * How much intake rush to mix in. Closed is silent. Wide open stays under
-     * the blast. A turbo whooshes more than an open intake.
+     * Intake and charger noise, kept under the exhaust pulse the way a tailpipe
+     * recording is. Closed is silent. A turbo whooshes more than an open intake,
+     * and both stay quieter than the blowdown.
      */
     fun airGain(induction: Induction, throttle: Double): Double {
         if (throttle <= 0.0) return 0.0
         val open = throttle.coerceIn(0.0, 1.0).pow(1.35)
         val kind = when (induction) {
-            Induction.NA -> 0.014
-            Induction.SUPERCHARGER -> 0.022
-            Induction.TURBO -> 0.028
-            Induction.TWIN_TURBO -> 0.025
+            Induction.NA -> 0.0045
+            Induction.SUPERCHARGER -> 0.0065
+            Induction.TURBO -> 0.0080
+            Induction.TWIN_TURBO -> 0.0072
         }
         return kind * open
     }
@@ -41,7 +42,6 @@ object EngineTone {
 class EngineVoice {
     private var pSub = 0.7
     private var p1 = 0.2
-    private var p2 = 1.1
     private var whine = 0.4
     private var airLp = 0.0
     private var blastLp = 0.0
@@ -61,37 +61,41 @@ class EngineVoice {
         val step = 2.0 * PI / sampleRate
         pSub += step * bore * 0.55 * fall
         p1 += step * bore
-        p2 += step * bore * 1.97
         if (pSub > 1e6) {
             pSub %= 2.0 * PI
             p1 %= 2.0 * PI
-            p2 %= 2.0 * PI
         }
         val blastRaw = nextNoise()
-        blastLp += (blastRaw - blastLp) * (0.022 + 0.12 * hottest.pow(2.4))
+        // Blowdown is a short band-limited crack. The rest of the flame is the pipe.
+        val crackOpen = hottest.pow(4.2)
+        blastLp += (blastRaw - blastLp) * (0.010 + 0.055 * crackOpen)
         var hit = 0.0
-        var exhaust = 0.0
+        var pipe = 0.0
         for (cycle in cycles) {
             val burn = EngineMotion.burn(cycle)
             if (burn > 0.02f) {
                 val decay = burn.toDouble()
-                val front = decay.pow(3.6)
-                val boom = decay.pow(1.05)
-                val body = sin(pSub) * (1.05 - 0.08 * bright) +
-                    sin(p1) * (0.30 + 0.10 * bright)
+                val boom = decay.pow(0.70)
+                val crack = decay.pow(5.2)
+                val sine = sin(pSub)
+                // A recorded pulse rises faster than it falls, so a little even harmonic
+                // sits on the attack and the fundamental carries the boom.
+                val body = sine * (1.08 - 0.05 * bright) +
+                    sine * kotlin.math.abs(sine) * 0.14 * crack
                 hit += body * boom
-                hit += blastLp * front * (1.15 + 0.45 * bright)
-                hit += sin(p2) * front * (0.05 + 0.14 * bright)
+                hit += sin(p1) * boom * (0.14 + 0.05 * bright)
+                hit += blastLp * crack * (0.62 + 0.22 * bright)
             }
             val puff = EngineMotion.puff(cycle)
             if (puff != null) {
-                val hush = sin(Math.PI * puff).toFloat()
-                exhaust += nextNoise() * hush * (0.45 + 0.55 * (1f - bright))
+                val hush = sin(Math.PI * puff)
+                pipe += blastLp * hush * 0.035
             }
         }
         val share = 1.0 / kotlin.math.sqrt(cycles.size.toDouble())
-        val mixed = (softClip(hit) * 0.82 + exhaust * 0.08) * share + air(ear, cycles, sampleRate)
-        val out = mixed * level * (0.90 + 0.10 * (1.0 - bright))
+        val bang = softClip(hit) * 0.92 * share
+        val mixed = bang + pipe * share + air(ear, cycles, sampleRate)
+        val out = mixed * level * (0.92 + 0.08 * (1.0 - bright))
         return out.coerceIn(-1.0, 1.0).toFloat()
     }
 
@@ -109,10 +113,10 @@ class EngineVoice {
         val open = ear.throttle.coerceIn(0.0, 1.0)
         val raw = nextNoise()
         val cutoff = when (ear.induction) {
-            Induction.NA -> 0.16 + 0.22 * open
-            Induction.SUPERCHARGER -> 0.07 + 0.08 * open
-            Induction.TURBO -> 0.035 + 0.05 * open
-            Induction.TWIN_TURBO -> 0.05 + 0.07 * open
+            Induction.NA -> 0.035 + 0.045 * open
+            Induction.SUPERCHARGER -> 0.028 + 0.030 * open
+            Induction.TURBO -> 0.018 + 0.022 * open
+            Induction.TWIN_TURBO -> 0.022 + 0.026 * open
         }
         airLp += (raw - airLp) * cutoff
         val whineHz = when (ear.induction) {
@@ -125,7 +129,7 @@ class EngineVoice {
         if (whineHz > 0.0) {
             whine += 2.0 * PI * whineHz / sampleRate
             if (whine > 1e6) whine %= 2.0 * PI
-            val bite = if (ear.induction == Induction.SUPERCHARGER) 0.55 else 0.28
+            val bite = if (ear.induction == Induction.SUPERCHARGER) 0.28 else 0.14
             tone = sin(whine) * bite
         }
         var gulp = 0.0
@@ -134,7 +138,7 @@ class EngineVoice {
             gulp += sin(Math.PI * charge)
         }
         val breath = 0.62 + 0.38 * (gulp / cycles.size)
-        return (airLp * 0.85 + tone * 0.72) * gain * breath * 2.3
+        return (airLp * 0.50 + tone * 0.28) * gain * breath
     }
 
     private fun nextNoise(): Double {

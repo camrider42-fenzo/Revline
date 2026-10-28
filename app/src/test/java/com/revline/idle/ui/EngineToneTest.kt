@@ -50,6 +50,16 @@ class EngineToneTest {
     }
 
     @Test
+    fun theExplosionIsLouderThanTheAir() {
+        val ear = EngineEar(86.0, 11.0, 1, 1, throttle = 1.0, running = true, induction = Induction.TURBO)
+        val voice = EngineVoice()
+        repeat(2500) { voice.sample(ear, 420f, 44100) }
+        val gap = window(voice, ear, 420f, 900)
+        val bang = window(voice, ear, 0f, 900)
+        assertTrue("blowdown $bang vs intake air $gap", bang > gap * 3.0)
+    }
+
+    @Test
     fun intakeAirFollowsThePedalAndTheCharger() {
         assertEquals(0.0, EngineTone.airGain(Induction.TURBO, 0.0), 0.0)
         assertTrue(EngineTone.airGain(Induction.NA, 1.0) > EngineTone.airGain(Induction.NA, 0.25) * 2.0)
@@ -73,6 +83,17 @@ class EngineToneTest {
             assertEquals(EngineMotion.cycle(10f + offsets[index]), cycle, 0.01f)
         }
         assertEquals(8, EngineMotion.flameCycles(0f, 8, 2).size)
+    }
+
+    private fun window(voice: EngineVoice, ear: EngineEar, angle: Float, count: Int): Float {
+        var sum = 0f
+        var a = angle
+        repeat(count) {
+            sum += abs(voice.sample(ear, a, 44100))
+            a += stepDeg
+            if (a >= 720f) a -= 720f
+        }
+        return sum / count
     }
 
     private fun energy(samples: FloatArray): Float {
