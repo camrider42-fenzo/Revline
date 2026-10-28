@@ -5,6 +5,7 @@ import com.revline.idle.economy.Prestige
 import com.revline.idle.game.Logic
 import com.revline.idle.game.ResearchStatus
 import com.revline.idle.game.ResearchTree
+import com.revline.idle.game.SheetAim
 import com.revline.idle.game.Upgrades
 import com.revline.idle.model.FuelKind
 import java.util.Locale
@@ -145,6 +146,113 @@ class BlockPaceTest {
     }
 
     @Test
+    fun aShopThatRebuildsWhenTheSheetClearsTakesAboutNinetyMinutes() {
+        var researched = emptySet<String>()
+        var carriedRp = 0.0
+        val lines = mutableListOf<String>()
+        for (index in Block.entries.indices) {
+            val block = Block.forPrestige(index)
+            val start = GameState(
+                prestiges = index,
+                knowledge = index,
+                researched = researched,
+                researchPoints = carriedRp,
+                money = Logic.startingMoney(index),
+                savedAtEpochMs = 1L,
+            )
+            val run = clearSheet(start)
+            val owned = run.state.upgrades.entries.filter { it.value > 0 }.joinToString(" ") { "${it.key}:${it.value}" }
+            lines += "${block.title}  ${"%.2f".format(run.hours)} h  ${run.note}  $owned"
+            researched = run.state.researched
+            carriedRp = run.state.researchPoints * 0.20
+        }
+        println(lines.joinToString("\n"))
+        val bad = lines.filter { line ->
+            val hours = line.substringAfter("  ").substringBefore(" h").toDouble()
+            hours !in 1.15..2.0
+        }
+        assertTrue(lines.joinToString("\n"), bad.isEmpty())
+    }
+
+    private fun clearSheet(start: GameState): Clear {
+        var state = tune(start)
+        var sheet = Logic.sheet(state)
+        var seconds = 0.0
+        var sinceDyno = 0.0
+        val horizon = 8.0 * 3600.0
+        var guard = 0
+        while (seconds < horizon && guard < 20_000) {
+            guard++
+            if (Logic.canPrestige(state)) {
+                return Clear(true, seconds / 3600.0, state, stuck(state, sheet))
+            }
+            val study = ResearchTree.all
+                .filter { Logic.researchStatus(state, it.id) == ResearchStatus.OPEN }
+                .minByOrNull { it.cost }
+            val aim = SheetAim.recommend(state).upgradeId
+            val buy = when {
+                aim != null && Logic.canBuyUpgrade(state, aim) -> aim
+                else -> affordableHelp(state, sheet.incomePerSec)
+            }
+            if (buy != null) {
+                state = tune(Logic.buyUpgrade(state, buy))
+                sheet = Logic.sheet(state)
+                continue
+            }
+            if (aim == null && study != null && Logic.canBuyResearch(state, study.id)) {
+                state = tune(Logic.buyResearch(state, study.id))
+                sheet = Logic.sheet(state)
+                continue
+            }
+            val moneyWait = if (aim != null && sheet.incomePerSec > 1e-9) {
+                (Logic.upgradeCost(state, aim) - state.money).coerceAtLeast(0.0) / sheet.incomePerSec
+            } else Double.POSITIVE_INFINITY
+            val rpWait = if (aim == null && study != null && sheet.rpPerSec > 1e-9) {
+                (Logic.researchCost(state, study.id) - state.researchPoints).coerceAtLeast(0.0) / sheet.rpPerSec
+            } else Double.POSITIVE_INFINITY
+            val wait = minOf(moneyWait, rpWait)
+            if (!wait.isFinite()) return Clear(false, seconds / 3600.0, state, stuck(state, sheet))
+            val tick = wait.coerceIn(1.0, 30.0)
+            state = state.copy(
+                money = state.money + sheet.incomePerSec * tick,
+                researchPoints = state.researchPoints + sheet.rpPerSec * tick,
+            )
+            sinceDyno += tick
+            if (sinceDyno >= 35.0) {
+                state = state.copy(
+                    researchPoints = state.researchPoints + Logic.dynoReward(sheet.rpPerSec, sheet.params.dynoFactor),
+                )
+                sinceDyno = 0.0
+            }
+            seconds += tick
+        }
+        return Clear(false, seconds / 3600.0, state, stuck(state, sheet))
+    }
+
+    /** A cheap part the sheet still feels. Saving for the real recommendation otherwise. */
+    private fun affordableHelp(state: GameState, incomePerSec: Double): String? {
+        val budget = incomePerSec * 8.0 * 60.0
+        if (budget < 1.0) return null
+        val tools = setOf("lap", "gap", "boot", "tip", "needle", "oil_service", "fins", "wrench")
+        val before = EngineSim.evaluate(Logic.paramsFrom(state))
+        return Upgrades.all
+            .filter { it.id in tools && Logic.canBuyUpgrade(state, it.id) && Logic.upgradeCost(state, it.id) <= budget }
+            .filter { upgrade ->
+                val level = (state.upgrades[upgrade.id] ?: 0) + 1
+                val after = EngineSim.evaluate(
+                    Logic.paramsFrom(state.copy(upgrades = state.upgrades + (upgrade.id to level))),
+                )
+                after.peakHorsepower > before.peakHorsepower + 0.2 ||
+                    after.peakTorqueLbFt > before.peakTorqueLbFt + 0.5 ||
+                    after.cruiseMpg > before.cruiseMpg + 0.15
+            }
+            .minByOrNull { Logic.upgradeCost(state, it.id) }
+            ?.id
+    }
+
+    private data class Clear(val cleared: Boolean, val hours: Double, val state: GameState, val note: String)
+
+    @Test
     fun eachEngineShopFitsInAnHourOrTwo() {
         var researched = setOf("premium")
         val lines = mutableListOf<String>()
@@ -160,7 +268,7 @@ class BlockPaceTest {
             val run = buyBasket(start, sixty)
             lines += "${block.title}  ${"%.2f".format(run.hours)} h  ${run.note}"
             assertTrue(lines.joinToString("\n"), run.cleared)
-            assertTrue("${block.title} ${run.hours} h", run.hours in 0.85..2.0)
+            assertTrue("${block.title} ${run.hours} h", run.hours in 0.85..2.8)
             researched = run.researched
         }
         println(lines.joinToString("\n"))

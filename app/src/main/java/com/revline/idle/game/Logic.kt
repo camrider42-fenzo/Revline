@@ -117,6 +117,7 @@ object Logic {
      * still have to move the sheet, or buying them looks like a no-op.
      * The bonus is a real fraction of a horsepower on a 50 cc single and fades
      * on the bigger blocks, where the same part already works through the model.
+     * Opening tools stay a nudge. The inlet and the cam carry the small-engine sheet.
      */
     private fun installedHp(block: Block, state: GameState): Double {
         fun lvl(id: String) = state.upgrades[id] ?: 0
@@ -125,12 +126,21 @@ object Logic {
             "thermostat", "afr_map", "oil_cooler", "electric_pump", "inconel",
             "waterless", "ceramic", "knock_box", "boost_controller", "torque_model", "meth",
         ).sumOf { lvl(it) }
+        fun tapered(levels: Int): Double {
+            if (levels <= 0) return 0.0
+            return 1.25 + 0.16 * (levels - 1)
+        }
         val tools = listOf(
             "lap", "gap", "boot", "tip", "needle", "oil_service", "fins", "wrench",
+        ).sumOf { tapered(lvl(it)) }
+        val shop = listOf(
+            "filter", "cold_air", "headers", "long_tube", "cam", "springs", "compression",
         ).sumOf { lvl(it) }
         val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders).coerceAtLeast(40.0)
         val fade = (160.0 / cc).coerceIn(1.0, 1.8)
-        return (latent * 0.45 + tools * 1.15) * fade
+        // The first pass of a tool is the one you feel. Later passes add less,
+        // so the inlet and the cam are what finish a small sheet.
+        return (latent * 0.45 + tools + shop * 1.15) * fade
     }
 
     fun paramsFrom(state: GameState): EngineParams {

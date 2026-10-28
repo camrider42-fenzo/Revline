@@ -73,13 +73,13 @@ enum class Block(
         val shop = 0.52
         val trim = when (this) {
             MOPED -> 1.0
-            THUMPER -> 0.94
-            TWIN -> 0.97
-            TRIPLE -> 1.08
-            INLINE_FOUR -> 0.90
-            V6 -> 0.97
-            V8 -> 1.0
-            V12 -> 1.0
+            THUMPER -> 0.90
+            TWIN -> 0.88
+            TRIPLE -> 1.20
+            INLINE_FOUR -> 1.05
+            V6 -> 1.22
+            V8 -> 1.90
+            V12 -> 1.48
         }
         return minMultiplier * pace * glide * trim * shop
     }

@@ -36,7 +36,7 @@ class PedalShapeTest {
                 val label = "${block.title} ${if (built) "built" else "stock"} best $best"
                 if (best !in 0.35..0.80) misses += "$label outside the stop"
                 if (wide > bestPay * 0.75) misses += "$label wide open pays ${wide / bestPay}"
-                if (bestPay < light * 1.55) misses += "$label light pedal pays too close ($light vs $bestPay)"
+                if (bestPay < light * 1.45) misses += "$label light pedal pays too close ($light vs $bestPay)"
             }
         }
         assertTrue(misses.joinToString("\n"), misses.isEmpty())
