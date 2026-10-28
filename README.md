@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.40.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.41.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -97,7 +97,9 @@ The engine runs a real four-stroke cycle at a slowed-down rate that follows the 
 
 DEV MODE at the bottom of the REBUILD tab makes every part level and every study free for testing. Study gates still apply. A red DEV tag sits next to the title while it is on, and the switch is saved and survives rebuilds.
 
-The engine is audible. The same crank that moves the pistons drives the speaker, at the same slowed rate, so a flame and its blast happen together. Bore sets the pitch: a 39 mm jug sits about an octave above a 94 mm bore. Each firing event is a low exhaust pulse, the shape of a tailpipe recording: a short blowdown crack, then a boom that falls in pitch and dies through the power stroke. Most of that energy stays low. Compression makes the crack harder, not brighter. Intake rush, blower whine, and turbo whoosh sit under the pulse and get louder as the pedal opens. Closing the pedal all the way stalls the crank and the sound dies with it.
+The engine is audible, and each block has its own voice. A single chugs high and long. A twin rasps. A four screams. A V8 is a low rumble with a bank lope. A V12 is a smoother, higher sheen. Bore still drops the pitch as the jug gets wider, and the note thins out as the tach nears redline. Each firing is still a blowdown crack and a boom, and the intake stays under that pulse. Closing the pedal all the way stalls the crank and the sound dies with it.
+
+The first engines come with a lower tach: 6,800 on the moped, 7,600 on the thumper, 8,200 on the twin. The longer-stroke blocks sit where the piston can live, and the V12 stock is 8,000. A rev kit, the valve springs, and a deleted limiter raise that tach. Each block has a hard stop that climbs the whole way, from 8,000 on the moped to 10,000 on the V12. Nothing goes past that stop. Past it, mean piston speed is what the bottom end has to live with.
 
 The Tune tab is the screws: spark advance, mixture, cam center, wastegate, rev limiter, and thermostat. There is no idle-speed screw. The bottom of the pedal is a stall: the crank stops and the contract pays nothing until you crack it open. A screw stays locked until its part is on the engine. More of that part, and the parts that refine it (a mapped spark table, VVT, a boost controller), make the range wider and the clicks smaller. The position goes into the same engine model as the hardware, so the sheet and the contract move when you turn it. A rebuild throws the screws away with the parts.
 

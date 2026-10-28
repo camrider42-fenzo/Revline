@@ -21,6 +21,7 @@ class EngineCrank {
     private val throttleBits = AtomicInteger(0.18f.toRawBits())
     private val running = AtomicInteger(1)
     private val induction = AtomicInteger(Induction.NA.ordinal)
+    private val redlineBits = AtomicInteger(7000f.toRawBits())
 
     var angle: Float
         get() = Float.fromBits(angleBits.get())
@@ -40,6 +41,7 @@ class EngineCrank {
         throttleBits.set(throttle.toRawBits())
         running.set(if (live) 1 else 0)
         induction.set(params.induction.ordinal)
+        redlineBits.set(params.redlineRpm.toFloat().toRawBits())
     }
 
     fun ear(): EngineEar = EngineEar(
@@ -50,6 +52,8 @@ class EngineCrank {
         throttle = Float.fromBits(throttleBits.get()).toDouble(),
         running = running.get() == 1,
         induction = Induction.entries[induction.get().coerceIn(0, Induction.entries.lastIndex)],
+        rpm = Float.fromBits(rpmBits.get()).toDouble(),
+        redlineRpm = Float.fromBits(redlineBits.get()).toDouble(),
     )
 }
 

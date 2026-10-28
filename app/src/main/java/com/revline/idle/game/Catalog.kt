@@ -84,6 +84,7 @@ object Upgrades {
         Upgrade("mapped_timing", Category.IGNITION, "Mapped spark table", "The piggyback moves advance with rpm instead of a vacuum can.", 5, 80.0, 1.08, requires = "piggyback"),
         Upgrade("knock_box", Category.IGNITION, "Knock listening", "The ECU hears detonation and pulls spark. Unresolved knock falls; a hard pull still costs a little torque.", 1, 220.0, 1.0, requires = "knock_node"),
         Upgrade("springs", Category.VALVETRAIN, "Valve springs", "Controls the valve at higher rpm. Redline and a little bottom-end strength come with it.", 5, 400.0, 1.08),
+        Upgrade("rev_kit", Category.VALVETRAIN, "Rev kit", "A raised limiter and retainers that keep up. Each level is another 380 rpm, until this block's tach stops.", 4, 240.0, 1.22),
         Upgrade("cam", Category.VALVETRAIN, "Performance cam", "More duration. The VE peak climbs and moves up-rpm. Torque at 1,800 rpm falls until VVT widens the island.", 4, 360.0, 1.15, requires = "perf_cam"),
         Upgrade("vvt", Category.VALVETRAIN, "Variable valve timing", "Cam phasing gives back low-rpm fill without giving up the top-end lobe.", 2, 150.0, 1.15, requires = "vvt_node"),
         Upgrade("vvl", Category.VALVETRAIN, "Variable lift", "A second lobe. Low lift for cruise manners, high lift for the pull.", 1, 500.0, 1.0, requires = "vvl_node"),

@@ -63,7 +63,7 @@ object UpgradeMap {
     fun effectOf(id: String): Effect = when (id) {
         "filter", "manifold", "itb", "headers", "long_tube", "cam", "vvt", "vvl",
         "compression", "bore", "coils", "base_timing", "mapped_timing", "springs",
-        "lap", "gap", "limiter", "dyno_fuel",
+        "lap", "gap", "limiter", "dyno_fuel", "rev_kit",
         -> Effect.POWER
         "jets", "afr_map", "catback", "cold_air", "boot", "tip", "needle",
         -> Effect.ECONOMY

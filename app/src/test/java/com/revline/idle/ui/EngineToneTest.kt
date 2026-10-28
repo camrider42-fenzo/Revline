@@ -9,6 +9,21 @@ import kotlin.math.abs
 class EngineToneTest {
     private val stepDeg = 3000f * EngineMotion.VISUAL_CRANK / 44100f
     @Test
+    fun cylinderCountChangesTheVoice() {
+        val single = EngineTone.character(1)
+        val four = EngineTone.character(4)
+        val eight = EngineTone.character(8)
+        val twelve = EngineTone.character(12)
+        assertTrue(single.sub > four.sub * 2.0)
+        assertTrue(EngineTone.fundamentalHz(39.0) * single.pitch > EngineTone.fundamentalHz(93.0) * eight.pitch * 2.0)
+        assertTrue(four.pitch > eight.pitch * 2.0)
+        assertTrue(twelve.pitch > eight.pitch * 1.5)
+        assertTrue(eight.sub > four.sub * 3.0)
+        assertTrue(four.crack > eight.crack * 2.0)
+        assertTrue(single.boom < four.boom)
+    }
+
+    @Test
     fun boreSetsPitchAndCompressionSetsTheCrack() {
         val moped = EngineTone.fundamentalHz(39.0)
         val v8 = EngineTone.fundamentalHz(94.0)

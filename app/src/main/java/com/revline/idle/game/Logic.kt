@@ -144,6 +144,27 @@ object Logic {
         return (latent * 0.45 + tools + shop * 1.15) * fade
     }
 
+    /**
+     * Stock tach plus springs, the rev kit, and a deleted limiter.
+     * The block's cap is the realistic stop. On the V12 that stop is 10,000 rpm.
+     */
+    private fun redlineRpm(
+        block: Block,
+        springs: Int,
+        revKit: Int,
+        limiter: Int,
+        vvl: Boolean,
+        tune: Double,
+    ): Double {
+        val raised = block.redlineRpm +
+            180.0 * springs +
+            380.0 * revKit +
+            (if (vvl) 150.0 else 0.0) +
+            450.0 * limiter +
+            tune
+        return raised.coerceIn(block.redlineRpm * 0.72, block.redlineCap())
+    }
+
     fun paramsFrom(state: GameState): EngineParams {
         val block = Block.forPrestige(state.prestiges)
         fun lvl(id: String) = state.upgrades[id] ?: 0
@@ -174,6 +195,7 @@ object Logic {
         val mapped = lvl("mapped_timing")
         val knockBox = lvl("knock_box")
         val springs = lvl("springs")
+        val revKit = lvl("rev_kit")
         val cam = lvl("cam")
         val vvt = lvl("vvt")
         val vvl = lvl("vvl")
@@ -252,12 +274,11 @@ object Logic {
             0.018 * (state.perks["flow"] ?: 0)
         var frac = block.vePeakFraction + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
             0.018 * longTube + 0.040 * cam + 0.015 * vvl + Tuners.value(state, "cam")
-        if (limiter > 0) {
-            val breathing = block.redlineRpm + 180.0 * springs + if (vvl > 0) 150.0 else 0.0
-            val extended = breathing + 450.0 * limiter
-            val capped = frac.coerceIn(0.35, 0.92)
-            frac = capped * breathing / extended
-        }
+        val tune = Tuners.value(state, "redline")
+        val tach = redlineRpm(block, springs, revKit, limiter, vvl > 0, tune)
+        val breathing = redlineRpm(block, springs, 0, 0, vvl > 0, tune)
+        // A higher tach does not move the cam. The peak stays at the rpm the springs set.
+        frac *= breathing / tach
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
         var strength = 1.0 + 0.055 * springs + 0.12 * studs + 0.26 * pistons +
             0.16 * rods + 0.12 * crank + 0.36 * billet + 0.045 * wrench + 0.08 * (state.perks["fixtures"] ?: 0)
@@ -298,7 +319,7 @@ object Logic {
             peakVe = ve.coerceIn(0.55, 1.35),
             vePeakFraction = frac.coerceIn(0.35, 0.92),
             veWidthRpm = width.coerceIn(900.0, 6500.0),
-            redlineRpm = (block.redlineRpm + 180.0 * springs + 450.0 * limiter + Tuners.value(state, "redline") + if (vvl > 0) 150.0 else 0.0).coerceIn(4500.0, 14000.0),
+            redlineRpm = tach,
             backpressure = bp.coerceIn(0.30, 1.40),
             timingDeg = timing.coerceIn(6.0, 38.0),
             knockControl = knock.coerceIn(0.05, 0.95),
