@@ -1,5 +1,6 @@
 #!/bin/sh
 # Pack the release APK as a zip a phone archive app will open.
+# Commit dist/revline.zip afterward. That path is the copy kept in the repo.
 # Info-ZIP 3.0 sets a "made by 3.0" header and a max-compression flag, and
 # Samsung's archive app reports that as an unknown or damaged archive.
 # Storing the APK raw also leaves the APK's own zip trailer visible inside
