@@ -101,6 +101,8 @@ data class EngineParams(
      * hold a harder rpm without the head soaking away.
      */
     val coolingHeadroom: Double = 1.0,
+    /** Tailpipe character. Stock is a muffled log manifold. Headers, a cat-back, and a cam change it. */
+    val exhaustNote: ExhaustNote = ExhaustNote(),
 )
 
 data class OperatingPoint(

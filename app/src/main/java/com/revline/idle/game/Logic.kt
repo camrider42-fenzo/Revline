@@ -11,6 +11,7 @@ import com.revline.idle.economy.formatDuration
 import com.revline.idle.model.Block
 import com.revline.idle.model.Coolant
 import com.revline.idle.model.EngineParams
+import com.revline.idle.model.exhaustNote
 import com.revline.idle.model.EngineSim
 import com.revline.idle.model.EngineStats
 import com.revline.idle.model.FuelKind
@@ -311,6 +312,15 @@ object Logic {
             1.0 - 0.05 * crank - 0.035 * oilService - 0.028 * wrench -
                 (if (synthetic) 0.04 else 0.0) - 0.012 * (state.perks["breakin"] ?: 0)
             ).coerceIn(0.72, 1.2)
+        val pipe = exhaustNote(
+            backpressure = bp,
+            headers = headers,
+            longTube = longTube,
+            tip = tip,
+            catback = catback,
+            cam = cam,
+            ceramic = ceramic > 0,
+        )
         return EngineParams(
             cylinders = block.cylinders,
             boreMm = (block.boreMm + block.boreMm * 0.038 * bore).coerceIn(block.boreMm * 0.9, block.boreMm * 1.25),
@@ -380,6 +390,7 @@ object Logic {
                 + 0.10 * (state.perks["cores"] ?: 0)
                 + (if (waterless) -0.06 else 0.0)
                 ).coerceIn(0.7, 5.0),
+            exhaustNote = pipe,
         )
     }
 

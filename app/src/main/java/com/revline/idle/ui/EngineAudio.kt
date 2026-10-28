@@ -22,6 +22,10 @@ class EngineCrank {
     private val running = AtomicInteger(1)
     private val induction = AtomicInteger(Induction.NA.ordinal)
     private val redlineBits = AtomicInteger(7000f.toRawBits())
+    private val openBits = AtomicInteger(0)
+    private val raspBits = AtomicInteger(0)
+    private val barkBits = AtomicInteger(0)
+    private val lopeBits = AtomicInteger(0)
 
     var angle: Float
         get() = Float.fromBits(angleBits.get())
@@ -42,6 +46,10 @@ class EngineCrank {
         running.set(if (live) 1 else 0)
         induction.set(params.induction.ordinal)
         redlineBits.set(params.redlineRpm.toFloat().toRawBits())
+        openBits.set(params.exhaustNote.open.toFloat().toRawBits())
+        raspBits.set(params.exhaustNote.rasp.toFloat().toRawBits())
+        barkBits.set(params.exhaustNote.bark.toFloat().toRawBits())
+        lopeBits.set(params.exhaustNote.lope.toFloat().toRawBits())
     }
 
     fun ear(): EngineEar = EngineEar(
@@ -54,6 +62,10 @@ class EngineCrank {
         induction = Induction.entries[induction.get().coerceIn(0, Induction.entries.lastIndex)],
         rpm = Float.fromBits(rpmBits.get()).toDouble(),
         redlineRpm = Float.fromBits(redlineBits.get()).toDouble(),
+        exhaustOpen = Float.fromBits(openBits.get()).toDouble(),
+        exhaustRasp = Float.fromBits(raspBits.get()).toDouble(),
+        exhaustBark = Float.fromBits(barkBits.get()).toDouble(),
+        exhaustLope = Float.fromBits(lopeBits.get()).toDouble(),
     )
 }
 

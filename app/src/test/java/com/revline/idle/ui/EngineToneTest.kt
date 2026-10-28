@@ -1,6 +1,7 @@
 package com.revline.idle.ui
 
 import com.revline.idle.model.Induction
+import com.revline.idle.model.exhaustNote
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,6 +32,44 @@ class EngineToneTest {
         assertTrue(EngineTone.brightness(13.5) > EngineTone.brightness(8.2) + 0.5)
         assertEquals(0.0, EngineTone.brightness(7.0), 0.0)
         assertEquals(1.0, EngineTone.brightness(16.0), 0.0)
+    }
+
+    @Test
+    fun exhaustAndCompressionChangeTheHit() {
+        val stock = exhaustNote(1.0, 0, 0, 0, 0, 0, false)
+        val headers = exhaustNote(0.76, 4, 0, 0, 0, 0, false)
+        val cat = exhaustNote(0.82, 0, 0, 0, 4, 0, false)
+        val cam = exhaustNote(1.0, 0, 0, 0, 0, 4, false)
+        val full = exhaustNote(0.40, 4, 3, 3, 4, 4, true)
+        assertTrue("stock open ${stock.open}", stock.open < 0.12)
+        assertTrue("headers rasp ${headers.rasp} vs cat ${cat.rasp}", headers.rasp > cat.rasp + 0.35)
+        assertTrue("headers open ${headers.open}", headers.open > stock.open + 0.35)
+        assertTrue("cat bark ${cat.bark}", cat.bark > stock.bark + 0.25)
+        assertTrue(cat.rasp < 0.05)
+        assertTrue("cam lope ${cam.lope}", cam.lope > 0.7)
+        assertTrue(full.open > 0.85)
+
+        val mild = band(EngineEar(90.0, 8.2, 1, 1, throttle = 0.8, running = true))
+        val squeezed = band(EngineEar(90.0, 13.5, 1, 1, throttle = 0.8, running = true))
+        assertTrue(
+            "low compression should stay woollier (${mild.low}/${mild.high} vs ${squeezed.low}/${squeezed.high})",
+            mild.low / mild.high > squeezed.low / squeezed.high * 1.2,
+        )
+        val muffled = band(EngineEar(86.0, 11.0, 4, 1, throttle = 0.8, running = true))
+        val openPipe = band(
+            EngineEar(
+                86.0, 11.0, 4, 1,
+                throttle = 0.8,
+                running = true,
+                exhaustOpen = headers.open,
+                exhaustRasp = headers.rasp,
+                exhaustBark = headers.bark,
+            ),
+        )
+        assertTrue(
+            "headers should bring the crack (${openPipe.high} vs ${muffled.high})",
+            openPipe.high > muffled.high * 2.0,
+        )
     }
 
     @Test
@@ -109,6 +148,25 @@ class EngineToneTest {
             if (a >= 720f) a -= 720f
         }
         return sum / count
+    }
+
+    private data class Band(val low: Double, val high: Double)
+
+    /** Low versus high energy across the front of a flame, after the voice has settled. */
+    private fun band(ear: EngineEar): Band {
+        val voice = EngineVoice()
+        repeat(3000) { voice.sample(ear, 200f, 44100) }
+        val front = FloatArray(1800) { voice.sample(ear, it * stepDeg, 44100) }
+        var low = 0.0
+        var high = 0.0
+        var lp = 0.0
+        for (s in front) {
+            lp += (s - lp) * 0.018
+            low += lp * lp
+            val rest = s - lp
+            high += rest * rest
+        }
+        return Band(low, high)
     }
 
     private fun energy(samples: FloatArray): Float {

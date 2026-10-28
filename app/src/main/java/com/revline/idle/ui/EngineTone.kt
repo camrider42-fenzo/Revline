@@ -64,6 +64,8 @@ object EngineTone {
 class EngineVoice {
     private var pSub = 0.7
     private var p1 = 0.2
+    private var pLow = 0.4
+    private var pRasp = 1.1
     private var whine = 0.4
     private var airLp = 0.0
     private var blastLp = 0.0
@@ -77,23 +79,41 @@ class EngineVoice {
         val voice = EngineTone.character(ear.cylinders)
         val spun = if (ear.redlineRpm > 1.0) (ear.rpm / ear.redlineRpm).coerceIn(0.0, 1.15) else 0.5
         val nearRedline = (spun - 0.55).coerceAtLeast(0.0)
-        val bore = EngineTone.fundamentalHz(ear.boreMm) * voice.pitch * (1.0 + 0.22 * nearRedline * voice.crack)
-        val bright = EngineTone.brightness(ear.compression).toFloat()
+        val open = ear.exhaustOpen.coerceIn(0.0, 1.0)
+        val rasp = ear.exhaustRasp.coerceIn(0.0, 1.0)
+        val bark = ear.exhaustBark.coerceIn(0.0, 1.0)
+        val lope = ear.exhaustLope.coerceIn(0.0, 1.0)
+        val bright = EngineTone.brightness(ear.compression)
+        // An open pipe lifts the note. A muffler leaves the bore where it is.
+        val bore = EngineTone.fundamentalHz(ear.boreMm) * voice.pitch *
+            (1.0 + 0.22 * nearRedline * voice.crack) *
+            (1.0 + 0.36 * open)
         val cycles = EngineMotion.flameCycles(angleDeg, ear.cylinders, ear.banks)
         val hottest = cycles.maxOf { EngineMotion.burn(it) }.toDouble()
         // The boom starts near the bore note and falls through the flame.
         val fall = 0.62 + 1.35 * hottest.pow(2.0)
         val step = 2.0 * PI / sampleRate
         pSub += step * bore * 0.55 * fall
+        pLow += step * bore * 0.27 * fall
         p1 += step * bore * (1.0 + voice.rasp)
+        pRasp += step * bore * (2.6 + 1.6 * rasp)
         if (pSub > 1e6) {
             pSub %= 2.0 * PI
+            pLow %= 2.0 * PI
             p1 %= 2.0 * PI
+            pRasp %= 2.0 * PI
         }
         val blastRaw = nextNoise()
-        // Blowdown is a short band-limited crack. The rest of the flame is the pipe.
+        // A muffler keeps the blowdown dull. Headers and a tip let the crack through.
         val crackOpen = hottest.pow(4.2)
-        blastLp += (blastRaw - blastLp) * (0.010 + 0.055 * crackOpen)
+        val color = (0.010 + 0.055 * crackOpen) * (1.0 + 4.2 * open + 1.6 * bark)
+        blastLp += (blastRaw - blastLp) * color.coerceIn(0.004, 0.55)
+        val lopeGain = 1.0 - 0.48 * lope * (0.5 - 0.5 * sin(Math.toRadians(angleDeg * 0.5)))
+        val boomExp = voice.boom * (1.0 + 1.15 * bright) * (1.0 + 1.7 * open)
+        val subGain = voice.sub * (1.08 - 0.70 * open) * (0.70 + 0.55 * bright)
+        val wool = (1.0 - bright) * (1.0 - open)
+        val crackGain = voice.crack * (0.28 + 2.8 * open + 0.95 * bark) * (0.45 + 1.35 * bright)
+        val raspGain = rasp * (0.45 + 1.25 * open) * (0.55 + 0.75 * bright)
         var hit = 0.0
         var pipe = 0.0
         cycles.forEachIndexed { index, cycle ->
@@ -101,25 +121,27 @@ class EngineVoice {
             val burn = EngineMotion.burn(cycle)
             if (burn > 0.02f) {
                 val decay = burn.toDouble()
-                val boom = decay.pow(voice.boom)
-                val crack = decay.pow(5.2)
+                val boom = decay.pow(boomExp)
+                val crack = decay.pow(3.6 + 2.6 * open + 1.1 * bright)
                 val sine = sin(pSub)
-                val body = sine * voice.sub * (1.08 - 0.05 * bright) +
-                    sine * kotlin.math.abs(sine) * 0.14 * crack
-                hit += bank * body * boom
-                hit += bank * sin(p1) * boom * voice.rasp.coerceAtLeast(0.08) * (0.8 + bright)
-                hit += bank * blastLp * crack * voice.crack * (0.62 + 0.22 * bright)
+                val grit = sine * kotlin.math.abs(sine) * (0.08 + 0.34 * bright * open)
+                hit += bank * lopeGain * (sine * subGain + grit) * boom
+                hit += bank * lopeGain * sin(pLow) * voice.sub * 0.90 * wool * boom
+                hit += bank * lopeGain * sin(p1) * boom * voice.rasp.coerceAtLeast(0.08) * (0.55 + 0.30 * (1.0 - open))
+                hit += bank * lopeGain * blastLp * crack * crackGain
+                val buzz = sin(pRasp)
+                hit += bank * lopeGain * buzz * kotlin.math.abs(buzz) * crack * raspGain
             }
             val puff = EngineMotion.puff(cycle)
             if (puff != null) {
                 val hush = sin(Math.PI * puff)
-                pipe += blastLp * hush * 0.035
+                pipe += blastLp * hush * (0.018 + 0.34 * open + 0.14 * bark)
             }
         }
         val share = 1.0 / kotlin.math.sqrt(cycles.size.toDouble())
         val bang = softClip(hit) * 0.92 * share
         val mixed = bang + pipe * share + air(ear, cycles, sampleRate)
-        val out = mixed * level * (0.92 + 0.08 * (1.0 - bright))
+        val out = mixed * level * (0.88 + 0.22 * open) * (0.84 + 0.22 * bright)
         return out.coerceIn(-1.0, 1.0).toFloat()
     }
 
@@ -182,4 +204,8 @@ data class EngineEar(
     val induction: Induction = Induction.NA,
     val rpm: Double = 3000.0,
     val redlineRpm: Double = 7000.0,
+    val exhaustOpen: Double = 0.0,
+    val exhaustRasp: Double = 0.0,
+    val exhaustBark: Double = 0.0,
+    val exhaustLope: Double = 0.0,
 )
