@@ -2,7 +2,9 @@ package com.revline.idle.ui
 
 import android.graphics.Paint
 import android.graphics.Typeface
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -18,13 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -38,30 +34,14 @@ import androidx.compose.ui.unit.sp
 import com.revline.idle.model.OperatingPoint
 import java.util.Locale
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.sin
 
 @Composable
 fun Tachometer(rpm: Double, redline: Double, targetRpm: Double, modifier: Modifier = Modifier) {
-    val targetState = rememberUpdatedState(rpm.toFloat())
-    val markState = rememberUpdatedState(targetRpm.toFloat())
-    var shown by remember { mutableFloatStateOf(rpm.toFloat()) }
-    var mark by remember { mutableFloatStateOf(targetRpm.toFloat()) }
-    LaunchedEffect(Unit) {
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                if (last != 0L) {
-                    val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
-                    val follow = 1f - exp(-dt * 9f)
-                    shown += (targetState.value - shown) * follow
-                    mark += (markState.value - mark) * (1f - exp(-dt * 14f))
-                }
-                last = now
-            }
-        }
-    }
+    val settle: AnimationSpec<Float> = if (LocalBatterySaver.current) snap() else tween(durationMillis = 180)
+    val shown by animateFloatAsState(rpm.toFloat(), settle, label = "tach")
+    val mark by animateFloatAsState(targetRpm.toFloat(), settle, label = "mark")
     Canvas(modifier) {
         val stroke = (size.minDimension / 80f).coerceIn(1.7f, 3.2f)
         val c = Offset(size.width / 2f, size.height * 0.62f)
@@ -130,20 +110,11 @@ fun Tachometer(rpm: Double, redline: Double, targetRpm: Double, modifier: Modifi
 
 @Composable
 fun DynoChart(curve: List<OperatingPoint>, rpm: Double, modifier: Modifier = Modifier) {
-    val rpmState = rememberUpdatedState(rpm.toFloat())
-    var shown by remember { mutableFloatStateOf(rpm.toFloat()) }
-    LaunchedEffect(Unit) {
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                if (last != 0L) {
-                    val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
-                    shown += (rpmState.value - shown) * (1f - exp(-dt * 9f))
-                }
-                last = now
-            }
-        }
-    }
+    val shown by animateFloatAsState(
+        rpm.toFloat(),
+        if (LocalBatterySaver.current) snap() else tween(durationMillis = 180),
+        label = "cursor",
+    )
     Column(modifier) {
         val peakHp = curve.maxOfOrNull { it.horsepower } ?: 0.0
         val peakTq = curve.maxOfOrNull { it.torqueLbFt } ?: 0.0

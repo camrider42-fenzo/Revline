@@ -29,11 +29,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -57,7 +56,6 @@ import com.revline.idle.game.ResearchStatus
 import com.revline.idle.game.ResearchTree
 import com.revline.idle.model.EngineSim
 import java.util.Locale
-import kotlin.math.exp
 
 private enum class Tab(val label: String) { BENCH("BENCH"), PARTS("PARTS"), TUNE("TUNE"), STUDY("STUDY"), REBUILD("REBUILD") }
 
@@ -65,8 +63,9 @@ private enum class Tab(val label: String) { BENCH("BENCH"), PARTS("PARTS"), TUNE
 fun RevlineApp(vm: GameViewModel) {
     val ui = vm.ui
     val crank = rememberEngineCrank(vm)
-    EngineSoundtrack(crank)
+    EngineSoundtrack(crank, ui.game.batterySaver)
     val tab = remember { androidx.compose.runtime.mutableStateOf(Tab.BENCH) }
+    CompositionLocalProvider(LocalBatterySaver provides ui.game.batterySaver) {
     RevlineTheme {
         Scaffold(
             containerColor = Black,
@@ -80,6 +79,22 @@ fun RevlineApp(vm: GameViewModel) {
                         .navigationBarsPadding()
                         .padding(bottom = 8.dp),
                 ) {
+                    Text(
+                        if (ui.game.batterySaver) "BATTERY SAVER ON  ·  DRAWING FROZEN" else "BATTERY SAVER",
+                        color = if (ui.game.batterySaver) Amber else Olive,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Black)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = vm::toggleBatterySaver,
+                            )
+                            .padding(vertical = 8.dp),
+                    )
                     Box(Modifier.fillMaxWidth().height(1.dp).background(White))
                     Row(Modifier.fillMaxWidth()) {
                         Tab.entries.forEach { item ->
@@ -105,7 +120,7 @@ fun RevlineApp(vm: GameViewModel) {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).background(Black)) {
                 when (tab.value) {
-                    Tab.BENCH -> BenchScreen(ui, crank, vm::startDyno, vm::setThrottle)
+                    Tab.BENCH -> BenchScreen(ui, vm::startDyno, vm::setThrottle)
                     Tab.PARTS -> PartsScreen(ui, vm::buy, vm::remove, vm::fuel)
                     Tab.TUNE -> TuneScreen(ui, vm::nudgeTune)
                     Tab.STUDY -> StudyScreen(ui, vm::research)
@@ -129,46 +144,28 @@ fun RevlineApp(vm: GameViewModel) {
             )
         }
     }
+    }
 }
 
 @Composable
 private fun rememberEngineCrank(vm: GameViewModel): EngineCrank {
     val crank = remember { EngineCrank() }
-    val rpmState = rememberUpdatedState(vm.ui.rpm.toFloat())
-    val paramsState = rememberUpdatedState(vm.ui.sheet.params)
-    val throttleState = rememberUpdatedState(
-        if (vm.ui.phase == DynoPhase.IDLE) vm.ui.game.throttle.toFloat() else 1f,
-    )
-    val liveState = rememberUpdatedState(
-        !(Logic.stalled(vm.ui.game.throttle) && vm.ui.phase == DynoPhase.IDLE),
-    )
-    LaunchedEffect(crank) {
-        var angle = crank.angle
-        var spin = rpmState.value
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                if (last != 0L) {
-                    val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
-                    val follow = 1f - exp(-dt * 7f)
-                    spin += (rpmState.value - spin) * follow
-                    if (liveState.value && spin > 1f) {
-                        angle = EngineMotion.advanceCrank(angle, spin, dt)
-                    }
-                    crank.angle = angle
-                    crank.publish(paramsState.value, spin, throttleState.value, liveState.value)
-                }
-                last = now
-            }
-        }
+    val params = vm.ui.sheet.params
+    val rpm = vm.ui.rpm.toFloat()
+    val throttle = if (vm.ui.phase == DynoPhase.IDLE) vm.ui.game.throttle.toFloat() else 1f
+    val live = !vm.ui.game.batterySaver &&
+        !(Logic.stalled(vm.ui.game.throttle) && vm.ui.phase == DynoPhase.IDLE)
+    LaunchedEffect(params, rpm, throttle, live) {
+        crank.publish(params, rpm, throttle, live)
     }
     return crank
 }
 
 @Composable
-private fun EngineSoundtrack(crank: EngineCrank) {
+private fun EngineSoundtrack(crank: EngineCrank, saver: Boolean) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle, crank) {
+    DisposableEffect(lifecycle, crank, saver) {
+        if (saver) return@DisposableEffect onDispose { }
         val audio = EngineAudio(crank)
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -187,7 +184,7 @@ private fun EngineSoundtrack(crank: EngineCrank) {
 }
 
 @Composable
-private fun BenchScreen(ui: UiModel, crank: EngineCrank, onDyno: () -> Unit, onThrottle: (Double) -> Unit) {
+private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) -> Unit) {
     val params = ui.sheet.params
     val stats = ui.sheet.stats
     val bucket = (ui.rpm / 50.0).toInt() * 50
@@ -211,7 +208,7 @@ private fun BenchScreen(ui: UiModel, crank: EngineCrank, onDyno: () -> Unit, onT
                     Hud(ui)
                     Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     FailureLine(ui)
-                    EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), crank, ui.game.upgrades, Modifier.fillMaxWidth().height(280.dp))
+                    EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(280.dp))
                     Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(170.dp))
                         ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
@@ -236,7 +233,7 @@ private fun BenchScreen(ui: UiModel, crank: EngineCrank, onDyno: () -> Unit, onT
                 Hud(ui)
                 Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                 FailureLine(ui)
-                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), crank, ui.game.upgrades, Modifier.fillMaxWidth().height(200.dp))
+                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(200.dp))
                 Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(148.dp))
                     ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))

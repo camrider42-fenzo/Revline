@@ -1,10 +1,5 @@
 package com.revline.idle.ui
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,7 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -62,6 +60,7 @@ import com.revline.idle.model.EngineSim
 import com.revline.idle.model.FuelKind
 import java.util.Locale
 import kotlin.math.hypot
+import kotlinx.coroutines.delay
 
 /**
  * The map may move for a new focus request, and once when it first has a size.
@@ -96,12 +95,20 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit
     ) {
         Upgrades.all.associate { it.id to Logic.preview(ui.game, it.id) }
     }
-    val pulse by rememberInfiniteTransition(label = "afford").animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "affordPulse",
-    )
+    val saver = LocalBatterySaver.current
+    var pulse by remember { mutableFloatStateOf(0.7f) }
+    LaunchedEffect(saver) {
+        if (saver) {
+            pulse = 0.55f
+            return@LaunchedEffect
+        }
+        var bright = false
+        while (true) {
+            bright = !bright
+            pulse = if (bright) 1f else 0.45f
+            delay(700)
+        }
+    }
     val bucket = (ui.rpm / 50.0).toInt() * 50
     val liveLoad = if (ui.phase == DynoPhase.IDLE) Logic.loadFor(ui.game.throttle) else 1.0
     val soakBucket = (ui.game.soakC * 2.0).toInt()
@@ -127,20 +134,22 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit
     var pinned by remember { mutableStateOf<Effect?>(null) }
     var focusPart by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(Black).padding(horizontal = 8.dp, vertical = 4.dp)) {
-        BottleneckBar(suggestion) {
-            pinned = suggestion.effect
-            focusPart = null
-            focusTick++
+        Column(Modifier.fillMaxWidth().zIndex(2f).background(Black)) {
+            BottleneckBar(suggestion) {
+                pinned = suggestion.effect
+                focusPart = null
+                focusTick++
+            }
+            AimBar(aim) {
+                val id = aim.upgradeId ?: return@AimBar
+                selected.value = id
+                pinned = UpgradeMap.effectOf(id)
+                focusPart = id
+                focusTick++
+            }
+            PartsStatus(ui, live)
+            FuelRow(ui, onFuel)
         }
-        AimBar(aim) {
-            val id = aim.upgradeId ?: return@AimBar
-            selected.value = id
-            pinned = UpgradeMap.effectOf(id)
-            focusPart = id
-            focusTick++
-        }
-        PartsStatus(ui, live)
-        FuelRow(ui, onFuel)
         BubbleMap(
             layout = layout,
             ui = ui,
@@ -150,12 +159,14 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit
             focusPart = focusPart,
             focusTick = focusTick,
             onSelect = { selected.value = it },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.weight(1f).fillMaxWidth().zIndex(0f),
         )
-        if (selected.value == null) {
-            PartsStatus(ui, live)
-        } else {
-            PartDetail(ui, selected.value!!, previews[selected.value], onBuy, onRemove)
+        Column(Modifier.fillMaxWidth().zIndex(2f).background(Black)) {
+            if (selected.value == null) {
+                PartsStatus(ui, live)
+            } else {
+                PartDetail(ui, selected.value!!, previews[selected.value], onBuy, onRemove)
+            }
         }
     }
 }
@@ -208,6 +219,7 @@ private fun BubbleMap(
         Box(
             Modifier
                 .fillMaxSize()
+                .clipToBounds()
                 .pointerInput(layout, viewW, viewH) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
@@ -545,8 +557,10 @@ private fun PartDetail(
     Column(
         Modifier
             .fillMaxWidth()
+            .background(Black)
             .padding(top = 8.dp)
             .border(1.dp, effectColor(UpgradeMap.effectOf(upgrade.id)))
+            .background(Black)
             .padding(8.dp),
     ) {
         Text(upgrade.name, color = White, fontFamily = FontFamily.Monospace, fontSize = 14.sp)

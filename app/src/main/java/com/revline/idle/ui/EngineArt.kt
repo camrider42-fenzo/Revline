@@ -31,15 +31,16 @@ fun EngineArt(
     rpm: Float,
     coolantC: Float,
     egtC: Float,
-    crank: EngineCrank,
     parts: Map<String, Int> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
+    val frozen = LocalBatterySaver.current
     val rpmState = rememberUpdatedState(rpm)
-    var angle by remember { mutableFloatStateOf(crank.angle) }
+    var angle by remember { mutableFloatStateOf(20f) }
     var clock by remember { mutableFloatStateOf(0f) }
     var spinRpm by remember { mutableFloatStateOf(rpm) }
-    LaunchedEffect(crank) {
+    LaunchedEffect(frozen) {
+        if (frozen) return@LaunchedEffect
         var last = 0L
         while (true) {
             withFrameNanos { now ->
@@ -48,7 +49,9 @@ fun EngineArt(
                     val follow = 1f - exp(-dt * 7f)
                     spinRpm += (rpmState.value - spinRpm) * follow
                     clock += dt
-                    angle = crank.angle
+                    if (rpmState.value > 1f) {
+                        angle = EngineMotion.advanceCrank(angle, spinRpm, dt)
+                    }
                 }
                 last = now
             }

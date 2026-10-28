@@ -62,9 +62,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun loop() {
         var last = System.nanoTime()
         while (viewModelScope.isActive) {
-            delay(100)
+            val saver = ui.game.batterySaver
+            delay(if (saver) 1000 else 200)
             val nowNs = System.nanoTime()
-            val dt = ((nowNs - last) / 1e9).coerceIn(0.0, 0.5)
+            val dt = ((nowNs - last) / 1e9).coerceIn(0.0, if (saver) 1.25 else 0.5)
             last = nowNs
             clock += dt
             val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle, ui.sheet.params.idleRpm)
@@ -108,7 +109,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun advanceRpm(dt: Double, redline: Double, throttle: Double, idle: Double): Double {
-        val wobble = 16.0 * sin(clock * 2.4) + 6.0 * sin(clock * 6.1)
+        val wobble = if (ui.game.batterySaver) 0.0 else 16.0 * sin(clock * 2.4) + 6.0 * sin(clock * 6.1)
         val floor = idle.coerceIn(500.0, redline - 300.0)
         when (phase) {
             DynoPhase.PULL -> {
@@ -177,6 +178,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun nudgeTune(id: String, direction: Int) = mutate { Tuners.nudge(it, id, direction) }
     fun prestige() = mutate { Logic.prestige(it) }
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
+    fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }
 
     private fun mutate(block: (GameState) -> GameState) {
         val game = block(ui.game)

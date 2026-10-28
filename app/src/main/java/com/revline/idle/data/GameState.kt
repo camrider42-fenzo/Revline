@@ -23,6 +23,8 @@ data class GameState(
     val tune: Map<String, Double> = emptyMap(),
     /** Testing switch: parts and studies cost nothing. Gates still apply. */
     val devMode: Boolean = false,
+    /** Stops the bench drawing and the speaker. The contract keeps paying. */
+    val batterySaver: Boolean = false,
     /** Epoch ms until which a blown engine pays no contract. */
     val downUntilEpochMs: Long = 0L,
     val breakdowns: Int = 0,

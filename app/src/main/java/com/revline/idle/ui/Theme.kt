@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -16,6 +17,9 @@ val Cyan = Color(0xFF4DFFF0)
 val Amber = Color(0xFFFFC14A)
 val Red = Color(0xFFFF3B30)
 val Olive = Color(0xFF8A9A3A)
+
+/** When this is on, the bench drawing and the speaker stay still. */
+val LocalBatterySaver = compositionLocalOf { false }
 
 private val scheme = darkColorScheme(
     primary = Lime,

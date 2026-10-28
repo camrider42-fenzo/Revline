@@ -57,5 +57,8 @@ class DevModeTest {
         val rebuilt = Logic.prestige(ready)
         assertEquals(1, rebuilt.prestiges)
         assertTrue(rebuilt.devMode)
+        val quiet = Logic.prestige(ready.copy(batterySaver = true))
+        assertTrue(quiet.batterySaver)
+        assertTrue(SaveCodec.decode(SaveCodec.encode(quiet)).batterySaver)
     }
 }
