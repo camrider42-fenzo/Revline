@@ -69,7 +69,10 @@ class EngineCrank {
     )
 }
 
-/** Streams the crank. Pulses line up with the flames because both read [EngineCrank]. */
+/**
+ * Streams the crank at the tach's rpm. The drawing stays slow so the pistons
+ * can be seen. The speaker does not follow that slow crank.
+ */
 class EngineAudio(private val crank: EngineCrank) {
     private var track: AudioTrack? = null
     private var thread: Thread? = null
@@ -132,13 +135,10 @@ class EngineAudio(private val crank: EngineCrank) {
         val voice = EngineVoice()
         val frames = 256
         val buf = ShortArray(frames)
-        var audioAngle = crank.angle
+        var audioAngle = 0f
         while (!stop) {
             val ear = crank.ear()
-            val published = crank.angle
-            val drift = wrap(published - audioAngle)
-            audioAngle = EngineMotion.advanceCrank(audioAngle, 0f, 0f).let { (it + drift * 0.25f + 720f) % 720f }
-            val degPerSec = if (ear.running) crank.rpm * EngineMotion.VISUAL_CRANK else 0f
+            val degPerSec = if (ear.running) ear.rpm.toFloat() * EngineMotion.SOUND_CRANK else 0f
             val step = degPerSec / rate
             for (i in buf.indices) {
                 val sample = voice.sample(ear, audioAngle, rate)
@@ -153,12 +153,5 @@ class EngineAudio(private val crank: EngineCrank) {
                 wrote += n
             }
         }
-    }
-
-    private fun wrap(delta: Float): Float {
-        var d = delta
-        while (d > 360f) d -= 720f
-        while (d < -360f) d += 720f
-        return d
     }
 }

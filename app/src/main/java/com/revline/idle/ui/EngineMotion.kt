@@ -11,8 +11,14 @@ import kotlin.math.sqrt
  * firing TDC: power to 180, exhaust to 360, intake to 540, compression to 720.
  */
 object EngineMotion {
-    /** Degrees of crank per second for each rpm. The drawing and the sound share this. */
+    /** Degrees of crank per second for each rpm on the bench. Slow enough to see a piston. */
     const val VISUAL_CRANK = 0.20f
+
+    /**
+     * Degrees of crank per second for each rpm in the speaker.
+     * 360/60, so a tach reading of 6,000 rpm is 50 fires a second on a single, not one.
+     */
+    const val SOUND_CRANK = 6f
 
     fun advanceCrank(angle: Float, rpm: Float, dtSec: Float): Float {
         val next = angle + rpm * VISUAL_CRANK * dtSec

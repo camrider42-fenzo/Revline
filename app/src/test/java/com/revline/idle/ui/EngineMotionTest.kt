@@ -7,6 +7,15 @@ import org.junit.Test
 
 class EngineMotionTest {
     @Test
+    fun theSpeakerFiresAtTheTach() {
+        val sixThousand = 6000f * EngineMotion.SOUND_CRANK / 720f
+        assertEquals(50f, sixThousand, 0.01f)
+        assertEquals(200f, sixThousand * 4f, 0.01f)
+        val drawn = 6000f * EngineMotion.VISUAL_CRANK / 720f
+        assertTrue("the bench stays slow ($drawn Hz)", drawn < 3f)
+    }
+
+    @Test
     fun everyCylinderFiresOncePerTwoTurnsAtItsOwnAngle() {
         for (n in 1..12) {
             val offsets = EngineMotion.firingOffsets(n)
