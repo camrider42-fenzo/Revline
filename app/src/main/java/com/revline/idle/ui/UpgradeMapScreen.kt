@@ -481,7 +481,7 @@ private fun PartsStatus(ui: UiModel, live: com.revline.idle.model.OperatingPoint
     val stats = ui.sheet.stats
     Text(
         "${formatDollars(ui.game.money)}   ${formatDollars(ui.sheet.incomePerSec)}/s    " +
-            "sheet ${formatPower(stats.peakHorsepower)} hp  ${formatPower(stats.peakTorqueLbFt)}  ${String.format(Locale.US, "%.1f", stats.cruiseMpg)} mpg",
+            "sheet ${formatPower(stats.peakHorsepower)} hp  ${formatPower(stats.peakTorqueLbFt)} lb-ft  ${String.format(Locale.US, "%.1f", stats.cruiseMpg)} mpg",
         color = Lime,
         fontFamily = FontFamily.Monospace,
         fontSize = 11.sp,

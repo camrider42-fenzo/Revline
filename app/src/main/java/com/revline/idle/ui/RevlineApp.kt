@@ -334,11 +334,19 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
     val notes = if (s.reliabilityNotes.isEmpty()) "Inside limits" else s.reliabilityNotes.joinToString(" · ")
     Column(Modifier.padding(top = 8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Stat("HP", formatPower(live.horsepower), Lime, Modifier.weight(1f))
-            Stat("TQ", formatPower(live.torqueLbFt), Amber, Modifier.weight(1f))
-            Stat("MPG", String.format(Locale.US, "%.1f", live.mpg), if (live.mpg < 12.0) Amber else White, Modifier.weight(1f))
+            Stat("HP", formatPower(s.peakHorsepower), Lime, Modifier.weight(1f))
+            Stat("TQ", formatPower(s.peakTorqueLbFt), Amber, Modifier.weight(1f))
+            Stat("MPG", String.format(Locale.US, "%.1f", s.cruiseMpg), if (s.cruiseMpg < 12.0) Amber else White, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
+        Text(
+            "Sheet peak. Now ${formatPower(live.horsepower)} hp, ${formatPower(live.torqueLbFt)} lb-ft, " +
+                "${String.format(Locale.US, "%.1f", live.mpg)} mpg at this pedal.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         Text(
             "At ${live.rpm.toInt()} rpm · load ${(live.load * 100).toInt()}% · ${soakReadout(ui.game.soakC, EngineSim.soakPer10s(ui.sheet.params, live.rpm, if (ui.phase == DynoPhase.IDLE) ui.game.throttle else 1.0))} · " +
                 (if (ui.sheet.params.induction != com.revline.idle.model.Induction.NA && live.boostPsi < 0.4) "below spool · " else "") +

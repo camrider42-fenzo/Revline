@@ -145,9 +145,11 @@ fun DynoChart(curve: List<OperatingPoint>, rpm: Double, modifier: Modifier = Mod
         }
     }
     Column(modifier) {
+        val peakHp = curve.maxOfOrNull { it.horsepower } ?: 0.0
+        val peakTq = curve.maxOfOrNull { it.torqueLbFt } ?: 0.0
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("HP", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-            Text("TORQUE", color = Amber, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Text("HP ${formatPower(peakHp)}", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Text("TQ ${formatPower(peakTq)}", color = Amber, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             Text("CURSOR", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
         }
         Canvas(
