@@ -203,7 +203,7 @@ class EconomyTest {
                 .filter { Logic.lockReason(state, it.id) == null }
                 .minOf { Logic.upgradeCost(state, it.id) }
             val minutes = cheapest / pay / 60.0
-            assertTrue("${com.revline.idle.model.Block.forPrestige(index).title} first tool $minutes min", minutes < 2.5)
+            assertTrue("${com.revline.idle.model.Block.forPrestige(index).title} first tool $minutes min", minutes < 3.5)
         }
     }
 

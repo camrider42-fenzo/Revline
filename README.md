@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.34.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.35.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -55,7 +55,7 @@ A locked part on the bubble map names the upgrade you still have to buy, or the 
 
 The throttle you set is saved. Offline pay uses that same stop, at 80% of the contract and 20% of passive research, capped at 8 hours. A rebuild puts the pedal back to a light opening so the next long-block gets its own pull.
 
-Research points tick from peak horsepower (`0.05 + 0.035 × HP^0.8` per second, times the knowledge multiplier, more with the Dyno habit perk). A dyno pull pays 30 seconds of that same research rate, then the dyno-slip factor, and waits 35 seconds. The pull grows when horsepower, Engineering Knowledge, or Dyno habit grows. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
+Research points tick from peak horsepower (`0.04 + 0.022 × HP^0.8` per second, times the knowledge multiplier, more with the Dyno habit perk). A dyno pull pays 50 seconds of that same research rate, then the dyno-slip factor, and waits 35 seconds. Sitting on the passive trickle is the smaller share, so most of the research comes from pulling. The pull grows when horsepower, Engineering Knowledge, or Dyno habit grows. The pedal is locked while the rollers are moving. Pulls do not happen while the app is closed.
 
 ## The engine model
 
@@ -85,7 +85,7 @@ Each rebuild throws the parts away and bolts on the next engine, from a 50 cc mo
 
 A rebuild opens when peak horsepower, peak torque, and cruise mpg all clear that engine's sheet. The targets sit where about 60% of the parts have been bought. Parts move the sheet harder than they used to, and the cheap opening tools move it hardest, so those targets are higher. Meeting the sheet pays one Engineering Knowledge. Each stat adds four more per time it beats its own target, up to sixteen from one rebuild, and that knowledge raises the multiplier you keep (`1 + 0.12 × knowledge`). The rebuild tab spends it on perks that stay with the shop: breathing, research, octane, part prices, bottom-end strength, friction, bay heat, cooling headroom, spark, charger spool, dyno research, and fuel flow. Stock misses the power and torque numbers.
 
-The first tools on a fresh engine are cheap (a torque wrench, an oil service, a plug gap, a valve lap) so the opening minutes have something to buy. That wider shop still lands in about one to two hours per engine.
+The first tools on a fresh engine are cheap (a torque wrench, an oil service, a plug gap, a valve lap) so the opening minutes have something to buy. That wider shop still lands in about an hour and a half per engine.
 
 The bench drawing follows the parts on the engine. A filter grows pleats, a cold-air snorkel reaches farther, headers replace the log manifold and get longer, the turbo and supercharger get larger, the intercooler and oil cooler gain rows, fins stick out on an air-cooled jug, and the pistons widen and thicken as the bore and compression go up. Higher levels of the same part change the picture again.
 

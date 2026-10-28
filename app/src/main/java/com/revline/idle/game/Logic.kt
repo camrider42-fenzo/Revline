@@ -356,7 +356,7 @@ object Logic {
         val stats = EngineSim.evaluate(params)
         val mult = Prestige.multiplier(state.knowledge)
         val notebook = state.perks["notebook"] ?: 0
-        val rp = (0.05 + 0.035 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)) * (1.0 + 0.22 * notebook) * mult
+        val rp = (0.04 + 0.022 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)) * (1.0 + 0.22 * notebook) * mult
         val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
         val block = Block.forPrestige(state.prestiges)
         val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle, stats) * block.payScale()
@@ -366,9 +366,10 @@ object Logic {
     /**
      * One pull pays this many seconds of the research rate on the sheet.
      * The rate already includes horsepower, Engineering Knowledge, and Dyno habit,
-     * so the pull scales with them. Dyno slips apply on top.
+     * so the pull scales with them. Dyno slips apply on top. The passive trickle
+     * is the smaller share, so skipping the rollers is most of the research left behind.
      */
-    const val DYNO_PULL_SECONDS = 30.0
+    const val DYNO_PULL_SECONDS = 50.0
 
     fun dynoReward(rpPerSec: Double, dynoFactor: Double = 1.0): Double =
         rpPerSec.coerceAtLeast(0.0) * DYNO_PULL_SECONDS * dynoFactor.coerceAtLeast(1.0)

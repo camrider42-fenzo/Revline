@@ -69,7 +69,8 @@ enum class Block(
         val glide = 0.94.pow(prestiges.coerceAtLeast(0))
         // The shop has to reach about 60% of the parts inside an hour or two, so the
         // fitted street-car prices are scaled down. The opening tools are cheap on top of this.
-        val shop = 0.42
+        // 0.52 keeps that same list from clearing while the contract is still short.
+        val shop = 0.52
         val trim = when (this) {
             MOPED -> 1.0
             THUMPER -> 0.94
