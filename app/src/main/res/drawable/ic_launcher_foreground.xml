@@ -5,23 +5,37 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:pathData="M54,22 A32,32 0 1,1 53.9,22"
-        android:strokeColor="#E4FF47"
-        android:strokeWidth="3"
+        android:pathData="M85,54 A31,31 0 1,1 23,54 A31,31 0 1,1 85,54"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:fillColor="#00000000" />
+    <!-- Redline, a filled sector on the right of the sweep. -->
+    <path
+        android:pathData="M71.4,33.3 A27,27 0 0,1 77.4,67.5 L68.7,62.5 A17,17 0 0,0 64.9,41.0 Z"
+        android:fillColor="#FFFF3B30" />
+    <!-- The rest of the tach, from the lower left over the top to the red. -->
+    <path
+        android:pathData="M33.2,66.0 A24,24 0 0,1 69.4,35.6"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
         android:fillColor="#00000000" />
     <path
-        android:pathData="M54,54 L74,40"
-        android:strokeColor="#E4FF47"
-        android:strokeWidth="3"
+        android:pathData="M35.1,57.3 L30.4,58.2 M37.4,44.4 L33.2,42.0 M47.4,36.0 L45.8,31.4 M60.6,36.0 L62.2,31.4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.3"
+        android:strokeLineCap="round"
         android:fillColor="#00000000" />
     <path
-        android:pathData="M36,70 L72,70 L72,88 L36,88 Z"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2"
+        android:pathData="M54,54 L71.2,44.8"
+        android:strokeColor="#FFE4FF47"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
         android:fillColor="#00000000" />
     <path
-        android:pathData="M46,70 L46,58 L62,58 L62,70"
-        android:strokeColor="#4DFFF0"
-        android:strokeWidth="2"
-        android:fillColor="#00000000" />
+        android:pathData="M54,49.2 A4.8,4.8 0 1,1 54,58.8 A4.8,4.8 0 1,1 54,49.2 Z"
+        android:fillColor="#FFE4FF47" />
+    <path
+        android:pathData="M54,52.3 A1.7,1.7 0 1,1 54,55.7 A1.7,1.7 0 1,1 54,52.3 Z"
+        android:fillColor="#FF000000" />
 </vector>
