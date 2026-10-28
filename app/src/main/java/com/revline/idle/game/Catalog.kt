@@ -165,7 +165,7 @@ object ResearchTree {
 object Perks {
     val all: List<Perk> = listOf(
         Perk("flow", "Flow bench notes", "Each rank adds a little peak VE to every long-block you build after this.", listOf(1, 2, 4)),
-        Perk("notebook", "Dyno habit", "Each rank adds 22% to passive research. The shop learns faster between pulls.", listOf(1, 2, 3)),
+        Perk("notebook", "Dyno habit", "Each rank adds 22% to research. The passive trickle and the dyno pull both grow.", listOf(1, 2, 3)),
         Perk("octane", "Octane schooling", "Each rank is worth about 1.2 octane of knock resistance, on top of the fuel.", listOf(2, 3)),
         Perk("tooling", "Fixture credit", "Each rank takes 5% off part prices, to a floor of 18% off.", listOf(1, 2, 4)),
         Perk("fixtures", "Pattern strength", "Each rank leaves a little more bottom-end strength in the next stock block.", listOf(2, 4)),

@@ -34,8 +34,8 @@ class PerkTest {
         val slips = Logic.sheet(GameState(perks = mapOf("slips" to 1)))
         assertEquals(sheet.params.dynoFactor * 1.10, slips.params.dynoFactor, 1e-9)
         assertEquals(sheet.incomePerSec, slips.incomePerSec, 1e-6)
-        val stockPull = Logic.dynoReward(sheet.stats, sheet.params)
-        assertEquals(stockPull * 1.10, Logic.dynoReward(slips.stats, slips.params), 0.01)
+        val stockPull = Logic.dynoReward(sheet.rpPerSec, sheet.params.dynoFactor)
+        assertEquals(stockPull * 1.10, Logic.dynoReward(slips.rpPerSec, slips.params.dynoFactor), 0.01)
 
         val pump = Logic.paramsFrom(GameState(perks = mapOf("pump" to 1)))
         assertEquals(stock.fuelFlowFactor + 0.06, pump.fuelFlowFactor, 1e-9)

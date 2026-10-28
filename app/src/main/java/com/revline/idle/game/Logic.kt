@@ -361,10 +361,15 @@ object Logic {
         return Sheet(params, stats, pay, rp, mult)
     }
 
-    fun dynoReward(stats: EngineStats, params: EngineParams? = null, multiplier: Double = 1.0): Double {
-        val base = 4.0 + 0.6 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)
-        return base * (params?.dynoFactor ?: 1.0).coerceAtLeast(1.0) * multiplier.coerceAtLeast(0.0)
-    }
+    /**
+     * One pull pays this many seconds of the research rate on the sheet.
+     * The rate already includes horsepower, Engineering Knowledge, and Dyno habit,
+     * so the pull scales with them. Dyno slips apply on top.
+     */
+    const val DYNO_PULL_SECONDS = 30.0
+
+    fun dynoReward(rpPerSec: Double, dynoFactor: Double = 1.0): Double =
+        rpPerSec.coerceAtLeast(0.0) * DYNO_PULL_SECONDS * dynoFactor.coerceAtLeast(1.0)
 
     /**
      * Failures per second with the past-the-limit parts on. A cool cruise still

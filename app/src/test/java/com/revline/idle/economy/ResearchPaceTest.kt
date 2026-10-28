@@ -83,7 +83,7 @@ class ResearchPaceTest {
                 continue
             }
             val done = basket.all { (state.upgrades[it.key] ?: 0) >= it.value } && Logic.canPrestige(state)
-            if (done) return Run(true, seconds / 3600.0, state, sheet.rpPerSec, Logic.dynoReward(sheet.stats, sheet.params, sheet.multiplier))
+            if (done) return Run(true, seconds / 3600.0, state, sheet.rpPerSec, Logic.dynoReward(sheet.rpPerSec, sheet.params.dynoFactor))
             val part = basket
                 .filter { (state.upgrades[it.key] ?: 0) < it.value && Logic.lockReason(state, it.key) == null }
                 .minByOrNull { Logic.upgradeCost(state, it.key) }
@@ -116,12 +116,12 @@ class ResearchPaceTest {
             )
             sinceDyno += tick
             if (sinceDyno >= 35.0) {
-                state = state.copy(researchPoints = state.researchPoints + Logic.dynoReward(sheet.stats, sheet.params, sheet.multiplier))
+                state = state.copy(researchPoints = state.researchPoints + Logic.dynoReward(sheet.rpPerSec, sheet.params.dynoFactor))
                 sinceDyno = 0.0
             }
             seconds += tick
         }
-        return Run(false, seconds / 3600.0, state, sheet.rpPerSec, Logic.dynoReward(sheet.stats, sheet.params, sheet.multiplier))
+        return Run(false, seconds / 3600.0, state, sheet.rpPerSec, Logic.dynoReward(sheet.rpPerSec, sheet.params.dynoFactor))
     }
 
     private fun tune(state: GameState): GameState {

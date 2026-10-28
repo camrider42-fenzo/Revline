@@ -136,7 +136,7 @@ class BlockPaceTest {
             )
             sinceDyno += tick
             if (sinceDyno >= 35.0) {
-                state = state.copy(researchPoints = state.researchPoints + Logic.dynoReward(sheet.stats, sheet.params, sheet.multiplier))
+                state = state.copy(researchPoints = state.researchPoints + Logic.dynoReward(sheet.rpPerSec, sheet.params.dynoFactor))
                 sinceDyno = 0.0
             }
             seconds += tick

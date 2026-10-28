@@ -99,8 +99,13 @@ class EconomyTest {
         assertEquals(16, Prestige.knowledgeGain(block.hpGoal * 6, block.torqueGoal * 6, block.mpgGoal * 2, block))
         assertEquals(1.12, Prestige.multiplier(1), 1e-9)
         val dyno = Logic.sheet(GameState())
-        val pull = Logic.dynoReward(dyno.stats, dyno.params)
-        assertEquals(pull * Prestige.multiplier(5), Logic.dynoReward(dyno.stats, dyno.params, Prestige.multiplier(5)), 1e-6)
+        val learned = Logic.sheet(GameState(knowledge = 5))
+        val habit = Logic.sheet(GameState(perks = mapOf("notebook" to 2)))
+        val pull = Logic.dynoReward(dyno.rpPerSec, dyno.params.dynoFactor)
+        assertEquals(pull * (learned.rpPerSec / dyno.rpPerSec), Logic.dynoReward(learned.rpPerSec, learned.params.dynoFactor), 1e-6)
+        assertEquals(pull * (habit.rpPerSec / dyno.rpPerSec), Logic.dynoReward(habit.rpPerSec, habit.params.dynoFactor), 1e-6)
+        assertTrue(learned.rpPerSec > dyno.rpPerSec * 1.5)
+        assertTrue(habit.rpPerSec > dyno.rpPerSec * 1.4)
     }
 
     @Test

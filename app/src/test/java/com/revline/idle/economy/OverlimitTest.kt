@@ -38,13 +38,14 @@ class OverlimitTest {
         val plain = sheet(emptyMap())
         val kit = sheet(mapOf("nitrous" to 3, "overboost" to 3, "limiter" to 3, "dyno_fuel" to 3))
         val hpGain = kit.stats.peakHorsepower / plain.stats.peakHorsepower
-        val dynoGain = Logic.dynoReward(kit.stats, kit.params) / Logic.dynoReward(plain.stats, plain.params)
+        val dynoGain = Logic.dynoReward(kit.rpPerSec, kit.params.dynoFactor) /
+            Logic.dynoReward(plain.rpPerSec, plain.params.dynoFactor)
         assertTrue(
             "hp ${plain.stats.peakHorsepower.toInt()} -> ${kit.stats.peakHorsepower.toInt()} (${"%.2f".format(hpGain)})",
             hpGain >= 1.45,
         )
         assertTrue(
-            "dyno ${Logic.dynoReward(plain.stats, plain.params).toInt()} -> ${Logic.dynoReward(kit.stats, kit.params).toInt()} (${"%.2f".format(dynoGain)})",
+            "dyno ${Logic.dynoReward(plain.rpPerSec, plain.params.dynoFactor).toInt()} -> ${Logic.dynoReward(kit.rpPerSec, kit.params.dynoFactor).toInt()} (${"%.2f".format(dynoGain)})",
             dynoGain >= 2.5,
         )
         assertTrue("reliability ${kit.stats.reliability}", kit.stats.reliability < 55.0)

@@ -480,7 +480,7 @@ private fun DynoButton(ui: UiModel, onDyno: () -> Unit) {
     val label = when {
         busy -> "On the rollers"
         left > 0 -> "Rollers free in ${left}s"
-        else -> "Dyno pull  +${formatCompact(Logic.dynoReward(ui.sheet.stats, ui.sheet.params, ui.sheet.multiplier))} RP"
+        else -> "Dyno pull  +${formatCompact(Logic.dynoReward(ui.sheet.rpPerSec, ui.sheet.params.dynoFactor))} RP"
     }
     LineButton(label, !busy && left == 0L, onDyno, Modifier.fillMaxWidth().padding(top = 10.dp))
 }
