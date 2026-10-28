@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.revline.idle.data.GameState
 import com.revline.idle.data.SaveRepository
+import com.revline.idle.game.AimGoal
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
@@ -179,6 +180,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun prestige() = mutate { Logic.prestige(it) }
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
     fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }
+    fun setAimGoal(goal: AimGoal) = mutate { it.copy(aimGoal = goal.name) }
 
     private fun mutate(block: (GameState) -> GameState) {
         val game = block(ui.game)

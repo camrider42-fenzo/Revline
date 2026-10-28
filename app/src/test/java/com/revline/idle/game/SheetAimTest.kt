@@ -3,6 +3,7 @@ package com.revline.idle.game
 import com.revline.idle.data.GameState
 import com.revline.idle.model.Block
 import com.revline.idle.model.EngineSim
+import com.revline.idle.model.EngineStats
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -15,6 +16,41 @@ class SheetAimTest {
         assertEquals(SheetMark.TORQUE, SheetAim.farthest(0.5, 0.2, 0.9))
         assertEquals(SheetMark.CRUISE, SheetAim.farthest(1.2, 1.1, 0.4))
         assertEquals(SheetMark.POWER, SheetAim.farthest(0.3, 0.3, 0.9))
+    }
+
+    @Test
+    fun aChosenGoalPicksTheBiggestStep() {
+        val state = GameState(prestiges = Block.INLINE_FOUR.ordinal, throttle = 0.55)
+        for (goal in AimGoal.entries) {
+            val aim = SheetAim.recommend(state, goal)
+            val id = aim.upgradeId
+            assertNotNull("${goal.short} had no part", id)
+            assertEquals(null, Logic.lockReason(state, id!!))
+            val picked = step(state, id, goal)
+            assertTrue("${goal.short} via $id gained $picked", picked > 0.0)
+            for (upgrade in Upgrades.all) {
+                if (upgrade.id == id) continue
+                if (Logic.lockReason(state, upgrade.id) != null) continue
+                val other = step(state, upgrade.id, goal)
+                assertTrue(
+                    "${goal.short}: ${upgrade.id} gains $other and $id gains $picked",
+                    other <= picked + 1e-6,
+                )
+            }
+        }
+    }
+
+    private fun step(state: GameState, id: String, goal: AimGoal): Double {
+        val before = EngineSim.evaluate(Logic.paramsFrom(state))
+        val next = state.copy(upgrades = state.upgrades + (id to 1))
+        val after = EngineSim.evaluate(Logic.paramsFrom(next))
+        fun read(stats: EngineStats, from: GameState): Double = when (goal) {
+            AimGoal.POWER -> stats.peakHorsepower
+            AimGoal.TORQUE -> stats.peakTorqueLbFt
+            AimGoal.CRUISE -> stats.cruiseMpg
+            AimGoal.PAY -> Logic.sheet(from).incomePerSec
+        }
+        return read(after, next) - read(before, state)
     }
 
     @Test

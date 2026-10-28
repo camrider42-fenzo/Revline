@@ -25,6 +25,8 @@ data class GameState(
     val devMode: Boolean = false,
     /** Stops the bench drawing and the speaker. The contract keeps paying. */
     val batterySaver: Boolean = false,
+    /** What the next-part line is chasing: POWER, TORQUE, CRUISE, or PAY. */
+    val aimGoal: String = "POWER",
     /** Epoch ms until which a blown engine pays no contract. */
     val downUntilEpochMs: Long = 0L,
     val breakdowns: Int = 0,

@@ -48,6 +48,7 @@ import com.revline.idle.DynoPhase
 import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.Aim
+import com.revline.idle.game.AimGoal
 import com.revline.idle.game.Bottleneck
 import com.revline.idle.game.Effect
 import com.revline.idle.game.Logic
@@ -80,7 +81,13 @@ private fun effectColor(effect: Effect): Color = when (effect) {
 }
 
 @Composable
-fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit, onFuel: (FuelKind) -> Unit) {
+fun PartsScreen(
+    ui: UiModel,
+    onBuy: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onFuel: (FuelKind) -> Unit,
+    onGoal: (AimGoal) -> Unit,
+) {
     val selected = remember { mutableStateOf<String?>(null) }
     val layout = remember { UpgradeMap.bubbles() }
     val pedalBucket = (ui.game.throttle * 20.0).toInt()
@@ -120,6 +127,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit
     val suggestion = remember(ui.sheet.stats, live.heatSoakC, live.fuelLimited, soakRate, ui.game.upgrades, ui.game.prestiges) {
         Bottleneck.suggest(ui.game, ui.sheet.stats, live, soakRate)
     }
+    val aimGoal = AimGoal.from(ui.game.aimGoal)
     val aim = remember(
         ui.game.upgrades,
         ui.game.researched,
@@ -127,8 +135,10 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit
         ui.game.fuel,
         ui.game.tune,
         ui.game.perks,
+        ui.game.aimGoal,
+        ui.game.throttle,
     ) {
-        SheetAim.recommend(ui.game)
+        SheetAim.recommend(ui.game, aimGoal)
     }
     var focusTick by remember { mutableIntStateOf(0) }
     var pinned by remember { mutableStateOf<Effect?>(null) }
@@ -140,7 +150,7 @@ fun PartsScreen(ui: UiModel, onBuy: (String) -> Unit, onRemove: (String) -> Unit
                 focusPart = null
                 focusTick++
             }
-            AimBar(aim) {
+            AimBar(aim, aimGoal, onGoal) {
                 val id = aim.upgradeId ?: return@AimBar
                 selected.value = id
                 pinned = UpgradeMap.effectOf(id)
@@ -450,21 +460,45 @@ private fun BottleneckBar(suggestion: com.revline.idle.game.Suggestion, onShow: 
 }
 
 @Composable
-private fun AimBar(aim: Aim, onShow: () -> Unit) {
+private fun AimBar(aim: Aim, goal: AimGoal, onGoal: (AimGoal) -> Unit, onShow: () -> Unit) {
     val color = aim.upgradeId?.let { effectColor(UpgradeMap.effectOf(it)) } ?: Amber
     Column(
         Modifier
             .fillMaxWidth()
             .padding(bottom = 6.dp)
             .border(1.dp, color)
-            .clickable(
-                enabled = aim.upgradeId != null,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onShow,
-            )
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AimGoal.entries.forEach { item ->
+                val on = item == goal
+                Text(
+                    item.short,
+                    color = if (on) Black else color,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    modifier = Modifier
+                        .background(if (on) color else Black)
+                        .border(1.dp, color)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onGoal(item) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+                .clickable(
+                    enabled = aim.upgradeId != null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onShow,
+                ),
+        ) {
         Text("NEXT  ·  ${aim.headline.uppercase(Locale.US)}", color = color, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             aim.detail,
@@ -477,6 +511,7 @@ private fun AimBar(aim: Aim, onShow: () -> Unit) {
         )
         if (aim.upgradeId != null) {
             Text("Show this part", color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
+        }
         }
     }
 }
