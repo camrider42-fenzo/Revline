@@ -1,5 +1,9 @@
 package com.revline.idle.model
 
+import com.revline.idle.data.GameState
+import com.revline.idle.game.Logic
+import com.revline.idle.game.UpgradeMap
+import com.revline.idle.game.Upgrades
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,6 +35,29 @@ class EngineSimTest {
         val high = EngineSim.ottoEfficiency(12.0)
         assertTrue(low in 0.40..0.55)
         assertTrue(high > low)
+    }
+
+    @Test
+    fun economyPartsMoveCruiseMpg() {
+        val stock = Logic.sheet(GameState(prestiges = Block.INLINE_FOUR.ordinal))
+        val misses = mutableListOf<String>()
+        for (upgrade in Upgrades.all.filter { UpgradeMap.effectOf(it.id) == com.revline.idle.game.Effect.ECONOMY }) {
+            val one = Logic.sheet(
+                GameState(prestiges = Block.INLINE_FOUR.ordinal, upgrades = mapOf(upgrade.id to 1)),
+            )
+            val maxed = Logic.sheet(
+                GameState(prestiges = Block.INLINE_FOUR.ordinal, upgrades = mapOf(upgrade.id to upgrade.maxLevel)),
+            )
+            val step = one.stats.cruiseMpg - stock.stats.cruiseMpg
+            if (step < 0.4) misses += "${upgrade.id} +1 only ${"%.2f".format(step)} mpg"
+            if (maxed.stats.cruiseMpg < one.stats.cruiseMpg + 0.2 && upgrade.maxLevel > 1) {
+                misses += "${upgrade.id} max ${"%.2f".format(maxed.stats.cruiseMpg)} vs +1 ${"%.2f".format(one.stats.cruiseMpg)}"
+            }
+            if (one.stats.cruiseMpg <= stock.stats.cruiseMpg) {
+                misses += "${upgrade.id} did not raise cruise"
+            }
+        }
+        assertTrue(misses.joinToString("\n"), misses.isEmpty())
     }
 
     @Test

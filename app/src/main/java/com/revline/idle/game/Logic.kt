@@ -312,6 +312,14 @@ object Logic {
             1.0 - 0.05 * crank - 0.035 * oilService - 0.028 * wrench -
                 (if (synthetic) 0.04 else 0.0) - 0.012 * (state.perks["breakin"] ?: 0)
             ).coerceIn(0.72, 1.2)
+        val economy = 1.0 +
+            0.025 * boot +
+            0.022 * tip +
+            0.028 * needle +
+            0.032 * cai +
+            0.030 * catback +
+            0.030 * jets +
+            0.035 * afr
         val pipe = exhaustNote(
             backpressure = bp,
             headers = headers,
@@ -391,6 +399,7 @@ object Logic {
                 + (if (waterless) -0.06 else 0.0)
                 ).coerceIn(0.7, 5.0),
             exhaustNote = pipe,
+            economy = economy,
         )
     }
 

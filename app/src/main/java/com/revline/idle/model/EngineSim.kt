@@ -103,6 +103,11 @@ data class EngineParams(
     val coolingHeadroom: Double = 1.0,
     /** Tailpipe character. Stock is a muffled log manifold. Headers, a cat-back, and a cam change it. */
     val exhaustNote: ExhaustNote = ExhaustNote(),
+    /**
+     * Cruise-fuel multiplier from the economy parts. 1 is a stock map.
+     * Higher burns less fuel for the same road load.
+     */
+    val economy: Double = 1.0,
 )
 
 data class OperatingPoint(
@@ -323,7 +328,7 @@ object EngineSim {
             params.fuel.stoichAfr).coerceIn(0.70, 1.40)
         val mFuel = fuelW / (params.fuel.lhvJPerKg * comb * (cruiseEconomyFactor(cruiseLambda) / cruiseEconomyFactor(mapLambda)))
         val mpg = 60.0 / (mFuel * 3600.0 / params.fuel.kgPerGallon)
-        return mpg.coerceIn(8.0, 70.0)
+        return (mpg * params.economy.coerceIn(1.0, 2.4)).coerceIn(8.0, 95.0)
     }
 
     private fun reliability(params: EngineParams, curve: List<OperatingPoint>): Pair<Double, List<String>> {
