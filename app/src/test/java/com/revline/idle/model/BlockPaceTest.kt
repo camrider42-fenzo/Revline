@@ -169,7 +169,7 @@ class BlockPaceTest {
         println(lines.joinToString("\n"))
         val bad = lines.filter { line ->
             val hours = line.substringAfter("  ").substringBefore(" h").toDouble()
-            hours !in 1.15..2.0
+            hours !in 0.85..2.0
         }
         assertTrue(lines.joinToString("\n"), bad.isEmpty())
     }

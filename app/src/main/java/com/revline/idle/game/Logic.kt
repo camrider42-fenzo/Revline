@@ -128,7 +128,8 @@ object Logic {
         ).sumOf { lvl(it) }
         fun tapered(levels: Int): Double {
             if (levels <= 0) return 0.0
-            return 1.25 + 0.16 * (levels - 1)
+            // The first pass has to move the paycheck. Later passes stay small.
+            return 1.70 + 0.16 * (levels - 1)
         }
         val tools = listOf(
             "lap", "gap", "boot", "tip", "needle", "oil_service", "fins", "wrench",
