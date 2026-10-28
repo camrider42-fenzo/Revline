@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.39.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.40.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -79,7 +79,7 @@ Parts change the inputs above. A turbo does not add a horsepower sticker. It add
 
 Research spends research points along a tree (carb to TBI to port to direct injection, distributor to coil-on-plug, natural aspiration to supercharger or turbo to twins, cams to VVT to variable lift, and the cooling studies). Studies come in five price tiers, from about 25–60 points for the basics to 10,000–11,000 for torque-model control, variable lift, and a billet bottom end. A shop that studies whenever it can finishes the basics on the moped, works through the middle tiers from the thumper to the inline-three, and closes that notebook around the V6. The research pace test checks that spread.
 
-The first pass of an opening tool is the one you feel. On the moped it more than doubles the paycheck, and later passes of the same tool add less, so a valve lap and a plug gap do not finish the engine. A shop that buys the part the sheet is asking for, and studies when nothing unlocked will move that number, takes about an hour to an hour and a quarter on each engine.
+The first pass of an opening tool is the one you feel. On the moped it more than doubles the paycheck, and later passes of the same tool add less, so a valve lap and a plug gap do not finish the engine. Filter, cold air, headers, springs, cams, and the rest of that middle band cost about a quarter less than they did. A shop that buys the part the sheet is asking for takes about fifty minutes to an hour on each engine. The opening tools, the big chargers, and the past-the-limit parts are unchanged.
 
 Once a V8 is on the stand, a second branch opens: Past the limit. It is nitrous, a wastegate shim, a deleted rev limiter, and a dyno fuel cut, behind one study that names the risk. The parts add a lot of horsepower and multiply the dyno slip. They also pile heat into the coolant, the oil, and the exhaust, and the reliability line drops on purpose. Cruise economy is left alone, so the rebuild sheet still clears. The branch is priced so the V8 starts it and the V12 finishes it.
 
