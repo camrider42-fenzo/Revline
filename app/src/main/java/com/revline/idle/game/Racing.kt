@@ -215,7 +215,20 @@ object Racing {
 
     fun chassisById(id: String): Chassis = chassis.find { it.id == id } ?: mule
 
-    fun car(state: GameState): Car = assess(specOf(state))
+    fun driveFor(body: Chassis, place: Place): Drive =
+        if (body.id == "r5" && place == Place.MID) Drive.RWD else body.drive
+
+    fun car(state: GameState): Car = assess(specOf(state), lengthOf(state.raceLength))
+
+    /** What this engine would do in [body] on the strip you have selected. */
+    fun forecast(state: GameState, body: Chassis): Car {
+        val now = specOf(state)
+        val place = body.place
+        return assess(
+            now.copy(chassis = body, place = place, drive = driveFor(body, place), slots = body.slots),
+            lengthOf(state.raceLength),
+        )
+    }
 
     fun specOf(state: GameState): Spec {
         val sheet = Logic.sheet(state)
@@ -224,9 +237,9 @@ object Racing {
         val box = gearboxes.find { it.id == state.transmission } ?: gearboxes.first { it.id == "four" }
         val axle = axles.find { it.id == state.driveline } ?: axles.first()
         val tire = tires.find { it.id == state.tire } ?: tires.first()
-        val drive = runCatching { Drive.valueOf(state.driveType) }.getOrNull() ?: body.drive
         val asked = runCatching { Place.valueOf(state.enginePlace) }.getOrNull()
         val place = if (asked != null && asked in body.places) asked else body.place
+        val drive = driveFor(body, place)
         val slots = state.coolingSlots.coerceIn(0, slotMax(body, level))
         return Spec(
             hp = sheet.stats.peakHorsepower,
@@ -245,19 +258,20 @@ object Racing {
 
     fun slotMax(body: Chassis, level: Int): Int = body.slots + if (level >= 3) 1 else 0
 
-    fun assess(spec: Spec): Car {
+    fun assess(spec: Spec, length: Length = Length.QUARTER): Car {
         val body = spec.chassis
         val shaved = 0.04 * spec.level.coerceIn(0, 3)
         val massFloor = body.kg * 0.92
         var mass = (body.kg * (1.0 - shaved)).coerceAtLeast(massFloor)
         mass += 35.0 + spec.displacementCc * 0.042
         mass += spec.gearbox.kg + spec.axle.kg + spec.tire.kg
-        if (spec.drive != body.drive) mass += 40.0
+        val native = driveFor(body, spec.place)
+        if (spec.drive != native) mass += 40.0
         if (spec.place !in body.places) mass += 30.0
-        if (spec.drive == Drive.AWD) mass += 55.0
+        if (spec.drive == Drive.AWD && native != Drive.AWD) mass += 55.0
         var eff = spec.gearbox.efficiency * spec.axle.efficiency
-        if (spec.drive == Drive.AWD) eff *= 0.94
-        if (spec.drive != body.drive) eff *= 0.97
+        if (spec.drive == Drive.AWD && native != Drive.AWD) eff *= 0.94
+        if (spec.drive != native) eff *= 0.97
         if (spec.place !in body.places) eff *= 0.98
         val stuffed = spec.displacementCc > body.maxCc
         val choke = if (stuffed) 0.35 else 1.0
@@ -278,20 +292,32 @@ object Racing {
         }
         val slots = if (stuffed) 0 else spec.slots.coerceAtLeast(0)
         val drag = body.cd * body.area * (1.0 + 0.018 * slots) * spec.tire.drag
-        // A small radiator cooks a big engine. The launch is what the tires can hold.
-        val heat = made / (32.0 + 18.0 * slots)
-        val fade = ((heat - 0.70).coerceAtLeast(0.0) * 0.55).coerceAtMost(0.72)
+        // A bay that is full runs hot. A heavy car's bay is mostly empty around a small engine.
+        val bay = if (body.id == "mule") 2400.0 else body.maxCc
+        val fill = (spec.displacementCc / bay.coerceAtLeast(40.0)).coerceIn(0.15, 1.8)
+        val heat = made * fill / (36.0 + 24.0 * slots)
+        val fade = if (stuffed) {
+            ((heat - 0.70).coerceAtLeast(0.0) * 0.45).coerceIn(0.42, 0.72)
+        } else {
+            ((heat - 0.90).coerceAtLeast(0.0) * 0.38).coerceAtMost(0.48)
+        }
         val held = (1.0 - fade).coerceIn(0.34, 1.0)
         val traction = spec.tire.mu * spec.axle.grip * balance * mass * 0.55
-        val road = when (body.build) {
-            Build.LIGHT -> 1.28
-            Build.MEDIUM -> 1.0
-            Build.HEAVY -> 0.78
+        val road = when {
+            body.id == "mule" -> 0.94
+            body.build == Build.LIGHT -> 1.26
+            body.build == Build.MEDIUM -> 1.0
+            else -> 0.90
         }
         val accel = made * held * road / mass.coerceAtLeast(80.0)
         val launch = (wheelTq.coerceAtMost(traction) / mass) * spec.tire.mu * spec.axle.grip * balance
         val vMax = sqrt((made * held * road / drag.coerceAtLeast(0.2)).coerceAtLeast(0.01))
-        val pace = 1000.0 * accel.pow(0.46) * launch.pow(0.22) * vMax.pow(0.32)
+        val (accelExp, launchExp, speedExp) = when (length) {
+            Length.EIGHTH -> Triple(0.34, 0.46, 0.20)
+            Length.QUARTER -> Triple(0.46, 0.22, 0.32)
+            Length.HALF -> Triple(0.36, 0.12, 0.52)
+        }
+        val pace = 1000.0 * accel.pow(accelExp) * launch.pow(launchExp) * vMax.pow(speedExp)
         return Car(spec, mass, wheelHp, pace, fade, fits = !stuffed)
     }
 
@@ -318,7 +344,7 @@ object Racing {
     }
 
     fun ladder(state: GameState): Pair<GameState, String> {
-        val rungs = ladderRungs()
+        val rungs = ladderRungs(lengthOf(state.raceLength))
         val index = state.raceLadder.coerceIn(0, rungs.lastIndex)
         val rung = rungs[index]
         val you = car(state)
@@ -356,7 +382,7 @@ object Racing {
     }
 
     fun fieldForLadder(state: GameState): Field {
-        val rungs = ladderRungs()
+        val rungs = ladderRungs(lengthOf(state.raceLength))
         val index = state.raceLadder.coerceIn(0, rungs.lastIndex)
         val rung = rungs[index]
         return Field("ladder ${index + 1}", rung.title, rung.pace, 30.0 * 2.6.pow(index.toDouble()) * lengthOf(state.raceLength).scale, 0.0)
@@ -462,6 +488,7 @@ object Racing {
     }
 
     fun fitPart(state: GameState, kind: String, id: String): GameState {
+        if (kind == "drive") return state
         if (kind == "place") {
             val spot = runCatching { Place.valueOf(id) }.getOrNull() ?: return state
             if (spot !in chassisById(state.chassis).places) return state
@@ -485,8 +512,7 @@ object Racing {
             "box" -> spent.copy(transmission = id)
             "axle" -> spent.copy(driveline = id)
             "tire" -> spent.copy(tire = id)
-            "drive" -> spent.copy(driveType = id)
-            "place" -> spent.copy(enginePlace = id)
+            "place" -> spent.copy(enginePlace = id, driveType = driveFor(chassisById(state.chassis), Place.valueOf(id)).name)
             else -> state
         }
     }
@@ -541,15 +567,15 @@ object Racing {
     private fun classGhost(state: GameState, tier: Tier): Ghost {
         val block = Block.forPrestige(state.prestiges)
         val frac = when (tier) {
-            Tier.CLUB -> 0.38
+            Tier.CLUB -> 0.42
             Tier.NATIONAL -> 0.85
-            Tier.INTERNATIONAL -> 1.02
+            Tier.INTERNATIONAL -> 0.58
         }
         val group = state.prestiges.coerceIn(0, Block.entries.lastIndex)
         val body = when (tier) {
-            Tier.CLUB -> mule
+            Tier.CLUB -> groupChassis(group, Build.HEAVY)
             Tier.NATIONAL -> groupChassis(group, Build.MEDIUM)
-            Tier.INTERNATIONAL -> groupChassis(group, Build.MEDIUM)
+            Tier.INTERNATIONAL -> groupChassis(group, Build.LIGHT)
         }
         val tire = when (tier) {
             Tier.CLUB -> tires.first()
@@ -569,22 +595,24 @@ object Racing {
         val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
         val hp = block.hpGoal * frac
         val built = assess(
-            Spec(hp, hp * 5252.0 / 3600.0, cc, body, if (tier == Tier.INTERNATIONAL) 2 else 0, box, axle, tire, body.slots, body.drive, body.place),
+            Spec(hp, hp * 5252.0 / 3600.0, cc, body, if (tier == Tier.INTERNATIONAL) 2 else 0, box, axle, tire, body.slots, driveFor(body, body.place), body.place),
+            lengthOf(state.raceLength),
         )
         return Ghost(body.name, built.pace, body.name)
     }
 
     data class Rung(val title: String, val pace: Double)
 
-    fun ladderRungs(): List<Rung> = Block.entries.flatMapIndexed { index, block ->
-        val body = groupChassis(index, Build.MEDIUM)
+    fun ladderRungs(length: Length = Length.QUARTER): List<Rung> = Block.entries.flatMapIndexed { index, block ->
         listOf(0.70 to "club", 1.12 to "national").map { (frac, name) ->
+            val body = groupChassis(index, if (frac < 1.0) Build.MEDIUM else Build.LIGHT)
             val cc = com.revline.idle.model.EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
             val hp = block.hpGoal * frac
             val tire = if (frac < 1.0) tires.first { it.id == "radial" } else tires.first { it.id == "race" }
             val box = if (frac < 1.0) gearboxes.first { it.id == "four" } else gearboxes.first { it.id == "close" }
             val pace = assess(
-                Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axles.first { it.id == "lsd" }, tire, body.slots, body.drive, body.place),
+                Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axles.first { it.id == "lsd" }, tire, body.slots, driveFor(body, body.place), body.place),
+                length,
             ).pace
             Rung("${block.title} $name", pace)
         }
@@ -605,7 +633,8 @@ object Racing {
         val pool = chassis.filter { it.minPrestige <= state.prestiges && fits(it, cc) }
         val body = (listOf(mule) + pool).random(rng)
         val pace = assess(
-            Spec(hp, hp * 5252.0 / 3600.0, cc, body, rng.nextInt(0, 3), box, axle, tire, body.slots, body.drive, body.place),
+            Spec(hp, hp * 5252.0 / 3600.0, cc, body, rng.nextInt(0, 3), box, axle, tire, body.slots, driveFor(body, body.place), body.place),
+            lengthOf(state.raceLength),
         ).pace
         val label = "${body.name}, ${box.name.lowercase(Locale.US)}, ${tire.name.lowercase(Locale.US)}, ${hp.toInt()} hp"
         return Rival(label, pace)

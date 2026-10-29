@@ -47,8 +47,9 @@ object RaceDrive {
         val box = body.spec.gearbox
         val axle = body.spec.axle
         var eff = box.efficiency * axle.efficiency
-        if (body.spec.drive == Racing.Drive.AWD) eff *= 0.94
-        if (body.spec.drive != body.spec.chassis.drive) eff *= 0.97
+        val native = Racing.driveFor(body.spec.chassis, body.spec.place)
+        if (body.spec.drive == Racing.Drive.AWD && native != Racing.Drive.AWD) eff *= 0.94
+        if (body.spec.drive != native) eff *= 0.97
         if (body.spec.place !in body.spec.chassis.places) eff *= 0.98
         val balance = when (body.spec.place) {
             Racing.Place.FRONT -> 0.96

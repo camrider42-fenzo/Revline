@@ -76,7 +76,7 @@ fun RaceScreen(
         }
         Text("DISTANCE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
-            "An eighth is the launch. A quarter is the gears. A half mile is the top end.",
+            "An eighth is the launch. A quarter is the gears. A half mile is the top end. The pace number follows that distance.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
@@ -84,7 +84,7 @@ fun RaceScreen(
         ChipRow(Racing.Length.entries.map { it.id to it.title }, state.raceLength, onLength)
         Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
-            "Three fields in this engine's class. You drive the quarter. The throttle stays put. The clutch springs back.",
+            "Club is a heavy car. National is a medium one. International is a light car with a milder engine. You drive the distance above.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
@@ -95,7 +95,7 @@ fun RaceScreen(
             }
         }
         Text("LADDER", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
-        val rungs = Racing.ladderRungs()
+        val rungs = Racing.ladderRungs(Racing.lengthOf(state.raceLength))
         val rung = rungs[state.raceLadder.coerceIn(0, rungs.lastIndex)]
         Text(
             "Rung ${state.raceLadder + 1}/${rungs.size}: ${rung.title}, pace ${rung.pace.toInt()}. The field does not care what you drive.",
@@ -141,9 +141,11 @@ fun RaceScreen(
                 }
                 val places = item.places.joinToString("/") { it.name.lowercase(Locale.US) }
                 val bay = if (item.maxCc < 800) "${item.maxCc.toInt()} cc" else String.format(Locale.US, "%.1f L", item.maxCc / 1000.0)
+                val look = Racing.forecast(state, item)
+                val outlook = if (look.fits) "dyno ${look.wheelHp.toInt()}  pace ${look.pace.toInt()}" else "this engine will not fit"
                 ChassisRow(
                     "${item.build.name.lowercase(Locale.US)}  ${item.name}",
-                    "${item.kg.toInt()} kg  $places  bay $bay  ${item.slots} ducts  ${item.source}",
+                    "${item.kg.toInt()} kg  $places  bay $bay  ${item.slots} ducts  $outlook  ${item.source}",
                     state.chassis == item.id,
                     open,
                     label,
@@ -169,7 +171,7 @@ fun RaceScreen(
         )
         Text("FINAL DRIVE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         Text(
-            "Short leaves harder and runs out of rpm. Tall is lazy off the line and carries the top. The pace number stays put. The strip changes.",
+            "Short leaves harder and runs out of rpm. Tall is lazy off the line and carries the top. The pace number does not see the gear. The strip does.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
@@ -189,24 +191,28 @@ fun RaceScreen(
             val tire = Racing.tires.first { it.id == id }
             if (tire.study != null && tire.study !in state.raceStudies) onStudy(tire.study) else onPart("tire", id)
         }
-        Text("DRIVE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        ChipRow(Racing.Drive.entries.map { it.name to it.name }, car.spec.drive.name) { onPart("drive", it) }
-        Text("ENGINE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text("LAYOUT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         if (body.places.size == 1) {
             Text(
-                "The engine sits in the ${body.places.first().name.lowercase(Locale.US)}. This car was not built the other ways.",
+                "${body.places.first().name.lowercase(Locale.US)} engine, ${car.spec.drive.name}. This car was not built the other ways.",
                 color = White,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
             )
         } else {
             Text(
-                "Only the places this car used.",
+                "Front is the road car, and it pulls the front wheels. Mid is the Turbo, and it drives the rears.",
                 color = White,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
             )
-            ChipRow(body.places.map { it.name to it.name.lowercase(Locale.US) }, car.spec.place.name) { onPart("place", it) }
+            ChipRow(
+                body.places.map { spot ->
+                    val drive = Racing.driveFor(body, spot)
+                    spot.name to "${spot.name.lowercase(Locale.US)} ${drive.name}"
+                },
+                car.spec.place.name,
+            ) { onPart("place", it) }
         }
         Text("DUCTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

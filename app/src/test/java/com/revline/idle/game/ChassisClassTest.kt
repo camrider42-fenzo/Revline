@@ -27,6 +27,7 @@ class ChassisClassTest {
             val right = rate(heavy, cc, hp)
             assertTrue("$group dyno ${left.wheelHp.toInt()} ${mid.wheelHp.toInt()} ${right.wheelHp.toInt()}", right.wheelHp > mid.wheelHp && mid.wheelHp > left.wheelHp)
             assertTrue("$group pace ${left.pace.toInt()} ${mid.pace.toInt()} ${right.pace.toInt()}", left.pace > mid.pace && mid.pace > right.pace)
+            assertTrue("$group fade ${left.fade} ${right.fade}", left.fade + 0.001 >= right.fade && left.fade < 0.5)
             assertTrue(left.fits && mid.fits && right.fits)
             val bigger = (light.maxCc + heavy.maxCc) / 2.0
             assertFalse(Racing.fits(light, bigger))
@@ -43,11 +44,29 @@ class ChassisClassTest {
         assertEquals(Racing.Place.FRONT, Racing.car(seven).spec.place)
         assertEquals("MID", Racing.fitPart(seven, "place", "REAR").enginePlace)
         val road = GameState(chassis = "r5")
+        assertEquals(Racing.Drive.FWD, Racing.car(road).spec.drive)
         val mid = Racing.fitPart(road, "place", "MID")
         assertEquals("MID", mid.enginePlace)
+        assertEquals("RWD", mid.driveType)
         assertEquals(Racing.Place.MID, Racing.car(mid).spec.place)
+        assertEquals(Racing.Drive.RWD, Racing.car(mid).spec.drive)
         assertEquals("", Racing.fitPart(road, "place", "REAR").enginePlace)
+        assertEquals(road, Racing.fitPart(road, "drive", "AWD"))
         assertTrue(Racing.chassis.single { it.id == "r5" }.places.size >= 2)
+    }
+
+    @Test
+    fun aHalfMileGivesTheLongCarMoreOfItsPaceBack() {
+        val light = Racing.chassis.single { it.id == "seven" }
+        val heavy = Racing.chassis.single { it.id == "etype" }
+        fun ratio(length: Racing.Length): Double {
+            val left = Racing.assess(sheet(light, 1800.0, 200.0), length).pace
+            val right = Racing.assess(sheet(heavy, 1800.0, 200.0), length).pace
+            return right / left
+        }
+        val eighth = ratio(Racing.Length.EIGHTH)
+        val half = ratio(Racing.Length.HALF)
+        assertTrue("eighth $eighth half $half", half > eighth + 0.02)
     }
 
     @Test
@@ -68,14 +87,14 @@ class ChassisClassTest {
         assertTrue("$halfPurse vs $quarterPurse", halfPurse > quarterPurse * 1.4)
     }
 
-    private fun rate(body: Racing.Chassis, cc: Double, hp: Double): Racing.Car {
+    private fun sheet(body: Racing.Chassis, cc: Double, hp: Double): Racing.Spec {
         val box = Racing.gearboxes.first { it.id == "four" }
         val axle = Racing.axles.first()
         val tire = Racing.tires.first()
-        return Racing.assess(
-            Racing.Spec(hp, hp * 5252.0 / 3600.0, cc, body, 0, box, axle, tire, body.slots, body.drive, body.place),
-        )
+        return Racing.Spec(hp, hp * 5252.0 / 3600.0, cc, body, 0, box, axle, tire, body.slots, body.drive, body.place)
     }
+
+    private fun rate(body: Racing.Chassis, cc: Double, hp: Double): Racing.Car = Racing.assess(sheet(body, cc, hp))
 
     private fun sample(meters: Double) = RaceDrive.Setup(
         peakHp = 180.0,
