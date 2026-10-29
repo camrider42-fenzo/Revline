@@ -143,7 +143,7 @@ object Racing {
     )
 
     val gearboxes = listOf(
-        Gearbox("crash", "3-speed crash box", 0.90, 0.72, 28.0, null, 0, 0.0, listOf(2.87, 1.55, 1.00), 0.58),
+        Gearbox("crash", "3-speed crash box", 0.90, 0.72, 28.0, "box_crash", 0, 320.0, listOf(2.87, 1.55, 1.00), 0.58),
         Gearbox("four", "4-speed", 0.91, 0.84, 34.0, null, 0, 0.0, listOf(2.52, 1.74, 1.27, 1.00), 0.36),
         Gearbox("close", "Close-ratio 4-speed", 0.92, 0.91, 32.0, "box_close", 1, 1600.0, listOf(1.92, 1.51, 1.23, 1.00), 0.22),
         Gearbox("dog", "5-speed dog box", 0.93, 0.97, 38.0, "box_dog", 4, 5200.0, listOf(2.64, 1.88, 1.48, 1.22, 1.00), 0.13),
@@ -163,7 +163,19 @@ object Racing {
         Tire("slick", "Slick", 1.26, 1.05, 22.0, "tire_slick", 4, 4600.0),
     )
 
+    data class Final(val id: String, val name: String, val ratio: Double, val study: String?, val price: Double)
+
+    /** The mule starts on the road gear. The other two are a study, then a purchase. */
+    val finals = listOf(
+        Final("short", "Short 4.56", 4.56, "final_short", 640.0),
+        Final("road", "Road 3.73", 3.73, null, 0.0),
+        Final("tall", "Tall 3.07", 3.07, "final_tall", 640.0),
+    )
+
     val studies = listOf(
+        Study("box_crash", "Crash box", "Three gears and a slow shift. The study comes before the box.", 24.0),
+        Study("final_short", "Short final drive", "A 4.56 gear. It leaves harder and runs out of rpm.", 40.0),
+        Study("final_tall", "Tall final drive", "A 3.07 gear. It is lazy off the line and carries the top.", 40.0),
         Study("box_close", "Close-ratio gears", "A tighter set so the engine stays in the power.", 60.0, minPrestige = 1),
         Study("box_dog", "Dog engagement", "No synchros. The shift is a bang, and the box stays in gear.", 900.0, "box_close", 4),
         Study("axle_lsd", "Limited-slip", "Both rear tires take the torque.", 50.0),
@@ -521,26 +533,13 @@ object Racing {
             val spot = runCatching { Place.valueOf(id) }.getOrNull() ?: return state
             if (spot !in chassisById(state.chassis).places) return state
         }
-        val price = partPrice(state, kind, id)
-        val study = partStudy(kind, id)
-        if (study != null && study !in state.raceStudies) return state
-        if (!state.devMode && price > 0.0 && state.money < price) return state
-        val paid = if (state.devMode || price <= 0.0) 0.0 else price
-        val already = when (kind) {
-            "box" -> state.transmission == id
-            "axle" -> state.driveline == id
-            "tire" -> state.tire == id
-            "drive" -> state.driveType == id
-            "place" -> state.enginePlace == id
-            else -> true
-        }
-        if (already) return state
-        val spent = state.copy(money = state.money - paid)
+        if (fitted(state, kind, id)) return state
+        val bought = purchase(state, kind, id) ?: return state
         return when (kind) {
-            "box" -> spent.copy(transmission = id)
-            "axle" -> spent.copy(driveline = id)
-            "tire" -> spent.copy(tire = id)
-            "place" -> spent.copy(enginePlace = id, driveType = driveFor(chassisById(state.chassis), Place.valueOf(id)).name)
+            "box" -> bought.copy(transmission = id)
+            "axle" -> bought.copy(driveline = id)
+            "tire" -> bought.copy(tire = id)
+            "place" -> bought.copy(enginePlace = id, driveType = driveFor(chassisById(state.chassis), Place.valueOf(id)).name)
             else -> state
         }
     }
@@ -551,14 +550,28 @@ object Racing {
     }
 
     fun setFinal(state: GameState, id: String): GameState {
-        if (id != "short" && id != "road" && id != "tall") return state
-        return state.copy(finalDrive = id)
+        if (finals.none { it.id == id }) return state
+        if (state.finalDrive == id) return state
+        val bought = purchase(state, "final", id) ?: return state
+        return bought.copy(finalDrive = id)
     }
 
-    fun finalRatio(id: String): Double = when (id) {
-        "short" -> 4.56
-        "tall" -> 3.07
-        else -> 3.73
+    fun finalRatio(id: String): Double = finals.find { it.id == id }?.ratio ?: 3.73
+
+    /** What the chip should say, and which study a tap still has to buy. */
+    data class Gate(val label: String, val study: String?)
+
+    fun gate(state: GameState, kind: String, id: String, name: String): Gate {
+        val on = fitted(state, kind, id)
+        val study = partStudy(kind, id)
+        if (!on && study != null && study !in state.raceStudies) {
+            val cost = studies.first { it.id == study }.cost.toInt()
+            return Gate("$name · $cost RP", study)
+        }
+        val base = rawPrice(kind, id)
+        val owned = base <= 0.0 || "$kind:$id" in state.raceOwned || on
+        if (!owned) return Gate("$name · ${formatDollars(partPrice(state, kind, id))}", null)
+        return Gate(name, null)
     }
 
     fun setSlots(state: GameState, slots: Int): GameState {
@@ -572,22 +585,49 @@ object Racing {
         return body.price * scale * 1.15.pow((level - 1).coerceAtLeast(0).toDouble())
     }
 
+    private fun rawPrice(kind: String, id: String): Double = when (kind) {
+        "box" -> gearboxes.find { it.id == id }?.price ?: 0.0
+        "axle" -> axles.find { it.id == id }?.price ?: 0.0
+        "tire" -> tires.find { it.id == id }?.price ?: 0.0
+        "final" -> finals.find { it.id == id }?.price ?: 0.0
+        else -> 0.0
+    }
+
     private fun partPrice(state: GameState, kind: String, id: String): Double {
         val scale = Block.forPrestige(state.prestiges).upgradePriceScale(state.prestiges)
-        val base = when (kind) {
-            "box" -> gearboxes.find { it.id == id }?.price ?: 0.0
-            "axle" -> axles.find { it.id == id }?.price ?: 0.0
-            "tire" -> tires.find { it.id == id }?.price ?: 0.0
-            else -> 0.0
-        }
-        return base * scale
+        return rawPrice(kind, id) * scale
     }
 
     private fun partStudy(kind: String, id: String): String? = when (kind) {
         "box" -> gearboxes.find { it.id == id }?.study
         "axle" -> axles.find { it.id == id }?.study
         "tire" -> tires.find { it.id == id }?.study
+        "final" -> finals.find { it.id == id }?.study
         else -> null
+    }
+
+    private fun fitted(state: GameState, kind: String, id: String): Boolean = when (kind) {
+        "box" -> state.transmission == id
+        "axle" -> state.driveline == id
+        "tire" -> state.tire == id
+        "final" -> state.finalDrive == id
+        "drive" -> state.driveType == id
+        "place" -> state.enginePlace == id
+        else -> false
+    }
+
+    /** Study first, then money once. A part you already bought is free to put back on. */
+    private fun purchase(state: GameState, kind: String, id: String): GameState? {
+        val study = partStudy(kind, id)
+        if (study != null && study !in state.raceStudies) return null
+        val base = rawPrice(kind, id)
+        val key = "$kind:$id"
+        val owned = base <= 0.0 || key in state.raceOwned
+        val price = if (owned) 0.0 else partPrice(state, kind, id)
+        if (!state.devMode && price > 0.0 && state.money < price) return null
+        val paid = if (state.devMode || price <= 0.0) 0.0 else price
+        val ownedNow = if (base > 0.0) state.raceOwned + key else state.raceOwned
+        return state.copy(money = state.money - paid, raceOwned = ownedNow)
     }
 
     private data class Ghost(val title: String, val pace: Double, val label: String, val id: String)

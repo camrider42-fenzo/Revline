@@ -172,9 +172,15 @@ fun RaceScreen(
         }
 
         Text("GEARBOX", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        ChipRow(Racing.gearboxes.map { it.id to it.name }, state.transmission) { id ->
-            val box = Racing.gearboxes.first { it.id == id }
-            if (box.study != null && box.study !in state.raceStudies) onStudy(box.study) else onPart("box", id)
+        Text(
+            "The mule starts on the 4-speed. Another box is a study, then the price.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        ChipRow(Racing.gearboxes.map { it.id to Racing.gate(state, "box", it.id, it.name).label }, state.transmission) { id ->
+            val gate = Racing.gate(state, "box", id, Racing.gearboxes.first { it.id == id }.name)
+            if (gate.study != null) onStudy(gate.study) else onPart("box", id)
         }
         val fitted = Racing.gearboxes.first { it.id == state.transmission }
         val ratioText = fitted.ratios.joinToString(" / ") { String.format(Locale.US, "%.2f", it) }
@@ -187,16 +193,19 @@ fun RaceScreen(
         )
         Text("FINAL DRIVE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         Text(
-            "Short leaves harder and runs out of rpm. Tall is lazy off the line and carries the top. The pace number does not see the gear. The strip does.",
+            "Short leaves harder and runs out of rpm. Tall is lazy off the line and carries the top. The road gear is already in the mule. The other two are a study, then the price. The pace number does not see the gear. The strip does.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
         ChipRow(
-            listOf("short" to "Short 4.56", "road" to "Road 3.73", "tall" to "Tall 3.07"),
+            Racing.finals.map { it.id to Racing.gate(state, "final", it.id, it.name).label },
             state.finalDrive,
-            onFinal,
-        )
+        ) { id ->
+            val gear = Racing.finals.first { it.id == id }
+            val gate = Racing.gate(state, "final", id, gear.name)
+            if (gate.study != null) onStudy(gate.study) else onFinal(id)
+        }
         val gearKey = listOf(
             state.finalDrive,
             state.raceLength,
@@ -236,9 +245,16 @@ fun RaceScreen(
             if (axle.study != null && axle.study !in state.raceStudies) onStudy(axle.study) else onPart("axle", id)
         }
         Text("TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        ChipRow(Racing.tires.map { it.id to it.name }, state.tire) { id ->
+        Text(
+            "Bias-ply is what it rolled in on. A better tire is a study, then the price.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        ChipRow(Racing.tires.map { it.id to Racing.gate(state, "tire", it.id, it.name).label }, state.tire) { id ->
             val tire = Racing.tires.first { it.id == id }
-            if (tire.study != null && tire.study !in state.raceStudies) onStudy(tire.study) else onPart("tire", id)
+            val gate = Racing.gate(state, "tire", id, tire.name)
+            if (gate.study != null) onStudy(gate.study) else onPart("tire", id)
         }
         Text("LAYOUT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         if (body.places.size == 1) {

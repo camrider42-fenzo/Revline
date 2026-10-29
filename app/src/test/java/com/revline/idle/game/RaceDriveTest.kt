@@ -126,12 +126,45 @@ class RaceDriveTest {
 
     @Test
     fun theFinalDriveChangesTheStripAndNotThePaceCard() {
-        val road = GameState()
-        val short = Racing.setFinal(road, "short")
-        assertEquals(Racing.car(road).pace, Racing.car(short).pace, 0.001)
-        assertEquals(3.73, RaceDrive.setup(road).finalDrive, 0.001)
+        val fresh = GameState(money = 20_000.0, researchPoints = 500.0)
+        assertEquals("road", Racing.setFinal(fresh, "short").finalDrive)
+        val studied = Racing.study(fresh, "final_short")
+        assertTrue(studied.researchPoints < fresh.researchPoints)
+        val short = Racing.setFinal(studied, "short")
+        assertEquals("short", short.finalDrive)
+        assertTrue(short.money < studied.money)
+        assertEquals(Racing.car(studied).pace, Racing.car(short).pace, 0.001)
+        assertEquals(3.73, RaceDrive.setup(studied).finalDrive, 0.001)
         assertEquals(4.56, RaceDrive.setup(short).finalDrive, 0.001)
-        assertTrue(RaceDrive.setup(road).ratios.size >= 3)
+        val back = Racing.setFinal(short, "road")
+        assertEquals("road", back.finalDrive)
+        assertEquals(short.money, back.money, 0.01)
+        val again = Racing.setFinal(back, "short")
+        assertEquals("short", again.finalDrive)
+        assertEquals(back.money, again.money, 0.01)
+    }
+
+    @Test
+    fun aGearboxAndATireTakeResearchThenMoneyOnce() {
+        val fresh = GameState(money = 50_000.0, researchPoints = 5_000.0)
+        assertEquals("four", Racing.fitPart(fresh, "box", "crash").transmission)
+        assertEquals("bias", Racing.fitPart(fresh, "tire", "radial").tire)
+        val studied = Racing.study(Racing.study(fresh, "box_crash"), "tire_radial")
+        assertEquals("four", Racing.fitPart(studied.copy(money = 0.0), "box", "crash").transmission)
+        val boxed = Racing.fitPart(studied, "box", "crash")
+        assertEquals("crash", boxed.transmission)
+        assertTrue(boxed.money < studied.money)
+        val four = Racing.fitPart(boxed, "box", "four")
+        assertEquals("four", four.transmission)
+        assertEquals(boxed.money, four.money, 0.01)
+        val refit = Racing.fitPart(four, "box", "crash")
+        assertEquals("crash", refit.transmission)
+        assertEquals(four.money, refit.money, 0.01)
+        val shod = Racing.fitPart(studied, "tire", "radial")
+        assertEquals("radial", shod.tire)
+        assertTrue(shod.money < studied.money)
+        val bare = Racing.fitPart(shod, "tire", "bias")
+        assertEquals(shod.money, Racing.fitPart(bare, "tire", "radial").money, 0.01)
     }
 
     @Test

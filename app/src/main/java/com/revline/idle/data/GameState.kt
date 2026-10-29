@@ -28,6 +28,8 @@ data class GameState(
     val enginePlace: String = "",
     val coolingSlots: Int = 1,
     val raceStudies: Set<String> = emptySet(),
+    /** Bought after the study: "box:close", "final:short", "tire:radial". The starter parts are not listed. */
+    val raceOwned: Set<String> = emptySet(),
     val raceLadder: Int = 0,
     /** Strip length: eighth, quarter, or half. */
     val raceLength: String = "quarter",
