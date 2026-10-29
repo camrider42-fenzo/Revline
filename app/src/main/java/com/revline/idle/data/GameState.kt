@@ -29,6 +29,8 @@ data class GameState(
     val coolingSlots: Int = 1,
     val raceStudies: Set<String> = emptySet(),
     val raceLadder: Int = 0,
+    /** Strip length: eighth, quarter, or half. */
+    val raceLength: String = "quarter",
     val upgrades: Map<String, Int> = emptyMap(),
     val researched: Set<String> = emptySet(),
     val perks: Map<String, Int> = emptyMap(),

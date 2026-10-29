@@ -49,6 +49,7 @@ fun RaceMeet(
     yourPace: Double,
     onFinished: (Boolean, Double, Double) -> Unit,
 ) {
+    val finish = setup.distanceM
     val hands = remember { Hands(RaceDrive.fresh(setup)) }
     val rivalTime = remember(setup, yourPace, field.pace) {
         RaceDrive.rivalSeconds(setup, yourPace, field.pace)
@@ -69,7 +70,8 @@ fun RaceMeet(
         var last = 0L
         var lights = 1.35f
         var jumped = false
-        while (isActive && !settled && hands.run.distance < RaceDrive.FINISH_M && hands.run.time < 96.0) {
+        val limit = (96.0 * finish / RaceDrive.FINISH_M).coerceIn(48.0, 170.0)
+        while (isActive && !settled && hands.run.distance < finish && hands.run.time < limit) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0.0 else ((now - last) / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 last = now
@@ -80,19 +82,19 @@ fun RaceMeet(
                 if (lights > 0.0) {
                     lights -= dt.toFloat()
                     if (hands.throttle > 0.18) jumped = true
-                    frame = snap(hands.run, lights, jumped, rivalTime, done = false, won = false)
+                    frame = snap(hands.run, lights, jumped, rivalTime, finish, done = false, won = false)
                     return@withFrameNanos
                 }
                 val asked = if (jumped && hands.run.time < 0.7) 1.0 else hands.throttle
                 val shift = hands.shift && hands.clutch > 0.62
                 hands.shift = false
                 RaceDrive.step(setup, hands.run, asked, shift, dt, hands.clutch)
-                frame = snap(hands.run, 0f, jumped, rivalTime, done = false, won = false)
+                frame = snap(hands.run, 0f, jumped, rivalTime, finish, done = false, won = false)
             }
         }
         if (!settled && isActive) {
-            val won = hands.run.distance >= RaceDrive.FINISH_M && hands.run.time <= rivalTime
-            frame = snap(hands.run, 0f, jumped, rivalTime, done = true, won = won)
+            val won = hands.run.distance >= finish && hands.run.time <= rivalTime
+            frame = snap(hands.run, 0f, jumped, rivalTime, finish, done = true, won = won)
             delay(900)
             settle(won)
         }
@@ -121,7 +123,8 @@ fun RaceMeet(
         else -> "Win pays ${formatDollars(field.purse)}."
     }
     Column(Modifier.fillMaxSize().background(Black).padding(12.dp)) {
-        Text(field.title.uppercase(Locale.US), color = White, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
+        val length = Racing.Length.entries.firstOrNull { kotlin.math.abs(it.meters - finish) < 1.0 }?.title ?: "strip"
+        Text("${field.title.uppercase(Locale.US)}  $length", color = White, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
         Text(field.detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(purse, color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(banner, color = bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
@@ -179,8 +182,8 @@ fun RaceMeet(
             glowLine(White, Offset(left, y), Offset(left + width, y), stroke, 0.4f)
             glowLine(Olive, Offset(left, y - 14f), Offset(left, y + 8f), stroke, 0.7f)
             glowLine(Olive, Offset(left + width, y - 18f), Offset(left + width, y + 8f), stroke, 0.9f)
-            val youX = left + (frame.distance / RaceDrive.FINISH_M).toFloat().coerceIn(0f, 1f) * width
-            val themX = left + (frame.rival / RaceDrive.FINISH_M.toFloat()).coerceIn(0f, 1f) * width
+            val youX = left + (frame.distance / finish).toFloat().coerceIn(0f, 1f) * width
+            val themX = left + (frame.rival / finish.toFloat()).coerceIn(0f, 1f) * width
             carMark(Lime, youX, y, stroke)
             carMark(Red, themX, y - 18f, stroke)
         }
@@ -246,6 +249,7 @@ private fun snap(
     lights: Float,
     jumped: Boolean,
     rivalTime: Double,
+    finish: Double,
     done: Boolean,
     won: Boolean,
 ): Frame = Frame(
@@ -259,7 +263,7 @@ private fun snap(
     spinning = run.spinning,
     limiter = run.limiter,
     jumped = jumped,
-    rival = (RaceDrive.FINISH_M * (run.time / rivalTime)).toFloat().coerceAtMost(RaceDrive.FINISH_M.toFloat()),
+    rival = (finish * (run.time / rivalTime)).toFloat().coerceAtMost(finish.toFloat()),
     done = done,
     won = won,
 )

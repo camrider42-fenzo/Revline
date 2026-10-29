@@ -137,6 +137,7 @@ fun RevlineApp(vm: GameViewModel) {
                             vm::fitRace,
                             vm::setCooling,
                             vm::setFinal,
+                            vm::setLength,
                             vm::openQuick,
                             vm::openLadder,
                             vm::openStake,

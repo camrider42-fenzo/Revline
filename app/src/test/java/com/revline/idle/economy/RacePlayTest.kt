@@ -116,7 +116,7 @@ class RacePlayTest {
         assertTrue(lines.joinToString("\n"), profitClub.contains("Won"))
         assertTrue(lines.joinToString("\n"), profitIntl.contains("Lost"))
         assertTrue(lines.joinToString("\n"), cleared in 8..14)
-        assertTrue(lines.joinToString("\n"), wins in 48..72)
+        assertTrue(lines.joinToString("\n"), wins in 60..78)
         assertTrue(lines.joinToString("\n"), muleWins <= 20)
         assertTrue(lines.joinToString("\n"), wins > muleWins + 20)
     }

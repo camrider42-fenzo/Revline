@@ -33,6 +33,7 @@ fun RaceScreen(
     onPart: (String, String) -> Unit,
     onSlots: (Int) -> Unit,
     onFinal: (String) -> Unit,
+    onLength: (String) -> Unit,
     onQuick: (Racing.Tier) -> Unit,
     onLadder: () -> Unit,
     onStake: () -> Unit,
@@ -51,15 +52,16 @@ fun RaceScreen(
     ) {
         Text("RACE", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
         Text(
-            "${body.name}  ${car.massKg.toInt()} kg  ${car.wheelHp.toInt()} hp at the wheels  pace ${car.pace.toInt()}",
-            color = Lime,
+            "${body.name}  ${car.massKg.toInt()} kg  dyno ${car.wheelHp.toInt()} hp  pace ${car.pace.toInt()}",
+            color = if (car.fits) Lime else Amber,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp),
         )
         Text(
-            "${car.spec.place.name.lowercase(Locale.US)} ${car.spec.drive.name}  ducts $slots/$slotMax  fade ${(car.fade * 100).toInt()}%",
-            color = if (car.fade > 0.2) Amber else White,
+            "${car.spec.place.name.lowercase(Locale.US)} ${car.spec.drive.name}  ducts $slots/$slotMax  fade ${(car.fade * 100).toInt()}%" +
+                if (car.fits) "" else "  ENGINE DOES NOT FIT",
+            color = if (!car.fits || car.fade > 0.2) Amber else White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
@@ -72,6 +74,14 @@ fun RaceScreen(
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
+        Text("DISTANCE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+        Text(
+            "An eighth is the launch. A quarter is the gears. A half mile is the top end.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        ChipRow(Racing.Length.entries.map { it.id to it.title }, state.raceLength, onLength)
         Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
             "Three fields in this engine's class. You drive the quarter. The throttle stays put. The clutch springs back.",
@@ -106,33 +116,40 @@ fun RaceScreen(
 
         Text("CHASSIS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp))
         Text(
-            "Published weights. Lightening stops at a period race trim.",
+            "A light car is quickest on the strip and worst on the dyno. The bay is small and the radiator is small. A medium car is the middle, and a few of them sat the engine in more than one place. A heavy car takes a much larger engine, reads higher on the dyno, and is slower on the track.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
-        ChassisRow("Shop mule", "640 kg  front RWD  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
-        Racing.chassis.forEach { item ->
-            val study = "chassis_${item.id}"
-            val owned = state.chassisLevel[item.id] ?: 0
-            val open = item.minPrestige <= state.prestiges
-            val known = study in state.raceStudies
-            val label = when {
-                !open -> "Needs a later engine"
-                !known -> "Study · ${item.studyCost.toInt()} RP"
-                state.chassis == item.id && owned < 3 -> "Lighten to ${owned + 1}/3 · ${formatDollars(Racing.chassisPrice(state, item, owned + 1))}"
-                state.chassis == item.id -> "Fitted ${owned}/3"
-                owned >= 1 -> "Fit it"
-                else -> "Buy · ${formatDollars(Racing.chassisPrice(state, item, 1))}"
-            }
-            ChassisRow(
-                item.name,
-                "${item.kg.toInt()} kg  ${item.place.name.lowercase(Locale.US)} ${item.drive.name}  ${item.slots} ducts  ${item.source}",
-                state.chassis == item.id,
-                open,
-                label,
-            ) {
-                if (!known) onStudy(study) else onChassis(item.id)
+        ChassisRow("Shop mule", "640 kg  front  fits the engine you have  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
+        com.revline.idle.model.Block.entries.forEach { block ->
+            val group = Racing.chassis.filter { it.group == block.ordinal }
+            if (group.isEmpty()) return@forEach
+            Text(block.title.uppercase(Locale.US), color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+            group.forEach { item ->
+                val study = "chassis_${item.id}"
+                val owned = state.chassisLevel[item.id] ?: 0
+                val open = item.minPrestige <= state.prestiges
+                val known = study in state.raceStudies
+                val label = when {
+                    !open -> "Needs a later engine"
+                    !known -> "Study · ${item.studyCost.toInt()} RP"
+                    state.chassis == item.id && owned < 3 -> "Lighten to ${owned + 1}/3 · ${formatDollars(Racing.chassisPrice(state, item, owned + 1))}"
+                    state.chassis == item.id -> "Fitted ${owned}/3"
+                    owned >= 1 -> "Fit it"
+                    else -> "Buy · ${formatDollars(Racing.chassisPrice(state, item, 1))}"
+                }
+                val places = item.places.joinToString("/") { it.name.lowercase(Locale.US) }
+                val bay = if (item.maxCc < 800) "${item.maxCc.toInt()} cc" else String.format(Locale.US, "%.1f L", item.maxCc / 1000.0)
+                ChassisRow(
+                    "${item.build.name.lowercase(Locale.US)}  ${item.name}",
+                    "${item.kg.toInt()} kg  $places  bay $bay  ${item.slots} ducts  ${item.source}",
+                    state.chassis == item.id,
+                    open,
+                    label,
+                ) {
+                    if (!known) onStudy(study) else onChassis(item.id)
+                }
             }
         }
 
@@ -175,7 +192,22 @@ fun RaceScreen(
         Text("DRIVE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         ChipRow(Racing.Drive.entries.map { it.name to it.name }, car.spec.drive.name) { onPart("drive", it) }
         Text("ENGINE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        ChipRow(Racing.Place.entries.map { it.name to it.name }, car.spec.place.name) { onPart("place", it) }
+        if (body.places.size == 1) {
+            Text(
+                "The engine sits in the ${body.places.first().name.lowercase(Locale.US)}. This car was not built the other ways.",
+                color = White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+            )
+        } else {
+            Text(
+                "Only the places this car used.",
+                color = White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+            )
+            ChipRow(body.places.map { it.name to it.name.lowercase(Locale.US) }, car.spec.place.name) { onPart("place", it) }
+        }
         Text("DUCTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LineButton("Blank one", slots > 0, { onSlots(slots - 1) })

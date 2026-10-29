@@ -198,6 +198,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun fitRace(kind: String, id: String) = race { Racing.fitPart(it, kind, id) to null }
     fun setCooling(slots: Int) = race { Racing.setSlots(it, slots) to null }
     fun setFinal(id: String) = race { Racing.setFinal(it, id) to null }
+    fun setLength(id: String) = race { Racing.setLength(it, id) to null }
 
     fun openQuick(tier: Racing.Tier) = openStrip(ladder = false) { Racing.fieldForQuick(it, tier) to it }
 

@@ -26,6 +26,7 @@ object RaceDrive {
         val gripN: Double,
         val drag: Double,
         val shiftSeconds: Double,
+        val distanceM: Double = FINISH_M,
     )
 
     data class Run(
@@ -48,7 +49,7 @@ object RaceDrive {
         var eff = box.efficiency * axle.efficiency
         if (body.spec.drive == Racing.Drive.AWD) eff *= 0.94
         if (body.spec.drive != body.spec.chassis.drive) eff *= 0.97
-        if (body.spec.place != body.spec.chassis.place) eff *= 0.98
+        if (body.spec.place !in body.spec.chassis.places) eff *= 0.98
         val balance = when (body.spec.place) {
             Racing.Place.FRONT -> 0.96
             Racing.Place.MID -> 1.08
@@ -72,6 +73,7 @@ object RaceDrive {
             gripN = grip,
             drag = drag,
             shiftSeconds = box.shift,
+            distanceM = Racing.lengthOf(state.raceLength).meters,
         )
     }
 
@@ -83,7 +85,7 @@ object RaceDrive {
      * omit it leave the clutch engaged, which is how the card driver shifts.
      */
     fun step(setup: Setup, run: Run, throttle: Double, shift: Boolean, dt: Double, clutch: Double = 0.0) {
-        if (run.distance >= FINISH_M) return
+        if (run.distance >= setup.distanceM) return
         val stepDt = dt.coerceIn(0.0, 0.05)
         val th = throttle.coerceIn(0.0, 1.0)
         val depression = clutch.coerceIn(0.0, 1.0)
@@ -184,7 +186,8 @@ object RaceDrive {
     fun driveWell(setup: Setup): Run {
         val run = fresh(setup)
         var guard = 0
-        while (run.distance < FINISH_M && run.time < 90.0 && guard < 12_000) {
+        val cap = (90.0 * setup.distanceM / FINISH_M).coerceIn(40.0, 160.0)
+        while (run.distance < setup.distanceM && run.time < cap && guard < 20_000) {
             guard++
             val launch = if (run.gear == 1 && run.speed < 14.0 && !run.hooked) launchThrottle(setup) else 1.0
             val up = run.shiftLeft <= 0.0 && run.gear < setup.ratios.size && run.rpm > setup.redline * 0.91 && run.hooked
@@ -200,9 +203,10 @@ object RaceDrive {
      */
     fun rivalSeconds(setup: Setup, yourPace: Double, theirPace: Double): Double {
         val clean = driveWell(setup)
-        val perfect = if (clean.distance >= FINISH_M - 1.0) clean.time else 90.0
+        val cap = (90.0 * setup.distanceM / FINISH_M).coerceIn(40.0, 160.0)
+        val perfect = if (clean.distance >= setup.distanceM - 1.0) clean.time else cap
         val ratio = (yourPace / theirPace.coerceAtLeast(1.0)).coerceIn(0.45, 2.2)
-        return (perfect * ratio).coerceIn(6.0, 90.0)
+        return (perfect * ratio).coerceIn(6.0, cap)
     }
 
     fun launchThrottle(setup: Setup): Double {
