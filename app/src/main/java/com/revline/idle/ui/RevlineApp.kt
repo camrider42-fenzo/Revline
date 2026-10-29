@@ -112,7 +112,7 @@ fun RevlineApp(vm: GameViewModel) {
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null,
-                                    ) { tab.value = item }
+                                    ) { if (ui.strip == null) tab.value = item }
                                     .padding(vertical = 14.dp),
                             )
                         }
@@ -121,22 +121,28 @@ fun RevlineApp(vm: GameViewModel) {
             },
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).background(Black)) {
-                when (tab.value) {
-                    Tab.BENCH -> BenchScreen(ui, vm::startDyno, vm::setThrottle)
-                    Tab.PARTS -> PartsScreen(ui, vm::buy, vm::remove, vm::fuel, vm::setAimGoal)
-                    Tab.TUNE -> TuneScreen(ui, vm::nudgeTune)
-                    Tab.STUDY -> StudyScreen(ui, vm::research)
-                    Tab.RACE -> RaceScreen(
-                        ui,
-                        vm::studyRace,
-                        vm::fitChassis,
-                        vm::fitRace,
-                        vm::setCooling,
-                        vm::quickRace,
-                        vm::ladderRace,
-                        vm::stakeRace,
-                    )
-                    Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
+                val strip = ui.strip
+                if (strip != null) {
+                    RaceMeet(strip.setup, strip.field, strip.yourPace, vm::finishMeet)
+                } else {
+                    when (tab.value) {
+                        Tab.BENCH -> BenchScreen(ui, vm::startDyno, vm::setThrottle)
+                        Tab.PARTS -> PartsScreen(ui, vm::buy, vm::remove, vm::fuel, vm::setAimGoal)
+                        Tab.TUNE -> TuneScreen(ui, vm::nudgeTune)
+                        Tab.STUDY -> StudyScreen(ui, vm::research)
+                        Tab.RACE -> RaceScreen(
+                            ui,
+                            vm::studyRace,
+                            vm::fitChassis,
+                            vm::fitRace,
+                            vm::setCooling,
+                            vm::setFinal,
+                            vm::openQuick,
+                            vm::openLadder,
+                            vm::openStake,
+                        )
+                        Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
+                    }
                 }
             }
         }

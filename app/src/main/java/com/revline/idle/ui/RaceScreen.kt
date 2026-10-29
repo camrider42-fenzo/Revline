@@ -32,6 +32,7 @@ fun RaceScreen(
     onChassis: (String) -> Unit,
     onPart: (String, String) -> Unit,
     onSlots: (Int) -> Unit,
+    onFinal: (String) -> Unit,
     onQuick: (Racing.Tier) -> Unit,
     onLadder: () -> Unit,
     onStake: () -> Unit,
@@ -73,7 +74,7 @@ fun RaceScreen(
         }
         Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
-            "Three fields in this engine's class. Your car is what you brought.",
+            "Three fields in this engine's class. You drive the quarter. Feather the launch, then shift.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
@@ -92,7 +93,7 @@ fun RaceScreen(
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
-        LineButton("Run the rung", true, onLadder, Modifier.padding(top = 6.dp))
+        LineButton("Drive the rung", true, onLadder, Modifier.padding(top = 6.dp))
         Text("STAKE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         val stake = Racing.stakeCost(state.prestiges)
         Text(
@@ -101,7 +102,7 @@ fun RaceScreen(
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
-        LineButton("Put up the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
+        LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
 
         Text("CHASSIS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp))
         Text(
@@ -140,6 +141,27 @@ fun RaceScreen(
             val box = Racing.gearboxes.first { it.id == id }
             if (box.study != null && box.study !in state.raceStudies) onStudy(box.study) else onPart("box", id)
         }
+        val fitted = Racing.gearboxes.first { it.id == state.transmission }
+        val ratioText = fitted.ratios.joinToString(" / ") { String.format(Locale.US, "%.2f", it) }
+        Text(
+            "Ratios $ratioText. A shift takes ${String.format(Locale.US, "%.2f", fitted.shift)}s.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Text("FINAL DRIVE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "Short leaves harder and runs out of rpm. Tall is lazy off the line and carries the top. The pace number stays put. The strip changes.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        ChipRow(
+            listOf("short" to "Short 4.56", "road" to "Road 3.73", "tall" to "Tall 3.07"),
+            state.finalDrive,
+            onFinal,
+        )
         Text("DRIVELINE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         ChipRow(Racing.axles.map { it.id to it.name }, state.driveline) { id ->
             val axle = Racing.axles.first { it.id == id }

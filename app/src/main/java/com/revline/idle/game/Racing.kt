@@ -44,6 +44,10 @@ object Racing {
         val study: String?,
         val minPrestige: Int,
         val price: Double,
+        /** Gear ratios, first to top. A close box stays in the power. A crash box has gaps. */
+        val ratios: List<Double>,
+        /** Seconds with the clutch in. A dog box is a bang. A crash box is a pause. */
+        val shift: Double,
     )
 
     data class Axle(
@@ -94,10 +98,10 @@ object Racing {
     )
 
     val gearboxes = listOf(
-        Gearbox("crash", "3-speed crash box", 0.90, 0.72, 28.0, null, 0, 0.0),
-        Gearbox("four", "4-speed", 0.91, 0.84, 34.0, null, 0, 0.0),
-        Gearbox("close", "Close-ratio 4-speed", 0.92, 0.91, 32.0, "box_close", 1, 1600.0),
-        Gearbox("dog", "5-speed dog box", 0.93, 0.97, 38.0, "box_dog", 4, 5200.0),
+        Gearbox("crash", "3-speed crash box", 0.90, 0.72, 28.0, null, 0, 0.0, listOf(2.87, 1.55, 1.00), 0.58),
+        Gearbox("four", "4-speed", 0.91, 0.84, 34.0, null, 0, 0.0, listOf(2.52, 1.74, 1.27, 1.00), 0.36),
+        Gearbox("close", "Close-ratio 4-speed", 0.92, 0.91, 32.0, "box_close", 1, 1600.0, listOf(1.92, 1.51, 1.23, 1.00), 0.22),
+        Gearbox("dog", "5-speed dog box", 0.93, 0.97, 38.0, "box_dog", 4, 5200.0, listOf(2.64, 1.88, 1.48, 1.22, 1.00), 0.13),
     )
 
     val axles = listOf(
@@ -264,6 +268,71 @@ object Racing {
         return next to "Ladder ${index + 1}/${rungs.size}  ${rung.title}. Your pace ${you.pace.toInt()}. $verdict"
     }
 
+    data class Field(val title: String, val detail: String, val pace: Double, val purse: Double, val stake: Double)
+
+    fun fieldForQuick(state: GameState, tier: Tier): Field {
+        val ghost = classGhost(state, tier)
+        val seconds = when (tier) {
+            Tier.CLUB -> 50.0
+            Tier.NATIONAL -> 160.0
+            Tier.INTERNATIONAL -> 520.0
+        }
+        val purse = (Logic.sheet(state).incomePerSec * seconds).coerceAtLeast(when (tier) {
+            Tier.CLUB -> 4.0
+            Tier.NATIONAL -> 20.0
+            Tier.INTERNATIONAL -> 80.0
+        })
+        return Field(tier.name.lowercase(Locale.US), ghost.label, ghost.pace, purse, 0.0)
+    }
+
+    fun fieldForLadder(state: GameState): Field {
+        val rungs = ladderRungs()
+        val index = state.raceLadder.coerceIn(0, rungs.lastIndex)
+        val rung = rungs[index]
+        return Field("ladder ${index + 1}", rung.title, rung.pace, 30.0 * 2.6.pow(index.toDouble()), 0.0)
+    }
+
+    /** Takes the stake up front. Null when the till is short. */
+    fun openStake(state: GameState, seed: Long): Pair<GameState, Field>? {
+        val cost = stakeCost(state.prestiges)
+        if (!state.devMode && state.money < cost) return null
+        val rival = rival(state, seed)
+        val paid = if (state.devMode) 0.0 else cost
+        val next = state.copy(money = state.money - paid)
+        val purse = if (state.devMode) 0.0 else cost * 2.0
+        return next to Field("stake", rival.label, rival.pace, purse, cost)
+    }
+
+    fun award(state: GameState, field: Field, won: Boolean, ladder: Boolean): GameState {
+        if (!won) return state
+        val money = state.money + field.purse
+        val step = if (ladder) (state.raceLadder + 1).coerceAtMost(ladderRungs().lastIndex) else state.raceLadder
+        return state.copy(money = money, raceLadder = step)
+    }
+
+    /** [state] is the car before the purse is paid, so the ladder rung is the one just run. */
+    fun stripNote(state: GameState, field: Field, won: Boolean, time: Double, rival: Double, ladder: Boolean): String {
+        val clock = String.format(Locale.US, "%.2fs vs %.2fs", time, rival)
+        if (field.stake > 0.0) {
+            if (state.devMode || field.purse <= 0.0) {
+                val verdict = if (won) "The run was good enough." else "The run was short."
+                return "Stake was not on the table. $clock. $verdict"
+            }
+            val verdict = if (won) "Won ${formatDollars(field.purse)}." else "The stake is gone."
+            return "Stake ${formatDollars(field.stake)} vs ${field.detail}. $clock. $verdict"
+        }
+        if (ladder) {
+            val rungs = ladderRungs()
+            val index = state.raceLadder.coerceIn(0, rungs.lastIndex)
+            val rung = rungs[index]
+            if (!won) return "Ladder ${index + 1}/${rungs.size}  ${rung.title}. $clock. Short."
+            val more = if (index >= rungs.lastIndex) "The ladder is done." else "Next is ${rungs[index + 1].title}."
+            return "Ladder ${index + 1}/${rungs.size}  ${rung.title}. $clock. Won ${formatDollars(field.purse)}. $more"
+        }
+        val verdict = if (won) "Won ${formatDollars(field.purse)}." else "Lost."
+        return "${field.title}  ${field.detail}. $clock. $verdict"
+    }
+
     fun stake(state: GameState, seed: Long): Pair<GameState, String> {
         val cost = stakeCost(state.prestiges)
         if (!state.devMode && state.money < cost) {
@@ -336,6 +405,17 @@ object Racing {
             "place" -> spent.copy(enginePlace = id)
             else -> state
         }
+    }
+
+    fun setFinal(state: GameState, id: String): GameState {
+        if (id != "short" && id != "road" && id != "tall") return state
+        return state.copy(finalDrive = id)
+    }
+
+    fun finalRatio(id: String): Double = when (id) {
+        "short" -> 4.56
+        "tall" -> 3.07
+        else -> 3.73
     }
 
     fun setSlots(state: GameState, slots: Int): GameState {

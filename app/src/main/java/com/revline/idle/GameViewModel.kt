@@ -8,8 +8,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.revline.idle.data.GameState
 import com.revline.idle.data.SaveRepository
+import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.AimGoal
 import com.revline.idle.game.Logic
+import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Racing
 import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
@@ -29,6 +31,13 @@ import kotlinx.coroutines.withContext
 
 enum class DynoPhase { IDLE, PULL, RETURN }
 
+data class Strip(
+    val setup: RaceDrive.Setup,
+    val field: Racing.Field,
+    val yourPace: Double,
+    val ladder: Boolean,
+)
+
 data class UiModel(
     val game: GameState,
     val sheet: Sheet,
@@ -36,6 +45,7 @@ data class UiModel(
     val phase: DynoPhase,
     val offline: String?,
     val raceNote: String? = null,
+    val strip: Strip? = null,
 )
 
 class GameViewModel(app: Application) : AndroidViewModel(app) {
@@ -187,15 +197,58 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun fitChassis(id: String) = race { Racing.fitChassis(it, id) to null }
     fun fitRace(kind: String, id: String) = race { Racing.fitPart(it, kind, id) to null }
     fun setCooling(slots: Int) = race { Racing.setSlots(it, slots) to null }
-    fun quickRace(tier: Racing.Tier) = race { Racing.quick(it, tier) }
-    fun ladderRace() = race { Racing.ladder(it) }
-    fun stakeRace() = race { Racing.stake(it, System.nanoTime()) }
+    fun setFinal(id: String) = race { Racing.setFinal(it, id) to null }
+
+    fun openQuick(tier: Racing.Tier) = openStrip(ladder = false) { Racing.fieldForQuick(it, tier) to it }
+
+    fun openLadder() = openStrip(ladder = true) { Racing.fieldForLadder(it) to it }
+
+    fun openStake() {
+        if (ui.strip != null) return
+        val opened = Racing.openStake(ui.game, System.nanoTime())
+        if (opened == null) {
+            val cost = Racing.stakeCost(ui.game.prestiges)
+            publish(ui.copy(raceNote = "The stake is ${formatDollars(cost)}. The till is short."))
+            return
+        }
+        val (game, field) = opened
+        publish(
+            ui.copy(
+                game = game,
+                sheet = Logic.sheet(game),
+                strip = Strip(RaceDrive.setup(game), field, Racing.car(game).pace, ladder = false),
+                raceNote = null,
+            ),
+        )
+        save()
+    }
+
+    fun finishMeet(won: Boolean, time: Double, rival: Double) {
+        val strip = ui.strip ?: return
+        val note = Racing.stripNote(ui.game, strip.field, won, time, rival, strip.ladder)
+        val game = Racing.award(ui.game, strip.field, won, strip.ladder)
+        val sheet = if (game == ui.game) ui.sheet else Logic.sheet(game)
+        publish(ui.copy(game = game, sheet = sheet, strip = null, raceNote = note))
+        save()
+    }
+
+    private fun openStrip(ladder: Boolean, fieldOf: (GameState) -> Pair<Racing.Field, GameState>) {
+        if (ui.strip != null) return
+        val (field, game) = fieldOf(ui.game)
+        publish(
+            ui.copy(
+                strip = Strip(RaceDrive.setup(game), field, Racing.car(game).pace, ladder),
+                raceNote = null,
+            ),
+        )
+    }
 
     private fun race(block: (GameState) -> Pair<GameState, String?>) {
-        val (game, note) = block(ui.game)
-        val sheet = if (game == ui.game) ui.sheet else Logic.sheet(game)
+        val before = ui.game
+        val (game, note) = block(before)
+        val sheet = if (game == before) ui.sheet else Logic.sheet(game)
         publish(ui.copy(game = game, sheet = sheet, raceNote = note ?: ui.raceNote))
-        if (game != ui.game) save()
+        if (game != before) save()
     }
 
     private fun mutate(block: (GameState) -> GameState) {

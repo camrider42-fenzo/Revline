@@ -19,6 +19,8 @@ data class GameState(
     val chassis: String = "mule",
     val chassisLevel: Map<String, Int> = emptyMap(),
     val transmission: String = "four",
+    /** Final drive. short launches harder and runs out of gear. tall is lazy off the line. */
+    val finalDrive: String = "road",
     val driveline: String = "open",
     val tire: String = "bias",
     /** Blank uses the chassis's own layout. */
