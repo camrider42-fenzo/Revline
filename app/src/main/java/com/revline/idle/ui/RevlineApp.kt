@@ -57,7 +57,9 @@ import com.revline.idle.game.ResearchTree
 import com.revline.idle.model.EngineSim
 import java.util.Locale
 
-private enum class Tab(val label: String) { BENCH("BENCH"), PARTS("PARTS"), TUNE("TUNE"), STUDY("STUDY"), REBUILD("REBUILD") }
+private enum class Tab(val label: String) {
+    BENCH("BENCH"), PARTS("PARTS"), TUNE("TUNE"), STUDY("STUDY"), RACE("RACE"), REBUILD("REBUILD"),
+}
 
 @Composable
 fun RevlineApp(vm: GameViewModel) {
@@ -103,7 +105,7 @@ fun RevlineApp(vm: GameViewModel) {
                                 item.label,
                                 color = if (on) Lime else White,
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier
                                     .weight(1f)
@@ -124,6 +126,16 @@ fun RevlineApp(vm: GameViewModel) {
                     Tab.PARTS -> PartsScreen(ui, vm::buy, vm::remove, vm::fuel, vm::setAimGoal)
                     Tab.TUNE -> TuneScreen(ui, vm::nudgeTune)
                     Tab.STUDY -> StudyScreen(ui, vm::research)
+                    Tab.RACE -> RaceScreen(
+                        ui,
+                        vm::studyRace,
+                        vm::fitChassis,
+                        vm::fitRace,
+                        vm::setCooling,
+                        vm::quickRace,
+                        vm::ladderRace,
+                        vm::stakeRace,
+                    )
                     Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
                 }
             }

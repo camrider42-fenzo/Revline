@@ -10,6 +10,7 @@ import com.revline.idle.data.GameState
 import com.revline.idle.data.SaveRepository
 import com.revline.idle.game.AimGoal
 import com.revline.idle.game.Logic
+import com.revline.idle.game.Racing
 import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
 import com.revline.idle.model.Block
@@ -34,6 +35,7 @@ data class UiModel(
     val rpm: Double,
     val phase: DynoPhase,
     val offline: String?,
+    val raceNote: String? = null,
 )
 
 class GameViewModel(app: Application) : AndroidViewModel(app) {
@@ -181,6 +183,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
     fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }
     fun setAimGoal(goal: AimGoal) = mutate { it.copy(aimGoal = goal.name) }
+    fun studyRace(id: String) = race { Racing.study(it, id) to null }
+    fun fitChassis(id: String) = race { Racing.fitChassis(it, id) to null }
+    fun fitRace(kind: String, id: String) = race { Racing.fitPart(it, kind, id) to null }
+    fun setCooling(slots: Int) = race { Racing.setSlots(it, slots) to null }
+    fun quickRace(tier: Racing.Tier) = race { Racing.quick(it, tier) }
+    fun ladderRace() = race { Racing.ladder(it) }
+    fun stakeRace() = race { Racing.stake(it, System.nanoTime()) }
+
+    private fun race(block: (GameState) -> Pair<GameState, String?>) {
+        val (game, note) = block(ui.game)
+        val sheet = if (game == ui.game) ui.sheet else Logic.sheet(game)
+        publish(ui.copy(game = game, sheet = sheet, raceNote = note ?: ui.raceNote))
+        if (game != ui.game) save()
+    }
 
     private fun mutate(block: (GameState) -> GameState) {
         val game = block(ui.game)

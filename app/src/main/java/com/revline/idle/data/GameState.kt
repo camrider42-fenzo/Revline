@@ -15,6 +15,18 @@ data class GameState(
     val prestiges: Int = 0,
     /** This long-block is the race spec: higher redline, higher sheet power, lower sheet mpg. */
     val racing: Boolean = false,
+    /** Fitted chassis. "mule" is the bedstead you start on. */
+    val chassis: String = "mule",
+    val chassisLevel: Map<String, Int> = emptyMap(),
+    val transmission: String = "four",
+    val driveline: String = "open",
+    val tire: String = "bias",
+    /** Blank uses the chassis's own layout. */
+    val driveType: String = "",
+    val enginePlace: String = "",
+    val coolingSlots: Int = 1,
+    val raceStudies: Set<String> = emptySet(),
+    val raceLadder: Int = 0,
     val upgrades: Map<String, Int> = emptyMap(),
     val researched: Set<String> = emptySet(),
     val perks: Map<String, Int> = emptyMap(),
