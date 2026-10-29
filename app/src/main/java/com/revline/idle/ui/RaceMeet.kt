@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -54,6 +53,9 @@ fun RaceMeet(
     crank: EngineCrank,
     params: EngineParams,
     hear: Boolean,
+    yourId: String,
+    yourMid: Boolean,
+    rivalId: String,
 ) {
     val finish = setup.distanceM
     val hands = remember { Hands(RaceDrive.fresh(setup)) }
@@ -161,8 +163,8 @@ fun RaceMeet(
             val right = size.width - 18f
             val span = right - left
             val laneH = size.height / 2f
-            lane(Red, laneH * 0.55f, left, right, span, frame.rival / finish.toFloat(), (frame.rival / 0.33f), false, stroke, frame.lights <= 0f)
-            lane(Lime, laneH * 1.45f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33f).toFloat(), frame.spinning, stroke, true)
+            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, false, stroke, rivalId, false)
+            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.spinning, stroke, yourId, yourMid)
             gantry(Olive, left, 6f, size.height - 4f, stroke, 0.55f)
             val finishColor = if (frame.done && frame.won) Lime else if (frame.done) Red else White
             gantry(finishColor, right, 6f, size.height - 4f, stroke, 1f)
@@ -339,61 +341,21 @@ private fun DrawScope.lane(
     roll: Float,
     spinning: Boolean,
     stroke: Float,
-    yours: Boolean,
+    chassisId: String,
+    mid: Boolean,
 ) {
-    val rail = ground + 10f
-    glowLine(White, Offset(left, rail), Offset(right, rail), stroke * 0.8f, 0.28f)
+    glowLine(White, Offset(left, ground), Offset(right, ground), stroke * 0.8f, 0.28f)
     var mark = 0.25f
     while (mark < 1f) {
-        val x = left + span * mark
-        glowLine(Olive, Offset(x, rail - 5f), Offset(x, rail + 5f), stroke, 0.4f)
+        val tick = left + span * mark
+        glowLine(Olive, Offset(tick, ground - 5f), Offset(tick, ground + 5f), stroke, 0.4f)
         mark += 0.25f
     }
-    val carW = 52f
+    val scale = 20f
+    val half = Wireframe.length(chassisId) * scale * 0.5f
     val along = progress.coerceIn(0f, 1f)
-    val x = left + carW * 0.45f + along * (span - carW)
-    raceCar(color, x, rail, if (yours) 1f else 0.86f, roll, spinning, stroke)
-}
-
-private fun DrawScope.raceCar(
-    color: Color,
-    x: Float,
-    ground: Float,
-    scale: Float,
-    roll: Float,
-    spinning: Boolean,
-    stroke: Float,
-) {
-    val u = 15f * scale
-    val wheelR = u * 0.42f
-    val sill = ground - wheelR
-    val body = Path().apply {
-        moveTo(x - u * 1.7f, sill)
-        lineTo(x + u * 1.85f, sill)
-        lineTo(x + u * 1.55f, sill - u * 0.55f)
-        lineTo(x + u * 0.35f, sill - u * 0.7f)
-        lineTo(x + u * 0.15f, sill - u * 1.25f)
-        lineTo(x - u * 0.85f, sill - u * 1.25f)
-        lineTo(x - u * 1.15f, sill - u * 0.62f)
-        lineTo(x - u * 1.7f, sill - u * 0.38f)
-        close()
-    }
-    glowPath(color, body, stroke, if (spinning) 0.55f else 0.85f)
-    wheel(color, Offset(x - u * 0.95f, sill), wheelR, roll, stroke)
-    wheel(if (spinning) Red else color, Offset(x + u * 0.95f, sill), wheelR, roll, stroke)
-    if (spinning) {
-        glowLine(Red, Offset(x - u * 2.3f, ground), Offset(x - u * 0.7f, ground), stroke, 0.75f)
-        glowLine(Red, Offset(x - u * 1.8f, ground + 3f), Offset(x - u * 0.5f, ground + 3f), stroke * 0.7f, 0.4f)
-    }
-}
-
-private fun DrawScope.wheel(color: Color, center: Offset, radius: Float, roll: Float, stroke: Float) {
-    glowCircle(color, radius, center, stroke, filled = false, gain = 0.9f)
-    val step = (Math.PI / 2.0).toFloat()
-    for (spoke in 0..1) {
-        val ang = roll + spoke * step
-        val dx = cos(ang) * radius * 0.8f
-        val dy = sin(ang) * radius * 0.8f
-        glowLine(color, Offset(center.x - dx, center.y - dy), Offset(center.x + dx, center.y + dy), stroke * 0.7f, 0.7f)
+    val x = left + half + along * (span - half * 2f).coerceAtLeast(8f)
+    with(Wireframe) {
+        draw(chassisId, mid, color, x, ground, scale, roll, spinning, stroke)
     }
 }

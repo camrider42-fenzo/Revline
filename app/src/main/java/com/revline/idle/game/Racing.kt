@@ -385,7 +385,14 @@ object Racing {
         return next to "Ladder ${index + 1}/${rungs.size}  ${rung.title}. Your pace ${you.pace.toInt()}. $verdict"
     }
 
-    data class Field(val title: String, val detail: String, val pace: Double, val purse: Double, val stake: Double)
+    data class Field(
+        val title: String,
+        val detail: String,
+        val pace: Double,
+        val purse: Double,
+        val stake: Double,
+        val rivalId: String = "mule",
+    )
 
     fun fieldForQuick(state: GameState, tier: Tier): Field {
         val ghost = classGhost(state, tier)
@@ -399,14 +406,14 @@ object Racing {
             Tier.NATIONAL -> 20.0
             Tier.INTERNATIONAL -> 80.0
         }) * lengthOf(state.raceLength).scale
-        return Field(tier.name.lowercase(Locale.US), ghost.label, ghost.pace, purse, 0.0)
+        return Field(tier.name.lowercase(Locale.US), ghost.label, ghost.pace, purse, 0.0, ghost.id)
     }
 
     fun fieldForLadder(state: GameState): Field {
         val rungs = ladderRungs(lengthOf(state.raceLength))
         val index = state.raceLadder.coerceIn(0, rungs.lastIndex)
         val rung = rungs[index]
-        return Field("ladder ${index + 1}", rung.title, rung.pace, 30.0 * 2.6.pow(index.toDouble()) * lengthOf(state.raceLength).scale, 0.0)
+        return Field("ladder ${index + 1}", rung.title, rung.pace, 30.0 * 2.6.pow(index.toDouble()) * lengthOf(state.raceLength).scale, 0.0, rung.chassisId)
     }
 
     /** Takes the stake up front. Null when the till is short. */
@@ -417,7 +424,7 @@ object Racing {
         val paid = if (state.devMode) 0.0 else cost
         val next = state.copy(money = state.money - paid)
         val purse = if (state.devMode) 0.0 else cost * 2.0
-        return next to Field("stake", rival.label, rival.pace, purse, cost)
+        return next to Field("stake", rival.label, rival.pace, purse, cost, rival.id)
     }
 
     fun award(state: GameState, field: Field, won: Boolean, ladder: Boolean): GameState {
@@ -583,7 +590,7 @@ object Racing {
         else -> null
     }
 
-    private data class Ghost(val title: String, val pace: Double, val label: String)
+    private data class Ghost(val title: String, val pace: Double, val label: String, val id: String)
 
     private fun classGhost(state: GameState, tier: Tier): Ghost {
         val block = Block.forPrestige(state.prestiges)
@@ -619,10 +626,10 @@ object Racing {
             Spec(hp, hp * 5252.0 / 3600.0, cc, body, if (tier == Tier.INTERNATIONAL) 2 else 0, box, axle, tire, body.slots, driveFor(body, body.place), body.place),
             lengthOf(state.raceLength),
         )
-        return Ghost(body.name, built.pace, body.name)
+        return Ghost(body.name, built.pace, body.name, body.id)
     }
 
-    data class Rung(val title: String, val pace: Double)
+    data class Rung(val title: String, val pace: Double, val chassisId: String = "mule")
 
     fun ladderRungs(length: Length = Length.QUARTER): List<Rung> = Block.entries.flatMapIndexed { index, block ->
         listOf(0.70 to "club", 1.12 to "national").map { (frac, name) ->
@@ -635,11 +642,11 @@ object Racing {
                 Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axles.first { it.id == "lsd" }, tire, body.slots, driveFor(body, body.place), body.place),
                 length,
             ).pace
-            Rung("${block.title} $name", pace)
+            Rung("${block.title} $name", pace, body.id)
         }
     }
 
-    private data class Rival(val label: String, val pace: Double)
+    private data class Rival(val label: String, val pace: Double, val id: String)
 
     private fun rival(state: GameState, seed: Long): Rival {
         val rng = Random(seed)
@@ -658,6 +665,6 @@ object Racing {
             lengthOf(state.raceLength),
         ).pace
         val label = "${body.name}, ${box.name.lowercase(Locale.US)}, ${tire.name.lowercase(Locale.US)}, ${hp.toInt()} hp"
-        return Rival(label, pace)
+        return Rival(label, pace, body.id)
     }
 }

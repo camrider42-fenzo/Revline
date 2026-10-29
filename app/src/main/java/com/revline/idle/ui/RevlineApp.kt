@@ -131,6 +131,9 @@ fun RevlineApp(vm: GameViewModel) {
                         crank,
                         ui.sheet.params,
                         hear = !ui.game.batterySaver,
+                        yourId = ui.game.chassis,
+                        yourMid = ui.game.chassis == "r5" && ui.game.enginePlace == "MID",
+                        rivalId = strip.field.rivalId,
                     )
                 } else {
                     when (tab.value) {
