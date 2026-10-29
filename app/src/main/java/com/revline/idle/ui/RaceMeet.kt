@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -128,33 +129,81 @@ fun RaceMeet(
         Text(field.detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(purse, color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(banner, color = bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
-        Row(Modifier.fillMaxWidth().height(156.dp).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Canvas(Modifier.weight(1f).fillMaxHeight()) {
-            val stroke = (size.minDimension / 90f).coerceIn(1.6f, 3f)
-            val lampY = size.height * 0.08f
-            val lamp = size.minDimension * 0.045f
-            stageLamp(Olive, Offset(size.width * 0.38f, lampY), lamp, stroke, frame.lights > 0.7f)
-            stageLamp(Amber, Offset(size.width * 0.50f, lampY), lamp, stroke, frame.lights > 0f)
-            stageLamp(Lime, Offset(size.width * 0.62f, lampY), lamp, stroke, frame.lights <= 0f && !frame.done)
-            val c = Offset(size.width * 0.5f, size.height * 0.74f)
-            val r = size.minDimension * 0.40f
-            val start = 150f
-            val sweep = 240f
-            glowArc(White, start, sweep * 0.82f, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), stroke, 0.7f)
-            glowArc(Red, start + sweep * 0.82f, sweep * 0.18f, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), stroke * 1.3f, 1.1f)
-            val shiftFrac = 0.91f
-            val shiftAng = Math.toRadians((start + sweep * shiftFrac).toDouble())
-            val shiftIn = Offset(c.x + (cos(shiftAng) * r * 0.86).toFloat(), c.y + (sin(shiftAng) * r * 0.86).toFloat())
-            val shiftOut = Offset(c.x + (cos(shiftAng) * r * 1.02).toFloat(), c.y + (sin(shiftAng) * r * 1.02).toFloat())
-            glowLine(Lime, shiftIn, shiftOut, stroke, 0.9f)
-            val frac = (frame.rpm / setup.redline).toFloat().coerceIn(0f, 1.08f)
-            val ang = Math.toRadians((start + sweep * frac).toDouble())
-            val tip = Offset(c.x + (cos(ang) * r * 0.78).toFloat(), c.y + (sin(ang) * r * 0.78).toFloat())
-            val hot = frame.limiter || frame.rpm > setup.redline * 0.9
-            glowLine(if (hot) Red else Lime, c, tip, stroke * 1.3f, 1.15f)
-            glowCircle(if (frame.spinning) Red else Lime, stroke * 2f, c, stroke, filled = true)
+        Canvas(Modifier.fillMaxWidth().height(36.dp).padding(top = 4.dp)) {
+            val stroke = 2f
+            val lamp = size.minDimension * 0.28f
+            val y = size.height * 0.55f
+            val xs = listOf(0.32f, 0.44f, 0.56f, 0.68f)
+            val colors = listOf(Amber, Amber, Amber, if (frame.done && !frame.won) Red else Lime)
+            val lit = listOf(
+                frame.lights < 1.2f,
+                frame.lights < 0.8f,
+                frame.lights < 0.4f,
+                frame.lights <= 0f,
+            )
+            glowLine(Olive, Offset(size.width * 0.22f, y), Offset(size.width * 0.78f, y), stroke, 0.35f)
+            xs.forEachIndexed { index, at ->
+                stageLamp(colors[index], Offset(size.width * at, y), lamp, stroke, lit[index])
+            }
         }
-            Column(Modifier.width(72.dp).fillMaxHeight()) {
+        Canvas(Modifier.fillMaxWidth().height(168.dp).padding(top = 4.dp)) {
+            val stroke = (size.minDimension / 80f).coerceIn(1.5f, 2.6f)
+            val left = 18f
+            val right = size.width - 18f
+            val span = right - left
+            val laneH = size.height / 2f
+            lane(Red, laneH * 0.55f, left, right, span, frame.rival / finish.toFloat(), (frame.rival / 0.33f), false, stroke, frame.lights <= 0f)
+            lane(Lime, laneH * 1.45f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33f).toFloat(), frame.spinning, stroke, true)
+            gantry(Olive, left, 6f, size.height - 4f, stroke, 0.55f)
+            val finishColor = if (frame.done && frame.won) Lime else if (frame.done) Red else White
+            gantry(finishColor, right, 6f, size.height - 4f, stroke, 1f)
+        }
+        val gapM = frame.distance - frame.rival
+        Text(
+            if (frame.lights > 0f) "LIGHTS" else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
+            color = if (frame.lights > 0f) Olive else if (gapM >= 0) Lime else Red,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        Row(Modifier.fillMaxWidth().height(128.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                val stroke = (size.minDimension / 70f).coerceIn(1.6f, 3f)
+                val c = Offset(size.width * 0.5f, size.height * 0.78f)
+                val r = size.minDimension * 0.46f
+                val start = 150f
+                val sweep = 240f
+                val arc = Offset(c.x - r, c.y - r)
+                val box = Size(r * 2, r * 2)
+                glowArc(White, start, sweep * 0.82f, arc, box, stroke, 0.7f)
+                glowArc(Red, start + sweep * 0.82f, sweep * 0.18f, arc, box, stroke * 1.3f, 1.1f)
+                for (tick in 0..4) {
+                    val frac = tick / 4f * 0.82f
+                    val ang = Math.toRadians((start + sweep * frac).toDouble())
+                    glowLine(
+                        Olive,
+                        Offset(c.x + (cos(ang) * r * 0.88).toFloat(), c.y + (sin(ang) * r * 0.88).toFloat()),
+                        Offset(c.x + (cos(ang) * r * 1.0).toFloat(), c.y + (sin(ang) * r * 1.0).toFloat()),
+                        stroke,
+                        0.45f,
+                    )
+                }
+                val shiftAng = Math.toRadians((start + sweep * 0.91f).toDouble())
+                glowLine(
+                    Lime,
+                    Offset(c.x + (cos(shiftAng) * r * 0.84).toFloat(), c.y + (sin(shiftAng) * r * 0.84).toFloat()),
+                    Offset(c.x + (cos(shiftAng) * r * 1.04).toFloat(), c.y + (sin(shiftAng) * r * 1.04).toFloat()),
+                    stroke * 1.2f,
+                    1f,
+                )
+                val frac = (frame.rpm / setup.redline).toFloat().coerceIn(0f, 1.08f)
+                val ang = Math.toRadians((start + sweep * frac).toDouble())
+                val tail = Offset(c.x - (cos(ang) * r * 0.12).toFloat(), c.y - (sin(ang) * r * 0.12).toFloat())
+                val tip = Offset(c.x + (cos(ang) * r * 0.78).toFloat(), c.y + (sin(ang) * r * 0.78).toFloat())
+                val hot = frame.limiter || frame.rpm > setup.redline * 0.9
+                glowLine(if (hot) Red else Lime, tail, tip, stroke * 1.25f, 1.15f)
+                glowCircle(if (frame.spinning) Red else Lime, stroke * 2.2f, c, stroke, filled = true)
+            }
+            Column(Modifier.width(68.dp).fillMaxHeight()) {
                 Text("CLUTCH", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ClutchPedal(
                     clutchShown.toDouble(),
@@ -166,7 +215,7 @@ fun RaceMeet(
                     modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
                 )
             }
-            Column(Modifier.width(72.dp).fillMaxHeight()) {
+            Column(Modifier.width(68.dp).fillMaxHeight()) {
                 Text("THROTTLE", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ThrottlePedal(
                     throttle.toDouble(),
@@ -179,26 +228,6 @@ fun RaceMeet(
                 )
             }
         }
-        Canvas(Modifier.fillMaxWidth().height(64.dp)) {
-            val y = size.height * 0.62f
-            val stroke = 2f
-            val left = 12f
-            val width = size.width - 24f
-            glowLine(White, Offset(left, y), Offset(left + width, y), stroke, 0.4f)
-            glowLine(Olive, Offset(left, y - 14f), Offset(left, y + 8f), stroke, 0.7f)
-            glowLine(Olive, Offset(left + width, y - 18f), Offset(left + width, y + 8f), stroke, 0.9f)
-            val youX = left + (frame.distance / finish).toFloat().coerceIn(0f, 1f) * width
-            val themX = left + (frame.rival / finish.toFloat()).coerceIn(0f, 1f) * width
-            carMark(Lime, youX, y, stroke)
-            carMark(Red, themX, y - 18f, stroke)
-        }
-        val gapM = frame.distance - frame.rival
-        Text(
-            if (frame.lights > 0f) " " else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
-            color = if (gapM >= 0) Lime else Red,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
         Text(
             "GEAR ${frame.gear}/${setup.ratios.size}   ${frame.rpm.toInt()} rpm   ${(frame.speed * 2.237).toInt()} mph   ${String.format(Locale.US, "%.2f", frame.time)}s",
             color = White,
@@ -281,15 +310,80 @@ private fun snap(
 )
 
 private fun DrawScope.stageLamp(color: Color, center: Offset, radius: Float, stroke: Float, lit: Boolean) {
-    if (lit) glowCircle(color, radius, center, stroke, filled = true, gain = 1.1f)
-    else glowCircle(Olive, radius, center, stroke, filled = false, gain = 0.45f)
+    if (lit) glowCircle(color, radius, center, stroke, filled = true, gain = 1.15f)
+    else glowCircle(Olive, radius, center, stroke, filled = false, gain = 0.4f)
 }
 
-private fun DrawScope.carMark(color: Color, x: Float, y: Float, stroke: Float) {
-    glowLine(color, Offset(x - 14f, y), Offset(x + 16f, y), stroke, 0.9f)
-    glowLine(color, Offset(x - 6f, y), Offset(x - 2f, y - 10f), stroke, 0.9f)
-    glowLine(color, Offset(x - 2f, y - 10f), Offset(x + 10f, y - 10f), stroke, 0.9f)
-    glowLine(color, Offset(x + 10f, y - 10f), Offset(x + 16f, y), stroke, 0.9f)
-    glowCircle(color, 4f, Offset(x - 8f, y + 2f), stroke, filled = true, gain = 0.8f)
-    glowCircle(color, 4f, Offset(x + 10f, y + 2f), stroke, filled = true, gain = 0.8f)
+private fun DrawScope.gantry(color: Color, x: Float, top: Float, bottom: Float, stroke: Float, gain: Float) {
+    glowLine(color, Offset(x, top), Offset(x, bottom), stroke, gain)
+    glowLine(color, Offset(x - 7f, top), Offset(x + 7f, top), stroke, gain)
+}
+
+private fun DrawScope.lane(
+    color: Color,
+    ground: Float,
+    left: Float,
+    right: Float,
+    span: Float,
+    progress: Float,
+    roll: Float,
+    spinning: Boolean,
+    stroke: Float,
+    yours: Boolean,
+) {
+    val rail = ground + 10f
+    glowLine(White, Offset(left, rail), Offset(right, rail), stroke * 0.8f, 0.28f)
+    var mark = 0.25f
+    while (mark < 1f) {
+        val x = left + span * mark
+        glowLine(Olive, Offset(x, rail - 5f), Offset(x, rail + 5f), stroke, 0.4f)
+        mark += 0.25f
+    }
+    val carW = 52f
+    val along = progress.coerceIn(0f, 1f)
+    val x = left + carW * 0.45f + along * (span - carW)
+    raceCar(color, x, rail, if (yours) 1f else 0.86f, roll, spinning, stroke)
+}
+
+private fun DrawScope.raceCar(
+    color: Color,
+    x: Float,
+    ground: Float,
+    scale: Float,
+    roll: Float,
+    spinning: Boolean,
+    stroke: Float,
+) {
+    val u = 15f * scale
+    val wheelR = u * 0.42f
+    val sill = ground - wheelR
+    val body = Path().apply {
+        moveTo(x - u * 1.7f, sill)
+        lineTo(x + u * 1.85f, sill)
+        lineTo(x + u * 1.55f, sill - u * 0.55f)
+        lineTo(x + u * 0.35f, sill - u * 0.7f)
+        lineTo(x + u * 0.15f, sill - u * 1.25f)
+        lineTo(x - u * 0.85f, sill - u * 1.25f)
+        lineTo(x - u * 1.15f, sill - u * 0.62f)
+        lineTo(x - u * 1.7f, sill - u * 0.38f)
+        close()
+    }
+    glowPath(color, body, stroke, if (spinning) 0.55f else 0.85f)
+    wheel(color, Offset(x - u * 0.95f, sill), wheelR, roll, stroke)
+    wheel(if (spinning) Red else color, Offset(x + u * 0.95f, sill), wheelR, roll, stroke)
+    if (spinning) {
+        glowLine(Red, Offset(x - u * 2.3f, ground), Offset(x - u * 0.7f, ground), stroke, 0.75f)
+        glowLine(Red, Offset(x - u * 1.8f, ground + 3f), Offset(x - u * 0.5f, ground + 3f), stroke * 0.7f, 0.4f)
+    }
+}
+
+private fun DrawScope.wheel(color: Color, center: Offset, radius: Float, roll: Float, stroke: Float) {
+    glowCircle(color, radius, center, stroke, filled = false, gain = 0.9f)
+    val step = (Math.PI / 2.0).toFloat()
+    for (spoke in 0..1) {
+        val ang = roll + spoke * step
+        val dx = cos(ang) * radius * 0.8f
+        val dy = sin(ang) * radius * 0.8f
+        glowLine(color, Offset(center.x - dx, center.y - dy), Offset(center.x + dx, center.y + dy), stroke * 0.7f, 0.7f)
+    }
 }
