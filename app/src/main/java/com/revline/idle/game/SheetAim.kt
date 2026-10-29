@@ -61,11 +61,11 @@ object SheetAim {
         if (goal != null) return toward(state, goal)
         val block = Block.forPrestige(state.prestiges)
         val now = EngineSim.evaluate(Logic.paramsFrom(state))
-        val hpRatio = now.peakHorsepower / block.hpGoal
-        val tqRatio = now.peakTorqueLbFt / block.torqueGoal
-        val mpgRatio = now.cruiseMpg / block.mpgGoal
+        val hpRatio = now.peakHorsepower / block.sheetHp(state.racing)
+        val tqRatio = now.peakTorqueLbFt / block.sheetTorque(state.racing)
+        val mpgRatio = now.cruiseMpg / block.sheetMpg(state.racing)
         val mark = farthest(hpRatio, tqRatio, mpgRatio)
-        val goal = goal(block, mark)
+        val goal = goal(block, mark, state.racing)
         val before = value(now.peakHorsepower, now.peakTorqueLbFt, now.cruiseMpg, mark)
         val gap = (goal - before).coerceAtLeast(0.0)
         if (gap < 0.05) {
@@ -219,10 +219,10 @@ object SheetAim {
         }
     }
 
-    private fun goal(block: Block, mark: SheetMark): Double = when (mark) {
-        SheetMark.POWER -> block.hpGoal
-        SheetMark.TORQUE -> block.torqueGoal
-        SheetMark.CRUISE -> block.mpgGoal
+    private fun goal(block: Block, mark: SheetMark, racing: Boolean): Double = when (mark) {
+        SheetMark.POWER -> block.sheetHp(racing)
+        SheetMark.TORQUE -> block.sheetTorque(racing)
+        SheetMark.CRUISE -> block.sheetMpg(racing)
     }
 
     private fun value(hp: Double, torque: Double, mpg: Double, mark: SheetMark): Double = when (mark) {

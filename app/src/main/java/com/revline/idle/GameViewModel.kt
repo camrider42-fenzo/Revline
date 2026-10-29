@@ -177,7 +177,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun perk(id: String) = mutate { Logic.buyPerk(it, id) }
     fun fuel(kind: FuelKind) = mutate { Logic.selectFuel(it, kind) }
     fun nudgeTune(id: String, direction: Int) = mutate { Tuners.nudge(it, id, direction) }
-    fun prestige() = mutate { Logic.prestige(it) }
+    fun prestige(racing: Boolean) = mutate { Logic.prestige(it, racing) }
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
     fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }
     fun setAimGoal(goal: AimGoal) = mutate { it.copy(aimGoal = goal.name) }

@@ -519,22 +519,23 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
 }
 
 @Composable
-private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () -> Unit, onDevMode: () -> Unit) {
+private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Boolean) -> Unit, onDevMode: () -> Unit) {
     val block = Block.forPrestige(ui.game.prestiges)
     val next = Block.forPrestige(ui.game.prestiges + 1)
+    val racing = ui.game.racing
     val stats = ui.sheet.stats
-        val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block)
-        val nextMultiplier = Prestige.multiplier(ui.game.knowledge + gain)
+    val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block, racing)
+    val nextMultiplier = Prestige.multiplier(ui.game.knowledge + gain)
     val free = Logic.knowledgeFree(ui.game)
     val onLast = ui.game.prestiges >= Block.entries.lastIndex
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Hud(ui)
-        Text(block.title.uppercase(Locale.US), color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp))
+        Text(block.sheetTitle(racing).uppercase(Locale.US), color = if (racing) Red else White, fontFamily = FontFamily.Monospace, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp))
         Text(
             if (onLast) {
-                "Another rebuild stays on the ${block.title}. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
+                "Another rebuild stays on the ${block.title}. Street keeps this sheet. Race raises the power targets and cuts the mpg target, and the long-block itself revs higher. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay."
             } else {
-                "The next rebuild is a ${next.title}. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay. Engineering Knowledge stays and still multiplies the contract and the research."
+                "The next long-block is a ${next.title}. Street keeps the road sheet. Race asks for more power and less mpg, and comes out of the crate with more compression and a higher tach. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay."
             },
             color = White,
             fontFamily = FontFamily.Monospace,
@@ -548,9 +549,22 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 8.dp),
         )
-        SheetTarget("Power", stats.peakHorsepower, block.hpGoal, "hp")
-        SheetTarget("Torque", stats.peakTorqueLbFt, block.torqueGoal, "lb-ft")
-        SheetTarget("Cruise", stats.cruiseMpg, block.mpgGoal, "mpg")
+        SheetTarget("Power", stats.peakHorsepower, block.sheetHp(racing), "hp")
+        SheetTarget("Torque", stats.peakTorqueLbFt, block.sheetTorque(racing), "lb-ft")
+        SheetTarget("Cruise", stats.cruiseMpg, block.sheetMpg(racing), "mpg")
+        Text(
+            "Street next  ${fmtGoal(next.sheetHp(false))} hp  ${fmtGoal(next.sheetTorque(false))} lb-ft  ${fmtGoal(next.sheetMpg(false))} mpg",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            "Race next  ${fmtGoal(next.sheetHp(true))} hp  ${fmtGoal(next.sheetTorque(true))} lb-ft  ${fmtGoal(next.sheetMpg(true))} mpg",
+            color = Red,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
         Text(
             if (gain > 0) {
                 "Rebuild pays $gain Engineering Knowledge. The multiplier goes to x${String.format(Locale.US, "%.2f", nextMultiplier)}."
@@ -580,13 +594,21 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: () 
         LineButton(
             when {
                 gain <= 0 -> "Keep building"
-                onLast -> "Rebuild the ${block.title}"
-                else -> "Rebuild into a ${next.title}"
+                onLast -> "Street rebuild"
+                else -> "Street rebuild into a ${next.title}"
             },
             gain > 0,
-            onPrestige,
+            { onPrestige(false) },
             Modifier.fillMaxWidth(),
         )
+        if (gain > 0) {
+            LineButton(
+                if (onLast) "Race rebuild" else "Race rebuild into a ${next.title}",
+                true,
+                { onPrestige(true) },
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+        }
         Text("PERKS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
         Text(
             "These stay with the shop. Each rank spends Engineering Knowledge and applies to every long-block after it.",
@@ -658,6 +680,8 @@ private fun DevSwitch(on: Boolean) {
         Text(if (on) " ON" else " OFF", color = color, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
     }
 }
+
+private fun fmtGoal(value: Double): String = String.format(Locale.US, "%.0f", value)
 
 @Composable
 private fun SheetTarget(name: String, now: Double, goal: Double, unit: String) {

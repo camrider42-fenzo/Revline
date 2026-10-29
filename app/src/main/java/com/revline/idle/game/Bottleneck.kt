@@ -36,22 +36,22 @@ object Bottleneck {
             )
         }
         val block = Block.forPrestige(state.prestiges)
-        val hp = stats.peakHorsepower / block.hpGoal
-        val tq = stats.peakTorqueLbFt / block.torqueGoal
-        val mpg = stats.cruiseMpg / block.mpgGoal
+        val hp = stats.peakHorsepower / block.sheetHp(state.racing)
+        val tq = stats.peakTorqueLbFt / block.sheetTorque(state.racing)
+        val mpg = stats.cruiseMpg / block.sheetMpg(state.racing)
         if (minOf(hp, tq, mpg) < 1.0) {
             val worst = listOf(hp to "power", tq to "torque", mpg to "cruise").minBy { it.first }
             return if (worst.second == "cruise") {
                 Suggestion(
                     Effect.ECONOMY,
                     "Economy",
-                    "Cruise is the short number. ${one(stats.cruiseMpg)} mpg against a ${one(block.mpgGoal)} mpg sheet.",
+                    "Cruise is the short number. ${one(stats.cruiseMpg)} mpg against a ${one(block.sheetMpg(state.racing))} mpg sheet.",
                 )
             } else {
                 Suggestion(
                     Effect.POWER,
                     "Power",
-                    "Power is the short number. ${one(stats.peakHorsepower)} hp and ${one(stats.peakTorqueLbFt)} lb-ft, against ${one(block.hpGoal)} and ${one(block.torqueGoal)}.",
+                    "Power is the short number. ${one(stats.peakHorsepower)} hp and ${one(stats.peakTorqueLbFt)} lb-ft, against ${one(block.sheetHp(state.racing))} and ${one(block.sheetTorque(state.racing))}.",
                 )
             }
         }

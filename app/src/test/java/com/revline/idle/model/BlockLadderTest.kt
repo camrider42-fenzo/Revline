@@ -29,6 +29,43 @@ class BlockLadderTest {
     }
 
     @Test
+    fun aRaceRebuildRaisesPowerTargetsAndCutsMpg() {
+        for (block in Block.entries) {
+            assertTrue("${block.title} hp", block.sheetHp(true) > block.sheetHp(false) * 1.3)
+            assertTrue("${block.title} tq", block.sheetTorque(true) > block.sheetTorque(false) * 1.1)
+            assertTrue("${block.title} mpg", block.sheetMpg(true) < block.sheetMpg(false) * 0.75)
+        }
+        val research = com.revline.idle.game.ResearchTree.all.map { it.id }.toSet()
+        val maxed = com.revline.idle.game.Upgrades.all.associate { it.id to it.maxLevel }
+        val misses = mutableListOf<String>()
+        for (index in Block.entries.indices) {
+            val block = Block.forPrestige(index)
+            val stock = Logic.sheet(GameState(prestiges = index, racing = true)).stats
+            if (com.revline.idle.economy.Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stock.cruiseMpg, block, true)) {
+                misses += "${block.title} stock race already clears"
+            }
+            val built = Logic.sheet(GameState(prestiges = index, racing = true, researched = research, upgrades = maxed)).stats
+            if (!com.revline.idle.economy.Prestige.meets(built.peakHorsepower, built.peakTorqueLbFt, built.cruiseMpg, block, true)) {
+                misses += "${block.title} maxed race ${built.peakHorsepower.toInt()}/${built.peakTorqueLbFt.toInt()}/${"%.1f".format(built.cruiseMpg)} vs ${block.sheetHp(true).toInt()}/${block.sheetTorque(true).toInt()}/${"%.1f".format(block.sheetMpg(true))}"
+            }
+            assertTrue(Logic.paramsFrom(GameState(prestiges = index, racing = true)).redlineRpm > block.redlineRpm)
+            assertTrue(Logic.paramsFrom(GameState(prestiges = index, racing = true)).blockTitle.startsWith("Race "))
+        }
+        val ready = GameState(
+            money = 1e9,
+            researched = research,
+            upgrades = maxed,
+        )
+        val street = Logic.prestige(ready, false)
+        val race = Logic.prestige(ready, true)
+        assertEquals(1, street.prestiges)
+        assertEquals(false, street.racing)
+        assertEquals(1, race.prestiges)
+        assertEquals(true, race.racing)
+        assertTrue(misses.joinToString("\n"), misses.isEmpty())
+    }
+
+    @Test
     fun prestigeStepsUpInPowerAndChangesThePicture() {
         var previous = 0.0
         var previousPay = 0.0

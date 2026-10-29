@@ -156,18 +156,27 @@ object Logic {
         limiter: Int,
         vvl: Boolean,
         tune: Double,
+        base: Double,
     ): Double {
-        val raised = block.redlineRpm +
+        val raised = base +
             180.0 * springs +
             380.0 * revKit +
             (if (vvl) 150.0 else 0.0) +
             450.0 * limiter +
             tune
-        return raised.coerceIn(block.redlineRpm * 0.72, block.redlineCap())
+        return raised.coerceIn(base * 0.72, block.redlineCap())
     }
 
     fun paramsFrom(state: GameState): EngineParams {
         val block = Block.forPrestige(state.prestiges)
+        val race = state.racing
+        val comp0 = block.compression + if (race) 0.8 else 0.0
+        val ve0 = block.peakVe + if (race) 0.04 else 0.0
+        val frac0 = block.vePeakFraction + if (race) 0.04 else 0.0
+        val redline0 = if (race) (block.redlineRpm + 650.0).coerceAtMost(block.redlineCap() * 0.92) else block.redlineRpm
+        val idle0 = if (race) block.idleRpm + 160.0 else block.idleRpm
+        val flow0 = block.fuelFlow * if (race) 1.12 else 1.0
+        val title0 = block.sheetTitle(race)
         fun lvl(id: String) = state.upgrades[id] ?: 0
         val filter = lvl("filter")
         val boot = lvl("boot")
@@ -267,23 +276,23 @@ object Logic {
             else -> Mixture.CARB
         }
         val fuel = allowedFuel(state, state.fuel)
-        var ve = block.peakVe +
+        var ve = ve0 +
             0.020 * filter + 0.024 * cai + 0.020 * manifold + 0.028 * itb +
             0.010 * catback + 0.018 * headers + 0.020 * longTube +
             0.032 * cam + 0.020 * vvt + 0.046 * vvl +
             0.022 * lap + 0.018 * boot + 0.014 * tip + 0.012 * gap + 0.010 * fins +
             0.018 * (state.perks["flow"] ?: 0)
-        var frac = block.vePeakFraction + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
+        var frac = frac0 + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
             0.018 * longTube + 0.040 * cam + 0.015 * vvl + Tuners.value(state, "cam")
         val tune = Tuners.value(state, "redline")
-        val tach = redlineRpm(block, springs, revKit, limiter, vvl > 0, tune)
-        val breathing = redlineRpm(block, springs, 0, 0, vvl > 0, tune)
+        val tach = redlineRpm(block, springs, revKit, limiter, vvl > 0, tune, redline0)
+        val breathing = redlineRpm(block, springs, 0, 0, vvl > 0, tune, redline0)
         // A higher tach does not move the cam. The peak stays at the rpm the springs set.
         frac *= breathing / tach
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
         var strength = 1.0 + 0.055 * springs + 0.12 * studs + 0.26 * pistons +
             0.16 * rods + 0.12 * crank + 0.36 * billet + 0.045 * wrench + 0.08 * (state.perks["fixtures"] ?: 0)
-        var flow = block.fuelFlow + 0.18 * jets + 0.10 * needle + 0.40 * pump + 0.32 * tbi + 0.60 * injectors + 0.95 * hpfp +
+        var flow = flow0 + 0.18 * jets + 0.10 * needle + 0.40 * pump + 0.32 * tbi + 0.60 * injectors + 0.95 * hpfp +
             0.06 * (state.perks["pump"] ?: 0)
         var timing = block.timingDeg + 1.6 * baseTiming + 1.8 * mapped + 0.55 * coils + 0.85 * gap
         if (torque) timing += 1.4
@@ -333,7 +342,7 @@ object Logic {
             cylinders = block.cylinders,
             boreMm = (block.boreMm + block.boreMm * 0.038 * bore).coerceIn(block.boreMm * 0.9, block.boreMm * 1.25),
             strokeMm = block.strokeMm,
-            compressionRatio = (block.compression + 0.48 * compression).coerceIn(7.5, 14.5),
+            compressionRatio = (comp0 + 0.48 * compression).coerceIn(7.5, 14.5),
             peakVe = ve.coerceIn(0.55, 1.35),
             vePeakFraction = frac.coerceIn(0.35, 0.92),
             veWidthRpm = width.coerceIn(900.0, 6500.0),
@@ -371,8 +380,8 @@ object Logic {
             installedHp = installedHp(block, state),
             banks = block.banks,
             airCooled = block.airCooled && cai < 3,
-            idleRpm = block.idleRpm,
-            blockTitle = block.title,
+            idleRpm = idle0,
+            blockTitle = title0,
             nitrousFraction = (0.34 * nitrous).coerceIn(0.0, 1.2),
             overboostPsi = (5.0 * overboost).coerceIn(0.0, 20.0),
             leanPull = (0.55 * dynoFuel).coerceIn(0.0, 2.0),
@@ -724,7 +733,13 @@ object Logic {
 
     fun canPrestige(state: GameState): Boolean {
         val stats = sheet(state).stats
-        return Prestige.meets(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, Block.forPrestige(state.prestiges))
+        return Prestige.meets(
+            stats.peakHorsepower,
+            stats.peakTorqueLbFt,
+            stats.cruiseMpg,
+            Block.forPrestige(state.prestiges),
+            state.racing,
+        )
     }
 
     /** Cash on a fresh long-block: the four cheapest tools that block can buy. */
@@ -740,13 +755,14 @@ object Logic {
 
     fun newGame(): GameState = GameState(money = startingMoney(0))
 
-    fun prestige(state: GameState): GameState {
+    fun prestige(state: GameState, racing: Boolean = false): GameState {
         val stats = sheet(state).stats
         val gain = Prestige.knowledgeGain(
             stats.peakHorsepower,
             stats.peakTorqueLbFt,
             stats.cruiseMpg,
             Block.forPrestige(state.prestiges),
+            state.racing,
         )
         if (gain <= 0) return state
         return state.copy(
@@ -763,6 +779,7 @@ object Logic {
             breakdowns = 0,
             lastFailure = "",
             soakC = 0.0,
+            racing = racing,
         )
     }
 

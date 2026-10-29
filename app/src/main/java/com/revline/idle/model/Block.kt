@@ -99,6 +99,15 @@ enum class Block(
         return minMultiplier * pace * glide * trim * shop
     }
 
+    /** Race sheet: more power, less cruise. The street numbers stay the rebuild the shop was tuned on. */
+    fun sheetHp(racing: Boolean): Double = if (racing) hpGoal * 1.42 else hpGoal
+
+    fun sheetTorque(racing: Boolean): Double = if (racing) torqueGoal * 1.18 else torqueGoal
+
+    fun sheetMpg(racing: Boolean): Double = if (racing) mpgGoal * 0.64 else mpgGoal
+
+    fun sheetTitle(racing: Boolean): String = if (racing) "Race $title" else title
+
     companion object {
         fun forPrestige(prestiges: Int): Block = entries[prestiges.coerceIn(0, entries.lastIndex)]
     }

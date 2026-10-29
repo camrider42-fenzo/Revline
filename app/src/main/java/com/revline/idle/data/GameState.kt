@@ -13,6 +13,8 @@ data class GameState(
     val researchPoints: Double = 0.0,
     val knowledge: Int = 0,
     val prestiges: Int = 0,
+    /** This long-block is the race spec: higher redline, higher sheet power, lower sheet mpg. */
+    val racing: Boolean = false,
     val upgrades: Map<String, Int> = emptyMap(),
     val researched: Set<String> = emptySet(),
     val perks: Map<String, Int> = emptyMap(),

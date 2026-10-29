@@ -83,17 +83,17 @@ object Income {
 }
 
 object Prestige {
-    fun meets(hp: Double, torque: Double, mpg: Double, block: Block): Boolean =
-        hp >= block.hpGoal && torque >= block.torqueGoal && mpg >= block.mpgGoal
+    fun meets(hp: Double, torque: Double, mpg: Double, block: Block, racing: Boolean = false): Boolean =
+        hp >= block.sheetHp(racing) && torque >= block.sheetTorque(racing) && mpg >= block.sheetMpg(racing)
 
     /**
      * One point for clearing the sheet. Each stat then adds four points per time
      * it beats its own target, so staying to build past the bar raises the
      * multiplier. A stat that is only just over does not cancel the others.
      */
-    fun knowledgeGain(hp: Double, torque: Double, mpg: Double, block: Block): Int {
-        if (!meets(hp, torque, mpg, block)) return 0
-        val depth = surplus(hp, block.hpGoal) + surplus(torque, block.torqueGoal) + surplus(mpg, block.mpgGoal)
+    fun knowledgeGain(hp: Double, torque: Double, mpg: Double, block: Block, racing: Boolean = false): Int {
+        if (!meets(hp, torque, mpg, block, racing)) return 0
+        val depth = surplus(hp, block.sheetHp(racing)) + surplus(torque, block.sheetTorque(racing)) + surplus(mpg, block.sheetMpg(racing))
         return kotlin.math.floor(1.0 + depth * 4.0 + 1e-9).toInt().coerceIn(1, 16)
     }
 
