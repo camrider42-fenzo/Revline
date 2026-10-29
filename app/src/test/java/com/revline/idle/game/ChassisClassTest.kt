@@ -56,6 +56,11 @@ class ChassisClassTest {
     }
 
     @Test
+    fun aFreshEngineIsQuickestInTheLightestCarThatFits() {
+        assertEquals("p50", Racing.quickest(GameState())?.id)
+    }
+
+    @Test
     fun aHalfMileGivesTheLongCarMoreOfItsPaceBack() {
         val light = Racing.chassis.single { it.id == "seven" }
         val heavy = Racing.chassis.single { it.id == "etype" }

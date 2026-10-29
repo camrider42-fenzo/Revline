@@ -142,6 +142,11 @@ fun RaceMeet(
             val sweep = 240f
             glowArc(White, start, sweep * 0.82f, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), stroke, 0.7f)
             glowArc(Red, start + sweep * 0.82f, sweep * 0.18f, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), stroke * 1.3f, 1.1f)
+            val shiftFrac = 0.91f
+            val shiftAng = Math.toRadians((start + sweep * shiftFrac).toDouble())
+            val shiftIn = Offset(c.x + (cos(shiftAng) * r * 0.86).toFloat(), c.y + (sin(shiftAng) * r * 0.86).toFloat())
+            val shiftOut = Offset(c.x + (cos(shiftAng) * r * 1.02).toFloat(), c.y + (sin(shiftAng) * r * 1.02).toFloat())
+            glowLine(Lime, shiftIn, shiftOut, stroke, 0.9f)
             val frac = (frame.rpm / setup.redline).toFloat().coerceIn(0f, 1.08f)
             val ang = Math.toRadians((start + sweep * frac).toDouble())
             val tip = Offset(c.x + (cos(ang) * r * 0.78).toFloat(), c.y + (sin(ang) * r * 0.78).toFloat())
@@ -187,6 +192,13 @@ fun RaceMeet(
             carMark(Lime, youX, y, stroke)
             carMark(Red, themX, y - 18f, stroke)
         }
+        val gapM = frame.distance - frame.rival
+        Text(
+            if (frame.lights > 0f) " " else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
+            color = if (gapM >= 0) Lime else Red,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
         Text(
             "GEAR ${frame.gear}/${setup.ratios.size}   ${frame.rpm.toInt()} rpm   ${(frame.speed * 2.237).toInt()} mph   ${String.format(Locale.US, "%.2f", frame.time)}s",
             color = White,
@@ -202,7 +214,7 @@ fun RaceMeet(
             modifier = Modifier.padding(top = 2.dp),
         )
         Text(
-            "Throttle stays where you leave it. Clutch springs back in. Press it to shift.",
+            "Hook near ${(RaceDrive.launchThrottle(setup) * 100).toInt()}%. Shift at the lime mark. Clutch in, then let it spring back.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

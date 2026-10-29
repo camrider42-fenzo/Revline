@@ -220,6 +220,27 @@ object Racing {
 
     fun car(state: GameState): Car = assess(specOf(state), lengthOf(state.raceLength))
 
+    /** Fastest chassis this engine can sit in, on the distance selected. */
+    fun quickest(state: GameState): Chassis? =
+        chassis
+            .filter { it.minPrestige <= state.prestiges }
+            .map { it to forecast(state, it) }
+            .filter { (_, look) -> look.fits }
+            .maxByOrNull { (_, look) -> look.pace }
+            ?.first
+
+    /**
+     * A clean run in each final drive, on the strip selected.
+     * The pace card does not see the gear. This does.
+     */
+    fun gearTimes(state: GameState): Map<String, Double> {
+        val setup = RaceDrive.setup(state)
+        val meters = lengthOf(state.raceLength).meters
+        return listOf("short", "road", "tall").associateWith { id ->
+            RaceDrive.driveWell(setup.copy(finalDrive = finalRatio(id), distanceM = meters)).time
+        }
+    }
+
     /** What this engine would do in [body] on the strip you have selected. */
     fun forecast(state: GameState, body: Chassis): Car {
         val now = specOf(state)

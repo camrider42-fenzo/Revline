@@ -26,6 +26,21 @@ class RaceDriveTest {
     }
 
     @Test
+    fun aShortGearWinsTheEighthAndGivesGroundBackOnTheHalf() {
+        fun pair(meters: Double): Pair<Double, Double> {
+            val short = RaceDrive.driveWell(sample().copy(distanceM = meters, finalDrive = 4.56)).time
+            val tall = RaceDrive.driveWell(sample().copy(distanceM = meters, finalDrive = 3.07)).time
+            return short to tall
+        }
+        val (shortEighth, tallEighth) = pair(Racing.Length.EIGHTH.meters)
+        val (shortHalf, tallHalf) = pair(Racing.Length.HALF.meters)
+        val eighthShare = (tallEighth - shortEighth) / shortEighth
+        val halfShare = (tallHalf - shortHalf) / shortHalf
+        assertTrue("eighth short $shortEighth tall $tallEighth", tallEighth > shortEighth + 0.05)
+        assertTrue("half share $halfShare eighth share $eighthShare", halfShare < eighthShare)
+    }
+
+    @Test
     fun aShortGearLeavesHarderAndATallGearCarriesTheTop() {
         val short = sample().copy(finalDrive = Racing.finalRatio("short"))
         val tall = sample().copy(finalDrive = Racing.finalRatio("tall"))

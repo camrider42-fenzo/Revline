@@ -121,10 +121,21 @@ fun RaceScreen(
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
+        val quickestId = Racing.quickest(state)?.id
         ChassisRow("Shop mule", "640 kg  front  fits the engine you have  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
         com.revline.idle.model.Block.entries.forEach { block ->
             val group = Racing.chassis.filter { it.group == block.ordinal }
             if (group.isEmpty()) return@forEach
+            if (block.ordinal > state.prestiges) {
+                Text(
+                    "${block.title}  ·  three cars, with a later engine",
+                    color = Olive,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                return@forEach
+            }
             Text(block.title.uppercase(Locale.US), color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
             group.forEach { item ->
                 val study = "chassis_${item.id}"
@@ -142,10 +153,15 @@ fun RaceScreen(
                 val places = item.places.joinToString("/") { it.name.lowercase(Locale.US) }
                 val bay = if (item.maxCc < 800) "${item.maxCc.toInt()} cc" else String.format(Locale.US, "%.1f L", item.maxCc / 1000.0)
                 val look = Racing.forecast(state, item)
-                val outlook = if (look.fits) "dyno ${look.wheelHp.toInt()}  pace ${look.pace.toInt()}" else "this engine will not fit"
+                val outlook = if (look.fits) {
+                    "dyno ${look.wheelHp.toInt()}  pace ${look.pace.toInt()}  fade ${(look.fade * 100).toInt()}%"
+                } else {
+                    "this engine will not fit"
+                }
+                val star = if (item.id == quickestId) "  ·  quickest" else ""
                 ChassisRow(
-                    "${item.build.name.lowercase(Locale.US)}  ${item.name}",
-                    "${item.kg.toInt()} kg  $places  bay $bay  ${item.slots} ducts  $outlook  ${item.source}",
+                    "${item.build.name.lowercase(Locale.US)}  ${item.name}$star",
+                    "$outlook  ·  ${item.kg.toInt()} kg  $places  bay $bay  ·  ${item.source}",
                     state.chassis == item.id,
                     open,
                     label,
@@ -180,6 +196,39 @@ fun RaceScreen(
             listOf("short" to "Short 4.56", "road" to "Road 3.73", "tall" to "Tall 3.07"),
             state.finalDrive,
             onFinal,
+        )
+        val gearKey = listOf(
+            state.finalDrive,
+            state.raceLength,
+            state.chassis,
+            state.transmission,
+            state.driveline,
+            state.tire,
+            state.enginePlace,
+            ui.sheet.stats.peakHorsepower.toInt(),
+            ui.sheet.stats.peakTorqueLbFt.toInt(),
+        )
+        val gearLine = remember(gearKey) {
+            val times = Racing.gearTimes(state)
+            val best = times.minBy { it.value }
+            val now = times[state.finalDrive] ?: best.value
+            val name = when (best.key) {
+                "short" -> "Short"
+                "tall" -> "Tall"
+                else -> "Road"
+            }
+            if (best.key == state.finalDrive) {
+                "$name is the quick gear here, ${fmtSeconds(now)}."
+            } else {
+                "$name is ${fmtSeconds(now - best.value)} quicker on this distance."
+            }
+        }
+        Text(
+            gearLine,
+            color = Cyan,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp),
         )
         Text("DRIVELINE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         ChipRow(Racing.axles.map { it.id to it.name }, state.driveline) { id ->
@@ -228,6 +277,9 @@ fun RaceScreen(
         )
     }
 }
+
+private fun fmtSeconds(seconds: Double): String =
+    String.format(Locale.US, "%.2fs", kotlin.math.abs(seconds))
 
 @Composable
 private fun ChassisRow(title: String, detail: String, on: Boolean, enabled: Boolean, action: String, click: () -> Unit) {
