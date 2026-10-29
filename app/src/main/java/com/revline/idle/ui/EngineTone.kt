@@ -71,6 +71,7 @@ class EngineVoice {
     private var blastLp = 0.0
     private var noise = 0x27BB2EE
     private var level = 0.0
+    private var limitTime = 0.0
 
     fun sample(ear: EngineEar, angleDeg: Float, sampleRate: Int): Float {
         val target = if (ear.running) 0.22 + 0.78 * ear.throttle.coerceIn(0.0, 1.0) else 0.0
@@ -141,7 +142,11 @@ class EngineVoice {
         val share = 1.0 / kotlin.math.sqrt(cycles.size.toDouble())
         val bang = softClip(hit) * 0.92 * share
         val mixed = bang + pipe * share + air(ear, cycles, sampleRate)
-        val out = mixed * level * (0.88 + 0.22 * open) * (0.84 + 0.22 * bright)
+        var out = mixed * level * (0.88 + 0.22 * open) * (0.84 + 0.22 * bright)
+        if (ear.limiter) {
+            limitTime += 1.0 / sampleRate
+            if (com.revline.idle.game.RevLimiter.cutting(limitTime)) out *= 0.04
+        }
         return out.coerceIn(-1.0, 1.0).toFloat()
     }
 
@@ -208,4 +213,6 @@ data class EngineEar(
     val exhaustRasp: Double = 0.0,
     val exhaustBark: Double = 0.0,
     val exhaustLope: Double = 0.0,
+    /** Fuel cut at the top of the tach. The exhaust chops instead of holding a note. */
+    val limiter: Boolean = false,
 )

@@ -26,6 +26,7 @@ class EngineCrank {
     private val raspBits = AtomicInteger(0)
     private val barkBits = AtomicInteger(0)
     private val lopeBits = AtomicInteger(0)
+    private val limiter = AtomicInteger(0)
 
     var angle: Float
         get() = Float.fromBits(angleBits.get())
@@ -36,7 +37,7 @@ class EngineCrank {
     val rpm: Float
         get() = Float.fromBits(rpmBits.get())
 
-    fun publish(params: EngineParams, rpm: Float, throttle: Float, live: Boolean) {
+    fun publish(params: EngineParams, rpm: Float, throttle: Float, live: Boolean, limiterOn: Boolean = false) {
         rpmBits.set(rpm.toRawBits())
         boreBits.set(params.boreMm.toFloat().toRawBits())
         crBits.set(params.compressionRatio.toFloat().toRawBits())
@@ -50,6 +51,7 @@ class EngineCrank {
         raspBits.set(params.exhaustNote.rasp.toFloat().toRawBits())
         barkBits.set(params.exhaustNote.bark.toFloat().toRawBits())
         lopeBits.set(params.exhaustNote.lope.toFloat().toRawBits())
+        limiter.set(if (limiterOn) 1 else 0)
     }
 
     fun ear(): EngineEar = EngineEar(
@@ -66,6 +68,7 @@ class EngineCrank {
         exhaustRasp = Float.fromBits(raspBits.get()).toDouble(),
         exhaustBark = Float.fromBits(barkBits.get()).toDouble(),
         exhaustLope = Float.fromBits(lopeBits.get()).toDouble(),
+        limiter = limiter.get() == 1,
     )
 }
 

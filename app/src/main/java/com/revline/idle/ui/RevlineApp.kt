@@ -123,7 +123,15 @@ fun RevlineApp(vm: GameViewModel) {
             Box(Modifier.fillMaxSize().padding(padding).background(Black)) {
                 val strip = ui.strip
                 if (strip != null) {
-                    RaceMeet(strip.setup, strip.field, strip.yourPace, vm::finishMeet)
+                    RaceMeet(
+                        strip.setup,
+                        strip.field,
+                        strip.yourPace,
+                        vm::finishMeet,
+                        crank,
+                        ui.sheet.params,
+                        hear = !ui.game.batterySaver,
+                    )
                 } else {
                     when (tab.value) {
                         Tab.BENCH -> BenchScreen(ui, vm::startDyno, vm::setThrottle)
@@ -174,8 +182,9 @@ private fun rememberEngineCrank(vm: GameViewModel): EngineCrank {
     val throttle = if (vm.ui.phase == DynoPhase.IDLE) vm.ui.game.throttle.toFloat() else 1f
     val live = !vm.ui.game.batterySaver &&
         !(Logic.stalled(vm.ui.game.throttle) && vm.ui.phase == DynoPhase.IDLE)
-    LaunchedEffect(params, rpm, throttle, live) {
-        crank.publish(params, rpm, throttle, live)
+    val onStrip = vm.ui.strip != null
+    LaunchedEffect(params, rpm, throttle, live, vm.ui.limiter, onStrip) {
+        if (!onStrip) crank.publish(params, rpm, throttle, live, limiterOn = vm.ui.limiter && live)
     }
     return crank
 }
@@ -229,7 +238,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                     FailureLine(ui)
                     EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(280.dp))
                     Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(170.dp))
+                        Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(170.dp), bouncing = ui.limiter)
                         ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
                     }
                     Text(
@@ -254,7 +263,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                 FailureLine(ui)
                 EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(200.dp))
                 Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(148.dp))
+                    Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(148.dp), bouncing = ui.limiter)
                     ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))
                 }
                 Text(

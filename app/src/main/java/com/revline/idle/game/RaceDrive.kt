@@ -151,18 +151,25 @@ object RaceDrive {
         } else {
             run.hooked = true
             run.spinning = false
-            var tq = torqueNm(setup, roadRpm.coerceAtMost(setup.redline)) * setup.efficiency
-            run.limiter = roadRpm > setup.redline
-            if (run.limiter) tq *= 0.07
-            val force = tq * engagement * overall / WHEEL_R
-            val accel = (force - dragForce(setup, run.speed)) / setup.massKg
-            run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
-            val road = roadRpm(run.speed, overall).coerceAtLeast(setup.idle * 0.8)
-            run.rpm = if (engagement >= 0.92) {
-                road
+            val over = roadRpm > setup.redline && engagement >= 0.45 && th > 0.15
+            if (over) {
+                run.limiter = true
+                run.rpm = RevLimiter.rpm(setup.redline, run.time)
+                val dragA = dragForce(setup, run.speed) / setup.massKg
+                run.speed = (run.speed - dragA * stepDt).coerceAtLeast(0.0)
             } else {
-                val flare = setup.idle + th * (setup.redline - setup.idle)
-                (road * engagement + flare * depression).coerceAtLeast(setup.idle * 0.8)
+                run.limiter = false
+                var tq = torqueNm(setup, roadRpm.coerceAtMost(setup.redline)) * setup.efficiency
+                val force = tq * engagement * overall / WHEEL_R
+                val accel = (force - dragForce(setup, run.speed)) / setup.massKg
+                run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
+                val road = roadRpm(run.speed, overall).coerceAtLeast(setup.idle * 0.8)
+                run.rpm = if (engagement >= 0.92) {
+                    road
+                } else {
+                    val flare = setup.idle + th * (setup.redline - setup.idle)
+                    (road * engagement + flare * depression).coerceAtLeast(setup.idle * 0.8)
+                }
             }
         }
         advance(run, stepDt)

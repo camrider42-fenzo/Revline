@@ -127,6 +127,26 @@ class EngineToneTest {
     }
 
     @Test
+    fun theLimiterChopsTheExhaust() {
+        val ear = EngineEar(86.0, 10.5, 4, 1, throttle = 1.0, running = true, rpm = 7000.0, redlineRpm = 7000.0)
+        fun energy(cut: Boolean): Float {
+            val voice = EngineVoice()
+            var sum = 0f
+            var angle = 40f
+            repeat(8_000) {
+                sum += abs(voice.sample(ear.copy(limiter = cut), angle, 44100))
+                angle += 0.5f
+                if (angle >= 720f) angle -= 720f
+            }
+            return sum
+        }
+        val open = energy(false)
+        val cut = energy(true)
+        assertTrue("cut $cut vs open $open", cut < open * 0.82)
+        assertTrue("cut $cut still has a note", cut > open * 0.15)
+    }
+
+    @Test
     fun aStallIsSilentAndTheCrankMatchesTheDrawing() {
         val ear = EngineEar(86.0, 10.0, 1, 1, throttle = 0.0, running = false)
         assertEquals(0f, EngineVoice().sample(ear, 0f, 44100), 0f)

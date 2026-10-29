@@ -46,6 +46,8 @@ data class UiModel(
     val offline: String?,
     val raceNote: String? = null,
     val strip: Strip? = null,
+    /** True while the crank is on the fuel cut, on the bench or on a dyno pull. */
+    val limiter: Boolean = false,
 )
 
 class GameViewModel(app: Application) : AndroidViewModel(app) {
@@ -55,6 +57,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private var phase = DynoPhase.IDLE
     private var pullT = 0.0
+    private var onLimiter = false
     private var clock = 0.0
     private var sinceSave = 0.0
     private var rpm = Logic.IDLE_RPM
@@ -110,6 +113,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     game = game,
                     rpm = spun,
                     phase = phase,
+                    limiter = onLimiter,
                     sheet = ui.sheet.copy(incomePerSec = if (nowMs < game.downUntilEpochMs) 0.0 else pay),
                 ),
             )
@@ -124,16 +128,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private fun advanceRpm(dt: Double, redline: Double, throttle: Double, idle: Double): Double {
         val wobble = if (ui.game.batterySaver) 0.0 else 16.0 * sin(clock * 2.4) + 6.0 * sin(clock * 6.1)
         val floor = idle.coerceIn(500.0, redline - 300.0)
+        onLimiter = false
         when (phase) {
             DynoPhase.PULL -> {
                 pullT += dt
-                val u = (pullT / 7.0).coerceIn(0.0, 1.0)
-                val e = u * u * (3.0 - 2.0 * u)
-                if (pullT >= 7.0) {
+                val climb = 5.5
+                val hold = 7.3
+                if (pullT < climb) {
+                    val u = (pullT / climb).coerceIn(0.0, 1.0)
+                    val e = u * u * (3.0 - 2.0 * u)
+                    rpm = floor + (redline - floor) * e
+                } else if (pullT < hold) {
+                    rpm = redline
+                    onLimiter = true
+                } else {
                     phase = DynoPhase.RETURN
                     pullT = 0.0
+                    rpm = redline
                 }
-                rpm = floor + (redline - floor) * e
             }
             DynoPhase.RETURN -> {
                 pullT += dt
@@ -155,9 +167,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val follow = 1.0 - exp(-dt / if (throttle <= 0.0) 0.55 else 0.42)
                 rpm += (target - rpm) * follow
+                if (throttle >= 0.97 && rpm > redline - 180.0) {
+                    rpm = redline
+                    onLimiter = true
+                }
             }
         }
-        return rpm.coerceIn(0.0, redline + 80.0)
+        return rpm.coerceIn(0.0, redline + 40.0)
     }
 
     fun setThrottle(position: Double) {

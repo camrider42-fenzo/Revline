@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Racing
+import com.revline.idle.game.RevLimiter
+import com.revline.idle.model.EngineParams
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
@@ -49,6 +51,9 @@ fun RaceMeet(
     field: Racing.Field,
     yourPace: Double,
     onFinished: (Boolean, Double, Double) -> Unit,
+    crank: EngineCrank,
+    params: EngineParams,
+    hear: Boolean,
 ) {
     val finish = setup.distanceM
     val hands = remember { Hands(RaceDrive.fresh(setup)) }
@@ -91,6 +96,10 @@ fun RaceMeet(
                 hands.shift = false
                 RaceDrive.step(setup, hands.run, asked, shift, dt, hands.clutch)
                 frame = snap(hands.run, 0f, jumped, rivalTime, finish, done = false, won = false)
+                if (hear) {
+                    val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.time) else hands.run.rpm
+                    crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
+                }
             }
         }
         if (!settled && isActive) {
@@ -195,7 +204,8 @@ fun RaceMeet(
                     stroke * 1.2f,
                     1f,
                 )
-                val frac = (frame.rpm / setup.redline).toFloat().coerceIn(0f, 1.08f)
+                val shownRpm = if (frame.limiter) RevLimiter.rpm(setup.redline, frame.time) else frame.rpm
+                val frac = (shownRpm / setup.redline).toFloat().coerceIn(0f, 1.08f)
                 val ang = Math.toRadians((start + sweep * frac).toDouble())
                 val tail = Offset(c.x - (cos(ang) * r * 0.12).toFloat(), c.y - (sin(ang) * r * 0.12).toFloat())
                 val tip = Offset(c.x + (cos(ang) * r * 0.78).toFloat(), c.y + (sin(ang) * r * 0.78).toFloat())

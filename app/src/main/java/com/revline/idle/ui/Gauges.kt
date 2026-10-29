@@ -20,7 +20,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -31,16 +35,37 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.revline.idle.game.RevLimiter
 import com.revline.idle.model.OperatingPoint
+import kotlinx.coroutines.isActive
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
 @Composable
-fun Tachometer(rpm: Double, redline: Double, targetRpm: Double, modifier: Modifier = Modifier) {
+fun Tachometer(
+    rpm: Double,
+    redline: Double,
+    targetRpm: Double,
+    modifier: Modifier = Modifier,
+    bouncing: Boolean = false,
+) {
     val settle: AnimationSpec<Float> = if (LocalBatterySaver.current) snap() else tween(durationMillis = 180)
     val shown by animateFloatAsState(rpm.toFloat(), settle, label = "tach")
+    var nanos by androidx.compose.runtime.remember { mutableLongStateOf(0L) }
+    if (bouncing && !LocalBatterySaver.current) {
+        LaunchedEffect(Unit) {
+            while (isActive) {
+                withFrameNanos { nanos = it }
+            }
+        }
+    }
+    val needle = if (bouncing && !LocalBatterySaver.current) {
+        RevLimiter.rpm(redline, nanos / 1_000_000_000.0).toFloat()
+    } else {
+        shown
+    }
     val mark by animateFloatAsState(targetRpm.toFloat(), settle, label = "mark")
     Canvas(modifier) {
         val stroke = (size.minDimension / 80f).coerceIn(1.7f, 3.2f)
@@ -86,13 +111,13 @@ fun Tachometer(rpm: Double, redline: Double, targetRpm: Double, modifier: Modifi
             filled = true,
             gain = 1.1f,
         )
-        val frac = (shown / scale).coerceIn(0.0, 1.0)
+        val frac = (needle / scale).coerceIn(0.0, 1.0)
         val na = Math.toRadians(start + sweep * frac)
         val tip = Offset(c.x + (cos(na) * r * 0.78f).toFloat(), c.y + (sin(na) * r * 0.78f).toFloat())
-        val hot = shown >= redline.toFloat()
+        val hot = bouncing || needle >= redline.toFloat() - 80f
         glowLine(if (hot) Red else Lime, c, tip, stroke * 1.35f, 1.2f)
         glowCircle(if (hot) Red else Lime, stroke * 2f, c, stroke, filled = true)
-        val label = shown.toInt().toString()
+        val label = needle.toInt().toString()
         drawContext.canvas.nativeCanvas.drawText(
             label,
             c.x,

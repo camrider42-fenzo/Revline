@@ -26,6 +26,36 @@ class RaceDriveTest {
     }
 
     @Test
+    fun sittingOnTheLimiterStopsThePull() {
+        val car = sample()
+        val run = RaceDrive.fresh(car)
+        var guard = 0
+        var marked = false
+        var speedAt = 0.0
+        var timeAt = 0.0
+        var speedLater = 0.0
+        while (run.time < 20.0 && run.distance < RaceDrive.FINISH_M && guard < 8_000) {
+            guard++
+            val shift = !marked && run.gear == 1 && run.rpm > car.redline * 0.55
+            RaceDrive.step(car, run, 1.0, shift, 1.0 / 60.0)
+            if (!marked && run.limiter) {
+                marked = true
+                speedAt = run.speed
+                timeAt = run.time
+            }
+            if (marked && run.time > timeAt + 0.55) {
+                speedLater = run.speed
+                break
+            }
+        }
+        assertTrue("never reached the limiter", marked)
+        assertTrue("kept pulling $speedAt to $speedLater", speedLater <= speedAt * 1.03)
+        assertTrue("rpm ${run.rpm}", run.rpm < car.redline)
+        assertTrue(RevLimiter.rpm(7000.0, 0.0) < 6700.0)
+        assertTrue(RevLimiter.rpm(7000.0, 0.05) > 6900.0)
+    }
+
+    @Test
     fun aShortGearWinsTheEighthAndGivesGroundBackOnTheHalf() {
         fun pair(meters: Double): Pair<Double, Double> {
             val short = RaceDrive.driveWell(sample().copy(distanceM = meters, finalDrive = 4.56)).time
