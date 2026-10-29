@@ -77,7 +77,6 @@ fun RaceMeet(
     LaunchedEffect(setup) {
         var last = 0L
         var lights = 1.35f
-        var jumped = false
         val limit = (96.0 * finish / RaceDrive.FINISH_M).coerceIn(48.0, 170.0)
         while (isActive && !settled && hands.run.distance < finish && hands.run.time < limit) {
             withFrameNanos { now ->
@@ -87,17 +86,16 @@ fun RaceMeet(
                     hands.clutch = RaceDrive.releaseClutch(hands.clutch, dt)
                     clutchShown = hands.clutch.toFloat()
                 }
+                // The pedal sticks, so it can be set while the tree is lit. The car waits for green.
                 if (lights > 0.0) {
                     lights -= dt.toFloat()
-                    if (hands.throttle > 0.18) jumped = true
-                    frame = snap(hands.run, lights, jumped, rivalTime, finish, done = false, won = false)
+                    frame = snap(hands.run, lights, rivalTime, finish, done = false, won = false)
                     return@withFrameNanos
                 }
-                val asked = if (jumped && hands.run.time < 0.7) 1.0 else hands.throttle
                 val shift = hands.shift && hands.clutch > 0.62
                 hands.shift = false
-                RaceDrive.step(setup, hands.run, asked, shift, dt, hands.clutch)
-                frame = snap(hands.run, 0f, jumped, rivalTime, finish, done = false, won = false)
+                RaceDrive.step(setup, hands.run, hands.throttle, shift, dt, hands.clutch)
+                frame = snap(hands.run, 0f, rivalTime, finish, done = false, won = false)
                 if (hear) {
                     val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.time) else hands.run.rpm
                     crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
@@ -106,7 +104,7 @@ fun RaceMeet(
         }
         if (!settled && isActive) {
             val won = hands.run.distance >= finish && hands.run.time <= rivalTime
-            frame = snap(hands.run, 0f, jumped, rivalTime, finish, done = true, won = won)
+            frame = snap(hands.run, 0f, rivalTime, finish, done = true, won = won)
             delay(900)
             settle(won)
         }
@@ -117,7 +115,6 @@ fun RaceMeet(
         frame.lights > 0.7f -> "READY"
         frame.lights > 0f -> "SET"
         frame.shiftLeft > 0.0 -> "SHIFT"
-        frame.jumped && frame.time < 0.7 -> "JUMP"
         frame.spinning -> "SPIN"
         frame.limiter -> "LIMITER"
         else -> "GO"
@@ -125,7 +122,7 @@ fun RaceMeet(
     val bannerColor = when {
         frame.lights > 0f -> Amber
         frame.done && frame.won -> Lime
-        frame.done || frame.spinning || frame.limiter || (frame.jumped && frame.time < 0.7) -> Red
+        frame.done || frame.spinning || frame.limiter -> Red
         frame.shiftLeft > 0.0 -> Amber
         else -> Lime
     }
@@ -140,7 +137,7 @@ fun RaceMeet(
         Text(field.detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(purse, color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(banner, color = bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
-        Canvas(Modifier.fillMaxWidth().height(36.dp).padding(top = 4.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(40.dp).padding(top = 4.dp)) {
             val stroke = 2f
             val lamp = size.minDimension * 0.28f
             val y = size.height * 0.55f
@@ -157,7 +154,7 @@ fun RaceMeet(
                 stageLamp(colors[index], Offset(size.width * at, y), lamp, stroke, lit[index])
             }
         }
-        Canvas(Modifier.fillMaxWidth().height(168.dp).padding(top = 4.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(280.dp).padding(top = 4.dp)) {
             val stroke = (size.minDimension / 80f).coerceIn(1.5f, 2.6f)
             val left = 18f
             val right = size.width - 18f
@@ -256,7 +253,7 @@ fun RaceMeet(
             modifier = Modifier.padding(top = 2.dp),
         )
         Text(
-            "Hook near ${(RaceDrive.launchThrottle(setup) * 100).toInt()}%. Shift at the lime mark. Clutch in, then let it spring back.",
+            hookAdvice(setup) + " Shift at the lime mark. Clutch in, then let it spring back.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -292,7 +289,6 @@ private data class Frame(
     val shiftLeft: Double = 0.0,
     val spinning: Boolean = false,
     val limiter: Boolean = false,
-    val jumped: Boolean = false,
     val rival: Float = 0f,
     val done: Boolean = false,
     val won: Boolean = false,
@@ -301,7 +297,6 @@ private data class Frame(
 private fun snap(
     run: RaceDrive.Run,
     lights: Float,
-    jumped: Boolean,
     rivalTime: Double,
     finish: Double,
     done: Boolean,
@@ -316,11 +311,19 @@ private fun snap(
     shiftLeft = run.shiftLeft,
     spinning = run.spinning,
     limiter = run.limiter,
-    jumped = jumped,
     rival = (finish * (run.time / rivalTime)).toFloat().coerceAtMost(finish.toFloat()),
     done = done,
     won = won,
 )
+
+private fun hookAdvice(setup: RaceDrive.Setup): String {
+    val hook = RaceDrive.launchThrottle(setup)
+    return if (hook >= 0.99) {
+        "Full throttle holds."
+    } else {
+        "Under ${(hook * 100).toInt()}% the tires hold. Past that they spin."
+    }
+}
 
 private fun DrawScope.stageLamp(color: Color, center: Offset, radius: Float, stroke: Float, lit: Boolean) {
     if (lit) glowCircle(color, radius, center, stroke, filled = true, gain = 1.15f)
@@ -354,10 +357,13 @@ private fun DrawScope.lane(
         glowLine(Olive, Offset(tick, ground - 5f), Offset(tick, ground + 5f), stroke, 0.4f)
         mark += 0.25f
     }
-    val scale = 20f
+    // Tall enough to read the cabin, short enough that the car is not the whole track.
+    val scale = (size.height * 0.13f).coerceIn(48f, 84f)
     val half = Wireframe.length(chassisId) * scale * 0.5f
+    val pad = (scale * 0.22f).coerceAtLeast(10f)
     val along = progress.coerceIn(0f, 1f)
-    val x = left + half + along * (span - half * 2f).coerceAtLeast(8f)
+    val room = (span - half * 2f - pad * 2f).coerceAtLeast(8f)
+    val x = left + half + pad + along * room
     with(Wireframe) {
         draw(chassisId, mid, color, x, ground, scale, roll, spinning, stroke, time, gas)
     }

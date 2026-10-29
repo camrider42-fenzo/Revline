@@ -54,23 +54,26 @@ object Wireframe {
         val xs = model.lines.flatMap { listOf(it[0], it[2]) }
         val midX = ((xs.minOrNull() ?: 0f) + (xs.maxOrNull() ?: 0f)) / 2f
         fun at(nx: Float, ny: Float) = Offset(x + (nx - midX) * scale, ground - ny * scale)
-        for (seg in model.lines) {
-            glowLine(color, at(seg[0], seg[1]), at(seg[2], seg[3]), stroke, 0.8f)
-        }
         val rear = model.axles.minBy { it[0] }
+        val tailX = model.lines.minOf { minOf(it[0], it[2]) }
+        // Gas and smoke sit behind the body, so the cabin stays a line drawing.
+        if (gas > 0.04f) {
+            cloud(at(tailX, 0.22f), time * 1.3f, scale, stroke, smoke = false, amount = gas)
+        }
+        if (spinning) {
+            cloud(at(rear[0], rear[1]), time, scale, stroke, smoke = true)
+        }
+        for (seg in model.lines) {
+            glowLine(color, at(seg[0], seg[1]), at(seg[2], seg[3]), stroke, 0.85f)
+        }
         model.axles.forEach { axle ->
             val driven = spinning && axle[0] == rear[0]
             wheel(if (driven) Red else color, at(axle[0], axle[1]), model.tire * scale, roll, stroke)
         }
         if (spinning) {
-            val tail = at(rear[0] - model.tire * 1.4f, 0.02f)
-            val heel = at(rear[0], 0.02f)
-            glowLine(Red, tail, heel, stroke, 0.7f)
-            cloud(at(rear[0], rear[1]), time, scale, stroke, smoke = true)
-        }
-        if (gas > 0.04f) {
-            val tailX = model.lines.minOf { minOf(it[0], it[2]) }
-            cloud(at(tailX, 0.28f), time * 1.3f, scale, stroke, smoke = false, amount = gas)
+            val tail = at(rear[0] - model.tire * 2.2f, 0.02f)
+            val heel = at(rear[0] + model.tire * 0.2f, 0.02f)
+            glowLine(Red, tail, heel, stroke * 1.35f, 0.9f)
         }
     }
 
@@ -82,19 +85,20 @@ object Wireframe {
         smoke: Boolean,
         amount: Float = 1f,
     ) {
-        val count = if (smoke) 5 else 4
+        val count = if (smoke) 8 else 7
+        val puff = (scale / 52f).coerceIn(0.75f, 1.45f)
         for (i in 0 until count) {
-            val phase = ((time * if (smoke) 1.8f else 2.4f) + i / count.toFloat()) % 1f
-            val back = phase * scale * (if (smoke) 0.95f else 0.7f)
-            val up = phase * phase * scale * (if (smoke) 0.62f else 0.38f)
-            val side = sin(time * 3f + i) * scale * 0.08f * phase
+            val phase = ((time * if (smoke) 1.6f else 2.2f) + i / count.toFloat()) % 1f
+            val back = (0.18f + phase) * scale * (if (smoke) 1.55f else 1.35f)
+            val up = phase * phase * scale * (if (smoke) 0.72f else 0.42f)
+            val side = sin(time * 3f + i) * scale * 0.07f * phase
             val spot = origin + Offset(-back + side, -up)
-            val radius = (2.2f + phase * (if (smoke) 9f else 6f)) * (scale / 20f)
-            val fade = (1f - phase) * amount * if (smoke) 0.7f else 0.55f
+            val radius = (2.2f + phase * (if (smoke) 7.2f else 4.6f)) * puff
+            val fade = (1f - phase) * amount * if (smoke) 0.85f else 0.7f
             val ink = if (smoke) White else Amber
-            glowCircle(ink, radius, spot, stroke, filled = true, gain = fade.coerceIn(0.04f, 0.9f))
-            if (!smoke && phase < 0.35f) {
-                glowCircle(Red, radius * 0.45f, spot, stroke, filled = true, gain = (fade * 0.8f).coerceIn(0.04f, 0.6f))
+            glowCircle(ink, radius, spot, stroke, filled = true, gain = fade.coerceIn(0.05f, 0.95f))
+            if (!smoke && phase < 0.45f) {
+                glowCircle(Red, radius * 0.42f, spot, stroke, filled = true, gain = (fade * 0.85f).coerceIn(0.04f, 0.7f))
             }
         }
     }

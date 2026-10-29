@@ -561,18 +561,19 @@ private fun DrawScope.exhaustPlume(
     stroke: Float,
 ) {
     if (rpm < 30f) return
-    val open = throttle.coerceIn(0.12f, 1f)
+    val push = 0.34f + 0.66f * throttle.coerceIn(0f, 1f)
     val rate = (rpm / 700f).coerceIn(0.8f, 16f)
-    for (i in 0 until 5) {
-        val phase = ((clock * rate * 0.42f) + i / 5f) % 1f
-        val travel = 8f + phase * (22f + rpm / 350f) * open
-        val wobble = sin(clock * 2.6f + i * 1.7f) * 5f * phase
-        val rise = -phase * phase * 18f * open
+    val reach = (70f + rpm / 140f) * push
+    for (i in 0 until 7) {
+        val phase = ((clock * rate * 0.38f) + i / 7f) % 1f
+        val travel = 8f + phase * reach
+        val wobble = sin(clock * 2.4f + i * 1.5f) * (4f + 7f * phase)
+        val rise = -phase * phase * 34f * push
         val spot = mouth + blow * travel + Offset(wobble, rise)
-        val radius = stroke * (0.9f + phase * 3.4f)
-        val fade = (1f - phase) * gain * (0.25f + 0.75f * open)
-        glowCircle(White, radius * 1.7f, spot, stroke, filled = true, gain = (fade * 0.38f).coerceIn(0.04f, 0.7f))
-        glowCircle(color, radius * 0.75f, spot, stroke, filled = true, gain = fade.coerceIn(0.05f, 1.15f))
+        val radius = stroke * (0.7f + phase * 2.6f)
+        val fade = (1f - phase) * gain * (0.35f + 0.65f * push)
+        glowCircle(White, radius * 1.35f, spot, stroke, filled = true, gain = (fade * 0.32f).coerceIn(0.03f, 0.55f))
+        glowCircle(color, radius * 0.62f, spot, stroke, filled = true, gain = fade.coerceIn(0.05f, 1.05f))
     }
 }
 
