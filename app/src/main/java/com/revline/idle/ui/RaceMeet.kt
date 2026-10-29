@@ -162,9 +162,10 @@ fun RaceMeet(
             val left = 18f
             val right = size.width - 18f
             val span = right - left
-            val laneH = size.height / 2f
-            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, false, stroke, rivalId, false)
-            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.spinning, stroke, yourId, yourMid)
+            val yourGas = if (frame.lights > 0f) 0.15f else (frame.rpm / setup.redline).toFloat().coerceIn(0.2f, 1f)
+            val theirGas = if (frame.lights > 0f) 0.05f else 0.55f
+            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, false, stroke, rivalId, false, frame.time.toFloat(), theirGas)
+            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.spinning, stroke, yourId, yourMid, frame.time.toFloat(), yourGas)
             gantry(Olive, left, 6f, size.height - 4f, stroke, 0.55f)
             val finishColor = if (frame.done && frame.won) Lime else if (frame.done) Red else White
             gantry(finishColor, right, 6f, size.height - 4f, stroke, 1f)
@@ -343,6 +344,8 @@ private fun DrawScope.lane(
     stroke: Float,
     chassisId: String,
     mid: Boolean,
+    time: Float,
+    gas: Float,
 ) {
     glowLine(White, Offset(left, ground), Offset(right, ground), stroke * 0.8f, 0.28f)
     var mark = 0.25f
@@ -356,6 +359,6 @@ private fun DrawScope.lane(
     val along = progress.coerceIn(0f, 1f)
     val x = left + half + along * (span - half * 2f).coerceAtLeast(8f)
     with(Wireframe) {
-        draw(chassisId, mid, color, x, ground, scale, roll, spinning, stroke)
+        draw(chassisId, mid, color, x, ground, scale, roll, spinning, stroke, time, gas)
     }
 }

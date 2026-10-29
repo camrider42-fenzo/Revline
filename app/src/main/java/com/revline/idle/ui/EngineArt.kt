@@ -33,6 +33,7 @@ fun EngineArt(
     egtC: Float,
     parts: Map<String, Int> = emptyMap(),
     modifier: Modifier = Modifier,
+    throttle: Float = 1f,
 ) {
     val frozen = LocalBatterySaver.current
     val rpmState = rememberUpdatedState(rpm)
@@ -76,7 +77,7 @@ fun EngineArt(
             left = stroke * 0.35f * calm * sin(clock * lope),
             top = stroke * 0.45f * calm * sin(clock * lope * 1.7f + 0.6f),
         ) {
-            drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain)
+            drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
         }
     }
 }
@@ -91,6 +92,7 @@ private fun DrawScope.drawEngine(
     hose: Color,
     exhaust: Color,
     exhaustGain: Float,
+    throttle: Float,
 ) {
     run {
         val w = size.width
@@ -298,6 +300,15 @@ private fun DrawScope.drawEngine(
         if (tipLvl > 0) {
             glowLine(exhaust, Offset(tailX, exhY + tailDrop), Offset(tailX - 6f, exhY + tailDrop + 6f + tipLvl * 4f), stroke, exhaustGain)
         }
+        val mouth = if (tipLvl > 0) {
+            Offset(tailX - 6f, exhY + tailDrop + 6f + tipLvl * 4f)
+        } else if (headerLvl > 0 || catLvl > 0) {
+            Offset(tailX, exhY + tailDrop)
+        } else {
+            Offset(right, exhY)
+        }
+        val blow = if (tipLvl > 0) Offset(-0.35f, 0.75f) else Offset(0.9f, -0.2f)
+        exhaustPlume(mouth, blow, clock, spinRpm, throttle, exhaust, exhaustGain, stroke)
         if (pumpLvl > 0) {
             val pumpW = 8f + pumpLvl * 3f
             val py = h * 0.86f
@@ -539,6 +550,32 @@ private fun DrawScope.drawEngine(
 }
 
 /** Nitrous bottle and the red arc of a limiter that is no longer a limiter. */
+private fun DrawScope.exhaustPlume(
+    mouth: Offset,
+    blow: Offset,
+    clock: Float,
+    rpm: Float,
+    throttle: Float,
+    color: Color,
+    gain: Float,
+    stroke: Float,
+) {
+    if (rpm < 30f) return
+    val open = throttle.coerceIn(0.12f, 1f)
+    val rate = (rpm / 700f).coerceIn(0.8f, 16f)
+    for (i in 0 until 5) {
+        val phase = ((clock * rate * 0.42f) + i / 5f) % 1f
+        val travel = 8f + phase * (22f + rpm / 350f) * open
+        val wobble = sin(clock * 2.6f + i * 1.7f) * 5f * phase
+        val rise = -phase * phase * 18f * open
+        val spot = mouth + blow * travel + Offset(wobble, rise)
+        val radius = stroke * (0.9f + phase * 3.4f)
+        val fade = (1f - phase) * gain * (0.25f + 0.75f * open)
+        glowCircle(White, radius * 1.7f, spot, stroke, filled = true, gain = (fade * 0.38f).coerceIn(0.04f, 0.7f))
+        glowCircle(color, radius * 0.75f, spot, stroke, filled = true, gain = fade.coerceIn(0.05f, 1.15f))
+    }
+}
+
 private fun DrawScope.abuseMarks(parts: Map<String, Int>, w: Float, h: Float, stroke: Float) {
     val nitrous = parts["nitrous"] ?: 0
     if (nitrous > 0) {

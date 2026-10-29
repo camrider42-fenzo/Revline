@@ -47,6 +47,8 @@ object Wireframe {
         roll: Float,
         spinning: Boolean,
         stroke: Float,
+        time: Float,
+        gas: Float,
     ) {
         val model = of(id, mid)
         val xs = model.lines.flatMap { listOf(it[0], it[2]) }
@@ -64,6 +66,36 @@ object Wireframe {
             val tail = at(rear[0] - model.tire * 1.4f, 0.02f)
             val heel = at(rear[0], 0.02f)
             glowLine(Red, tail, heel, stroke, 0.7f)
+            cloud(at(rear[0], rear[1]), time, scale, stroke, smoke = true)
+        }
+        if (gas > 0.04f) {
+            val tailX = model.lines.minOf { minOf(it[0], it[2]) }
+            cloud(at(tailX, 0.28f), time * 1.3f, scale, stroke, smoke = false, amount = gas)
+        }
+    }
+
+    private fun DrawScope.cloud(
+        origin: Offset,
+        time: Float,
+        scale: Float,
+        stroke: Float,
+        smoke: Boolean,
+        amount: Float = 1f,
+    ) {
+        val count = if (smoke) 5 else 4
+        for (i in 0 until count) {
+            val phase = ((time * if (smoke) 1.8f else 2.4f) + i / count.toFloat()) % 1f
+            val back = phase * scale * (if (smoke) 0.95f else 0.7f)
+            val up = phase * phase * scale * (if (smoke) 0.62f else 0.38f)
+            val side = sin(time * 3f + i) * scale * 0.08f * phase
+            val spot = origin + Offset(-back + side, -up)
+            val radius = (2.2f + phase * (if (smoke) 9f else 6f)) * (scale / 20f)
+            val fade = (1f - phase) * amount * if (smoke) 0.7f else 0.55f
+            val ink = if (smoke) White else Amber
+            glowCircle(ink, radius, spot, stroke, filled = true, gain = fade.coerceIn(0.04f, 0.9f))
+            if (!smoke && phase < 0.35f) {
+                glowCircle(Red, radius * 0.45f, spot, stroke, filled = true, gain = (fade * 0.8f).coerceIn(0.04f, 0.6f))
+            }
         }
     }
 
