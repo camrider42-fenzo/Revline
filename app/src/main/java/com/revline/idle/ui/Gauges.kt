@@ -187,23 +187,13 @@ fun ThrottlePedal(
                     }
                 },
         ) {
-            val w = size.width
-            val h = size.height
-            val stroke = (w / 26f).coerceIn(1.6f, 3.2f)
-            glowLine(White, Offset(w * 0.22f, h * 0.06f), Offset(w * 0.22f, h * 0.94f), stroke, 0.45f)
-            glowLine(White, Offset(w * 0.78f, h * 0.06f), Offset(w * 0.78f, h * 0.94f), stroke, 0.45f)
-            val plate = h * 0.10f + shown * (h * 0.68f)
             val color = when {
                 !enabled -> Olive
                 shown > 0.92f -> Red
                 shown > 0.55f -> Amber
                 else -> Lime
             }
-            glowLine(color, Offset(w * 0.10f, plate), Offset(w * 0.90f, plate + h * 0.07f), stroke * 1.6f, 0.55f + shown)
-            glowLine(color, Offset(w * 0.90f, plate + h * 0.07f), Offset(w * 0.78f, plate + h * 0.16f), stroke * 1.3f, 0.7f + shown * 0.4f)
-            glowLine(color, Offset(w * 0.78f, plate + h * 0.16f), Offset(w * 0.22f, plate + h * 0.16f), stroke * 1.3f, 0.7f + shown * 0.4f)
-            glowLine(color, Offset(w * 0.22f, plate + h * 0.16f), Offset(w * 0.10f, plate), stroke * 1.3f, 0.7f + shown * 0.4f)
-            glowCircle(White, stroke * 1.5f, Offset(w * 0.5f, h * 0.93f), stroke, filled = true, gain = 0.7f)
+            pedalPlate(shown, color)
         }
         Text(
             when {
@@ -217,6 +207,80 @@ fun ThrottlePedal(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
         )
     }
+}
+
+/**
+ * Same plate as the throttle. Travel sticks while the foot is down.
+ * Letting go springs it back to engaged, which is the top of the slot.
+ */
+@Composable
+fun ClutchPedal(
+    depression: Double,
+    onDepression: (Double) -> Unit,
+    onHeld: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shown by animateFloatAsState(
+        targetValue = depression.toFloat().coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 80),
+        label = "clutch",
+    )
+    Box(modifier) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        onHeld(true)
+                        try {
+                            fun apply(y: Float) {
+                                onDepression((y / size.height).toDouble().coerceIn(0.0, 1.0))
+                            }
+                            apply(down.position.y)
+                            drag(down.id) { change ->
+                                apply(change.position.y)
+                                change.consume()
+                            }
+                        } finally {
+                            onHeld(false)
+                        }
+                    }
+                },
+        ) {
+            val color = when {
+                shown < 0.08f -> Lime
+                shown < 0.7f -> Amber
+                else -> Red
+            }
+            pedalPlate(shown, color)
+        }
+        Text(
+            when {
+                shown < 0.04f -> "IN"
+                shown > 0.85f -> "OUT"
+                else -> "${(shown * 100).toInt()}%"
+            },
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
+        )
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.pedalPlate(shown: Float, color: androidx.compose.ui.graphics.Color) {
+    val w = size.width
+    val h = size.height
+    val stroke = (w / 26f).coerceIn(1.6f, 3.2f)
+    glowLine(White, Offset(w * 0.22f, h * 0.06f), Offset(w * 0.22f, h * 0.94f), stroke, 0.45f)
+    glowLine(White, Offset(w * 0.78f, h * 0.06f), Offset(w * 0.78f, h * 0.94f), stroke, 0.45f)
+    val plate = h * 0.10f + shown * (h * 0.68f)
+    glowLine(color, Offset(w * 0.10f, plate), Offset(w * 0.90f, plate + h * 0.07f), stroke * 1.6f, 0.55f + shown)
+    glowLine(color, Offset(w * 0.90f, plate + h * 0.07f), Offset(w * 0.78f, plate + h * 0.16f), stroke * 1.3f, 0.7f + shown * 0.4f)
+    glowLine(color, Offset(w * 0.78f, plate + h * 0.16f), Offset(w * 0.22f, plate + h * 0.16f), stroke * 1.3f, 0.7f + shown * 0.4f)
+    glowLine(color, Offset(w * 0.22f, plate + h * 0.16f), Offset(w * 0.10f, plate), stroke * 1.3f, 0.7f + shown * 0.4f)
+    glowCircle(White, stroke * 1.5f, Offset(w * 0.5f, h * 0.93f), stroke, filled = true, gain = 0.7f)
 }
 
 fun signed(value: Double, digits: Int = 1): String {

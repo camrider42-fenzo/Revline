@@ -74,7 +74,7 @@ fun RaceScreen(
         }
         Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
-            "Three fields in this engine's class. You drive the quarter. Feather the launch, then shift.",
+            "Three fields in this engine's class. You drive the quarter. The throttle stays put. The clutch springs back.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,

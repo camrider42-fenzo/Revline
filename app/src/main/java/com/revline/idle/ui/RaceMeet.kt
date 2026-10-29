@@ -2,17 +2,15 @@ package com.revline.idle.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,7 +26,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,7 +53,8 @@ fun RaceMeet(
     val rivalTime = remember(setup, yourPace, field.pace) {
         RaceDrive.rivalSeconds(setup, yourPace, field.pace)
     }
-    var pedal by remember { mutableFloatStateOf(0f) }
+    var throttle by remember { mutableFloatStateOf(0f) }
+    var clutchShown by remember { mutableFloatStateOf(0f) }
     var frame by remember { mutableStateOf(Frame(rpm = setup.idle)) }
     var settled by remember { mutableStateOf(false) }
     fun settle(won: Boolean) {
@@ -75,6 +73,10 @@ fun RaceMeet(
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0.0 else ((now - last) / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 last = now
+                if (!hands.clutchHeld) {
+                    hands.clutch = RaceDrive.releaseClutch(hands.clutch, dt)
+                    clutchShown = hands.clutch.toFloat()
+                }
                 if (lights > 0.0) {
                     lights -= dt.toFloat()
                     if (hands.throttle > 0.18) jumped = true
@@ -82,9 +84,9 @@ fun RaceMeet(
                     return@withFrameNanos
                 }
                 val asked = if (jumped && hands.run.time < 0.7) 1.0 else hands.throttle
-                val shift = hands.shift
+                val shift = hands.shift && hands.clutch > 0.62
                 hands.shift = false
-                RaceDrive.step(setup, hands.run, asked, shift, dt)
+                RaceDrive.step(setup, hands.run, asked, shift, dt, hands.clutch)
                 frame = snap(hands.run, 0f, jumped, rivalTime, done = false, won = false)
             }
         }
@@ -100,7 +102,7 @@ fun RaceMeet(
         frame.done -> "SHORT"
         frame.lights > 0.7f -> "READY"
         frame.lights > 0f -> "SET"
-        frame.shiftLeft > 0.0 -> "CLUTCH"
+        frame.shiftLeft > 0.0 -> "SHIFT"
         frame.jumped && frame.time < 0.7 -> "JUMP"
         frame.spinning -> "SPIN"
         frame.limiter -> "LIMITER"
@@ -123,7 +125,8 @@ fun RaceMeet(
         Text(field.detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(purse, color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(banner, color = bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
-        Canvas(Modifier.fillMaxWidth().height(168.dp).padding(top = 6.dp)) {
+        Row(Modifier.fillMaxWidth().height(156.dp).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Canvas(Modifier.weight(1f).fillMaxHeight()) {
             val stroke = (size.minDimension / 90f).coerceIn(1.6f, 3f)
             val lampY = size.height * 0.08f
             val lamp = size.minDimension * 0.045f
@@ -143,7 +146,32 @@ fun RaceMeet(
             glowLine(if (hot) Red else Lime, c, tip, stroke * 1.3f, 1.15f)
             glowCircle(if (frame.spinning) Red else Lime, stroke * 2f, c, stroke, filled = true)
         }
-        Canvas(Modifier.fillMaxWidth().height(78.dp)) {
+            Column(Modifier.width(72.dp).fillMaxHeight()) {
+                Text("CLUTCH", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                ClutchPedal(
+                    clutchShown.toDouble(),
+                    onDepression = {
+                        hands.clutch = it
+                        clutchShown = it.toFloat()
+                    },
+                    onHeld = { hands.clutchHeld = it },
+                    modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
+                )
+            }
+            Column(Modifier.width(72.dp).fillMaxHeight()) {
+                Text("THROTTLE", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                ThrottlePedal(
+                    throttle.toDouble(),
+                    enabled = !frame.done,
+                    onThrottle = {
+                        throttle = it.toFloat()
+                        hands.throttle = it
+                    },
+                    modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
+                )
+            }
+        }
+        Canvas(Modifier.fillMaxWidth().height(64.dp)) {
             val y = size.height * 0.62f
             val stroke = 2f
             val left = 12f
@@ -171,42 +199,13 @@ fun RaceMeet(
             modifier = Modifier.padding(top = 2.dp),
         )
         Text(
-            "Feather it until the tires hook. Shift before the limiter.",
+            "Throttle stays where you leave it. Clutch springs back in. Press it to shift.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 6.dp),
         )
-        Text("THROTTLE", color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp)
-                .height(36.dp)
-                .background(Black)
-                .pointerInput(Unit) {
-                    fun at(x: Float) {
-                        val next = (x / size.width).coerceIn(0f, 1f)
-                        pedal = next
-                        hands.throttle = next.toDouble()
-                    }
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        at(down.position.x)
-                        drag(down.id) { change ->
-                            at(change.position.x)
-                            change.consume()
-                        }
-                    }
-                },
-        ) {
-            Canvas(Modifier.fillMaxSize()) {
-                glowLine(Olive, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 6f, 0.4f)
-                val hot = frame.spinning || (frame.jumped && frame.time < 0.7 && frame.lights <= 0f)
-                glowLine(if (hot) Red else Lime, Offset(0f, size.height / 2f), Offset(size.width * pedal, size.height / 2f), 8f, 1f)
-            }
-        }
-        val canShift = frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done
+        val canShift = frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > 0.62f
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LineButton(
                 if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT",
@@ -221,6 +220,8 @@ fun RaceMeet(
 
 private class Hands(val run: RaceDrive.Run) {
     var throttle: Double = 0.0
+    var clutch: Double = 0.0
+    var clutchHeld: Boolean = false
     var shift: Boolean = false
 }
 

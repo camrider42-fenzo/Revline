@@ -6,8 +6,9 @@ import kotlin.math.pow
 
 /**
  * A quarter-mile you have to drive. The launch spins if the throttle asks for
- * more than the tires can hold. The box you fitted sets the ratios and how long
- * a shift takes. Sitting on the limiter does not count as a shift.
+ * more than the tires can hold. The clutch cuts that ask: 0 is engaged, 1 is
+ * the pedal on the floor. The box you fitted sets the ratios and how long a
+ * shift takes. Sitting on the limiter does not count as a shift.
  */
 object RaceDrive {
     const val FINISH_M = 402.3
@@ -76,11 +77,17 @@ object RaceDrive {
 
     fun fresh(setup: Setup): Run = Run(rpm = setup.idle)
 
-    /** One slice of the strip. [shift] is a rising edge: the player asked for the next gear. */
-    fun step(setup: Setup, run: Run, throttle: Double, shift: Boolean, dt: Double) {
+    /**
+     * One slice of the strip. [shift] is a rising edge: the next gear.
+     * [clutch] is pedal travel, 0 engaged and 1 on the floor. Callers that
+     * omit it leave the clutch engaged, which is how the card driver shifts.
+     */
+    fun step(setup: Setup, run: Run, throttle: Double, shift: Boolean, dt: Double, clutch: Double = 0.0) {
         if (run.distance >= FINISH_M) return
         val stepDt = dt.coerceIn(0.0, 0.05)
         val th = throttle.coerceIn(0.0, 1.0)
+        val depression = clutch.coerceIn(0.0, 1.0)
+        val engagement = 1.0 - depression
         if (shift && run.shiftLeft <= 0.0 && run.gear < setup.ratios.size) {
             run.gear += 1
             run.shiftLeft = setup.shiftSeconds
@@ -90,10 +97,27 @@ object RaceDrive {
             run.shiftLeft -= stepDt
             val dragA = dragForce(setup, run.speed) / setup.massKg
             run.speed = (run.speed - dragA * stepDt).coerceAtLeast(0.0)
-            run.rpm += (setup.idle * 1.15 - run.rpm) * stepDt * 2.2
+            val free = if (depression > 0.5 && th > 0.15) {
+                setup.idle + th * (setup.redline - setup.idle)
+            } else {
+                setup.idle * 1.15
+            }
+            run.rpm += (free - run.rpm) * stepDt * 2.2
             run.rpm = run.rpm.coerceAtLeast(setup.idle * 0.75)
             run.spinning = false
             run.limiter = false
+            advance(run, stepDt)
+            return
+        }
+        if (engagement < 0.08) {
+            if (run.gear == 1 && run.speed < 14.0) run.hooked = false
+            val flare = setup.idle + th * (setup.redline - setup.idle)
+            run.rpm += (flare - run.rpm) * stepDt * 4.0
+            run.rpm = run.rpm.coerceIn(setup.idle * 0.8, setup.redline * 1.05)
+            run.spinning = false
+            run.limiter = run.rpm >= setup.redline * 0.98
+            val dragA = dragForce(setup, run.speed) / setup.massKg
+            run.speed = (run.speed - dragA * stepDt).coerceAtLeast(0.0)
             advance(run, stepDt)
             return
         }
@@ -102,7 +126,7 @@ object RaceDrive {
         val launching = run.gear == 1 && run.speed < 14.0 && !run.hooked
         if (launching) {
             val biteRpm = setup.idle + th * (setup.redline * 0.74 - setup.idle)
-            val requested = torqueNm(setup, biteRpm) * setup.efficiency * th * overall / WHEEL_R
+            val requested = torqueNm(setup, biteRpm) * setup.efficiency * th * engagement * overall / WHEEL_R
             if (requested > setup.gripN && th > 0.05) {
                 run.spinning = true
                 val flare = setup.idle + th * (setup.redline - setup.idle)
@@ -111,7 +135,10 @@ object RaceDrive {
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
             } else {
                 run.spinning = false
-                run.rpm += (biteRpm.coerceAtLeast(roadRpm) - run.rpm) * stepDt * 4.0
+                val locked = biteRpm.coerceAtLeast(roadRpm)
+                val flare = setup.idle + th * (setup.redline - setup.idle)
+                val target = if (engagement >= 0.92) locked else roadRpm * engagement + flare * depression
+                run.rpm += (target - run.rpm) * stepDt * 4.0
                 val accel = (requested - dragForce(setup, run.speed)) / setup.massKg
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
                 if (run.speed > 4.0 && roadRpm > setup.idle * 1.2) run.hooked = true
@@ -124,12 +151,33 @@ object RaceDrive {
             var tq = torqueNm(setup, roadRpm.coerceAtMost(setup.redline)) * setup.efficiency
             run.limiter = roadRpm > setup.redline
             if (run.limiter) tq *= 0.07
-            val force = tq * overall / WHEEL_R
+            val force = tq * engagement * overall / WHEEL_R
             val accel = (force - dragForce(setup, run.speed)) / setup.massKg
             run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
-            run.rpm = roadRpm(run.speed, overall).coerceAtLeast(setup.idle * 0.8)
+            val road = roadRpm(run.speed, overall).coerceAtLeast(setup.idle * 0.8)
+            run.rpm = if (engagement >= 0.92) {
+                road
+            } else {
+                val flare = setup.idle + th * (setup.redline - setup.idle)
+                (road * engagement + flare * depression).coerceAtLeast(setup.idle * 0.8)
+            }
         }
         advance(run, stepDt)
+    }
+
+    /** Pedal travel that lets full throttle leave without breaking the tires. 0 means the tires already hold it. */
+    fun clutchForLaunch(setup: Setup): Double {
+        val bite = setup.idle + (setup.redline * 0.74 - setup.idle)
+        val full = torqueNm(setup, bite) * setup.efficiency * setup.ratios[0] * setup.finalDrive / WHEEL_R
+        if (full <= setup.gripN * 0.96) return 0.0
+        val engagement = (setup.gripN * 0.96 / full).coerceIn(0.2, 0.92)
+        return 1.0 - engagement
+    }
+
+    /** Spring the pedal back to engaged. A foot that is still on it should not call this. */
+    fun releaseClutch(depression: Double, dt: Double): Double {
+        val back = depression.coerceIn(0.0, 1.0) * exp(-dt.coerceIn(0.0, 0.05) / 0.07)
+        return if (back < 0.02) 0.0 else back
     }
 
     /** A driver who feathers the launch and shifts just under the limiter. */

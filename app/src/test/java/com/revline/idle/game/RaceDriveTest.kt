@@ -29,8 +29,8 @@ class RaceDriveTest {
     fun aShortGearLeavesHarderAndATallGearCarriesTheTop() {
         val short = sample().copy(finalDrive = Racing.finalRatio("short"))
         val tall = sample().copy(finalDrive = Racing.finalRatio("tall"))
-        val shortRun = runFor(short, 1.4, ::clean)
-        val tallRun = runFor(tall, 1.4, ::clean)
+        val shortRun = runFor(short, 1.4, driver = ::clean)
+        val tallRun = runFor(tall, 1.4, driver = ::clean)
         assertTrue(
             "short ${"%.1f".format(shortRun.distance)} vs tall ${"%.1f".format(tallRun.distance)}",
             shortRun.distance > tallRun.distance,
@@ -119,6 +119,41 @@ class RaceDriveTest {
     }
 
     @Test
+    fun slippingTheClutchHooksAFullThrottleLaunch() {
+        val car = sample()
+        val slip = RaceDrive.clutchForLaunch(car)
+        assertTrue("slip $slip", slip > 0.08)
+        val dumped = runFor(car, 1.6) { _, _ -> 1.0 to false }
+        val slipped = runFor(car, 1.6, clutch = { _, _ -> slip }) { _, _ -> 1.0 to false }
+        assertTrue(
+            "slipped ${"%.1f".format(slipped.distance)} m vs dumped ${"%.1f".format(dumped.distance)} m",
+            slipped.distance > dumped.distance * 1.15,
+        )
+        val feather = { setup: RaceDrive.Setup, run: RaceDrive.Run ->
+            val t = if (run.gear == 1 && run.speed < 14.0 && !run.hooked) RaceDrive.launchThrottle(setup) else 1.0
+            t to false
+        }
+        val heldOpen = runFor(car, 1.2, clutch = { _, _ -> 1.0 }, driver = feather)
+        val engaged = runFor(car, 1.2, driver = feather)
+        assertTrue(
+            "open ${heldOpen.distance} engaged ${engaged.distance}",
+            engaged.distance > heldOpen.distance * 3.0,
+        )
+    }
+
+    @Test
+    fun theClutchSpringsClosedWhenYouLetGo() {
+        assertEquals(0.85, RaceDrive.releaseClutch(0.85, 0.0), 0.001)
+        var pedal = 0.85
+        var t = 0.0
+        while (t < 0.45) {
+            pedal = RaceDrive.releaseClutch(pedal, 1.0 / 60.0)
+            t += 1.0 / 60.0
+        }
+        assertEquals(0.0, pedal, 0.001)
+    }
+
+    @Test
     fun aStockMopedCanFinishTheQuarter() {
         val run = RaceDrive.driveWell(RaceDrive.setup(GameState()))
         assertTrue("moped ${run.time}s ${run.distance}m gear ${run.gear}", run.distance >= RaceDrive.FINISH_M - 1.0)
@@ -147,6 +182,7 @@ class RaceDriveTest {
     private fun runFor(
         setup: RaceDrive.Setup,
         seconds: Double,
+        clutch: (RaceDrive.Setup, RaceDrive.Run) -> Double = { _, _ -> 0.0 },
         driver: (RaceDrive.Setup, RaceDrive.Run) -> Pair<Double, Boolean>,
     ): RaceDrive.Run {
         val run = RaceDrive.fresh(setup)
@@ -154,7 +190,7 @@ class RaceDriveTest {
         while (run.time < seconds && run.distance < RaceDrive.FINISH_M && guard < 8_000) {
             guard++
             val (throttle, shift) = driver(setup, run)
-            RaceDrive.step(setup, run, throttle, shift, 1.0 / 60.0)
+            RaceDrive.step(setup, run, throttle, shift, 1.0 / 60.0, clutch(setup, run))
         }
         return run
     }
