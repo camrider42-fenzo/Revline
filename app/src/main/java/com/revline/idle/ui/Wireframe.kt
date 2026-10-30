@@ -45,11 +45,12 @@ object Wireframe {
         ground: Float,
         scale: Float,
         roll: Float,
-        spinning: Boolean,
+        slip: Float,
         stroke: Float,
         time: Float,
         gas: Float,
     ) {
+        val spinning = slip > 0.02f
         val model = of(id, mid)
         val xs = model.lines.flatMap { listOf(it[0], it[2]) }
         val midX = ((xs.minOrNull() ?: 0f) + (xs.maxOrNull() ?: 0f)) / 2f
@@ -61,7 +62,7 @@ object Wireframe {
             cloud(at(tailX, 0.22f), time * 1.3f, scale, stroke, smoke = false, amount = gas)
         }
         if (spinning) {
-            cloud(at(rear[0], rear[1]), time, scale, stroke, smoke = true)
+            cloud(at(rear[0], rear[1]), time, scale, stroke, smoke = true, amount = slip.coerceIn(0.15f, 1f))
         }
         for (seg in model.lines) {
             glowLine(color, at(seg[0], seg[1]), at(seg[2], seg[3]), stroke, 0.85f)
@@ -85,7 +86,7 @@ object Wireframe {
         smoke: Boolean,
         amount: Float = 1f,
     ) {
-        val count = if (smoke) 8 else 7
+        val count = if (smoke) 6 + (amount * 8f).toInt() else 7
         val puff = (scale / 52f).coerceIn(0.75f, 1.45f)
         for (i in 0 until count) {
             val phase = ((time * if (smoke) 1.6f else 2.2f) + i / count.toFloat()) % 1f
@@ -93,7 +94,7 @@ object Wireframe {
             val up = phase * phase * scale * (if (smoke) 0.72f else 0.42f)
             val side = sin(time * 3f + i) * scale * 0.07f * phase
             val spot = origin + Offset(-back + side, -up)
-            val radius = (2.2f + phase * (if (smoke) 7.2f else 4.6f)) * puff
+            val radius = (2.2f + phase * (if (smoke) 5f + 7f * amount else 4.6f)) * puff
             val fade = (1f - phase) * amount * if (smoke) 0.85f else 0.7f
             val ink = if (smoke) White else Amber
             glowCircle(ink, radius, spot, stroke, filled = true, gain = fade.coerceIn(0.05f, 0.95f))

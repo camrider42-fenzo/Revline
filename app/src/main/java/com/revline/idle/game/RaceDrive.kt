@@ -13,6 +13,8 @@ import kotlin.math.pow
 object RaceDrive {
     const val FINISH_M = 402.3
     const val WHEEL_R = 0.33
+    const val SLIP_EDGE = 0.3
+    private const val SLIP_FADE_S = 0.45
 
     data class Setup(
         val peakHp: Double,
@@ -37,6 +39,8 @@ object RaceDrive {
         var shiftLeft: Double = 0.0,
         var time: Double = 0.0,
         var spinning: Boolean = false,
+        /** 0..1 smoke and dash-lamp strength: set by how far the launch overshoots grip, eased out when the tires hook. */
+        var slip: Double = 0.0,
         var limiter: Boolean = false,
         var hooked: Boolean = false,
     )
@@ -86,6 +90,17 @@ object RaceDrive {
      * omit it leave the clutch engaged, which is how the card driver shifts.
      */
     fun step(setup: Setup, run: Run, throttle: Double, shift: Boolean, dt: Double, clutch: Double = 0.0) {
+        drive(setup, run, throttle, shift, dt, clutch)
+        if (!run.spinning) run.slip = (run.slip - dt.coerceIn(0.0, 0.05) / SLIP_FADE_S).coerceAtLeast(0.0)
+    }
+
+    /** How hard the tires are breaking loose: 0 while the grip holds, 0.3 at the edge, 1 at half again over the limit. */
+    fun slipAmount(requestedN: Double, gripN: Double): Double {
+        if (gripN <= 0.0 || requestedN <= gripN) return 0.0
+        return (SLIP_EDGE + (1.0 - SLIP_EDGE) * (requestedN / gripN - 1.0) / 0.5).coerceIn(SLIP_EDGE, 1.0)
+    }
+
+    private fun drive(setup: Setup, run: Run, throttle: Double, shift: Boolean, dt: Double, clutch: Double) {
         if (run.distance >= setup.distanceM) return
         val stepDt = dt.coerceIn(0.0, 0.05)
         val th = throttle.coerceIn(0.0, 1.0)
@@ -132,6 +147,8 @@ object RaceDrive {
             val requested = torqueNm(setup, biteRpm) * setup.efficiency * th * engagement * overall / WHEEL_R
             if (requested > setup.gripN && th > 0.05) {
                 run.spinning = true
+                val target = slipAmount(requested, setup.gripN)
+                run.slip += (target - run.slip) * (stepDt * 12.0).coerceAtMost(1.0)
                 val flare = setup.idle + th * (setup.redline - setup.idle)
                 run.rpm += (flare - run.rpm) * stepDt * 4.5
                 val accel = (setup.gripN * 0.22 - dragForce(setup, run.speed)) / setup.massKg

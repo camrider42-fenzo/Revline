@@ -26,6 +26,33 @@ class RaceDriveTest {
     }
 
     @Test
+    fun slipIsZeroUnderGripThenJumpsToTheEdgeAndSaturates() {
+        assertEquals(0.0, RaceDrive.slipAmount(900.0, 1000.0), 0.0)
+        assertEquals(0.0, RaceDrive.slipAmount(1000.0, 1000.0), 0.0)
+        assertEquals(RaceDrive.SLIP_EDGE, RaceDrive.slipAmount(1000.1, 1000.0), 0.01)
+        assertTrue(RaceDrive.slipAmount(1250.0, 1000.0) in 0.5..0.7)
+        assertEquals(1.0, RaceDrive.slipAmount(2000.0, 1000.0), 0.0)
+    }
+
+    @Test
+    fun smokeBuildsWhileSpinningAndFadesOnceTheTiresHook() {
+        val car = sample()
+        val run = RaceDrive.fresh(car)
+        var peak = 0.0
+        var t = 0
+        while (t < 60) {
+            t++
+            RaceDrive.step(car, run, 1.0, false, 1.0 / 60.0)
+            if (run.spinning) peak = maxOf(peak, run.slip)
+            assertTrue("slip only while spinning or fading", run.spinning || run.slip < peak + 1e-9)
+        }
+        assertTrue("floored launch never spun", peak >= RaceDrive.SLIP_EDGE * 0.8)
+        // Lift: the tires hold again and the smoke goes out within half a second.
+        repeat(40) { RaceDrive.step(car, run, 0.0, false, 1.0 / 60.0) }
+        assertTrue("still smoking ${run.slip}", !run.spinning && run.slip == 0.0)
+    }
+
+    @Test
     fun sittingOnTheLimiterStopsThePull() {
         val car = sample()
         val run = RaceDrive.fresh(car)

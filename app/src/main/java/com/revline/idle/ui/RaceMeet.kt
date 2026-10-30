@@ -181,8 +181,8 @@ fun RaceMeet(
             val span = right - left
             val yourGas = if (frame.lights > 0f) 0.15f else (frame.rpm / setup.redline).toFloat().coerceIn(0.2f, 1f)
             val theirGas = if (frame.lights > 0f) 0.05f else 0.55f
-            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, false, stroke, rivalId, false, frame.time.toFloat(), theirGas)
-            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.spinning, stroke, yourId, yourMid, frame.time.toFloat(), yourGas)
+            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, 0f, stroke, rivalId, false, frame.time.toFloat(), theirGas)
+            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.slip, stroke, yourId, yourMid, frame.time.toFloat(), yourGas)
             gantry(Olive, left, 6f, size.height - 4f, stroke, 0.55f)
             val finishColor = if (frame.done && frame.won) Lime else if (frame.done) Red else White
             gantry(finishColor, right, 6f, size.height - 4f, stroke, 1f)
@@ -208,7 +208,8 @@ fun RaceMeet(
                     modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
                 )
             }
-            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+            Canvas(Modifier.fillMaxSize()) {
                 val stroke = (size.minDimension / 70f).coerceIn(1.6f, 3f)
                 val c = Offset(size.width * 0.5f, size.height * 0.78f)
                 val r = size.minDimension * 0.46f
@@ -245,6 +246,8 @@ fun RaceMeet(
                 val hot = frame.limiter || frame.rpm > setup.redline * 0.9
                 glowLine(if (hot) Red else Lime, tail, tip, stroke * 1.25f, 1.15f)
                 glowCircle(if (frame.spinning) Red else Lime, stroke * 2.2f, c, stroke, filled = true)
+            }
+            SpinLamp(frame.spinning, frame.slip, Modifier.align(Alignment.TopCenter))
             }
             Box(Modifier.width(60.dp).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
                 SquareShift(if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT", canShift) { hands.shift = true }
@@ -287,6 +290,22 @@ fun RaceMeet(
             LineButton("BAIL", !frame.done, { settle(false) }, Modifier.weight(1f))
         }
     }
+}
+
+/** Dash traction lamp: dark outline until the tires break loose, then amber, red when they are really going. */
+@Composable
+private fun SpinLamp(on: Boolean, slip: Float, modifier: Modifier = Modifier) {
+    val color = if (!on) Olive else if (slip > 0.6f) Red else Amber
+    Text(
+        "SPIN",
+        color = color,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 10.sp,
+        modifier = modifier
+            .border(BorderStroke(1.dp, color))
+            .background(if (on) color.copy(alpha = 0.18f) else Color.Transparent)
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }
 
 @Composable
@@ -342,6 +361,7 @@ private data class Frame(
     val time: Double = 0.0,
     val shiftLeft: Double = 0.0,
     val spinning: Boolean = false,
+    val slip: Float = 0f,
     val limiter: Boolean = false,
     val rival: Float = 0f,
     val done: Boolean = false,
@@ -366,6 +386,7 @@ private fun snap(
     time = run.time,
     shiftLeft = run.shiftLeft,
     spinning = run.spinning,
+    slip = run.slip.toFloat(),
     limiter = run.limiter,
     rival = (finish * (run.time / rivalTime)).toFloat().coerceAtMost(finish.toFloat()),
     done = done,
@@ -399,7 +420,7 @@ private fun DrawScope.lane(
     span: Float,
     progress: Float,
     roll: Float,
-    spinning: Boolean,
+    slip: Float,
     stroke: Float,
     chassisId: String,
     mid: Boolean,
@@ -421,6 +442,6 @@ private fun DrawScope.lane(
     val room = (span - half * 2f - pad * 2f).coerceAtLeast(8f)
     val x = left + half + pad + along * room
     with(Wireframe) {
-        draw(chassisId, mid, color, x, ground, scale, roll, spinning, stroke, time, gas)
+        draw(chassisId, mid, color, x, ground, scale, roll, slip, stroke, time, gas)
     }
 }
