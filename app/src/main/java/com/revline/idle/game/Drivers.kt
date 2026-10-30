@@ -59,16 +59,16 @@ object Drivers {
     }
 
     val roster: List<Driver> = listOf(
-        Driver("dusty", "Dusty Kowalski", 1, 42, 40, 44, 38, Specialty.ALL_ROUNDER, 0.015, "Yard-sale hotshoe. Keeps it pointed straight."),
-        Driver("mina", "Mina Okafor", 1, 66, 40, 34, 40, Specialty.GRIP, 0.035, "Drove tractors before cars. Soft right foot."),
-        Driver("rusty", "Rusty Delgado", 1, 36, 60, 38, 34, Specialty.CLUTCH, 0.045, "Ex-drag-bike clutch hand. Not much else."),
-        Driver("pavel", "Pavel Novak", 2, 48, 52, 74, 50, Specialty.GEARS, 0.07, "Rows a box faster than you can say the gear."),
-        Driver("ines", "Ines Duarte", 2, 50, 48, 52, 76, Specialty.REVS, 0.07, "Reads a dyno sheet like a novel."),
-        Driver("tanaka", "Ren Tanaka", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Launch specialist from the import scene."),
-        Driver("gus", "Gus Harlan", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Steady veteran. Never wins it, never loses it."),
-        Driver("colette", "Colette Marchand", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.15, "Dog-box queen. Lives on the bite point."),
-        Driver("viktor", "Viktor Sokolov", 3, 64, 60, 62, 90, Specialty.REVS, 0.13, "Counts the curve in his head. Shifts exactly there."),
-        Driver("ace", "Ace Monroe", 3, 78, 76, 80, 76, Specialty.ALL_ROUNDER, 0.22, "Works-team ace. Sharp everywhere, and he bills for it."),
+        Driver("dusty", "Graham Hill", 1, 42, 40, 44, 38, Specialty.ALL_ROUNDER, 0.015, "Tidy and unflappable. Keeps it pointed straight."),
+        Driver("mina", "Stirling Moss", 1, 66, 40, 34, 40, Specialty.GRIP, 0.035, "Smooth as silk. Soft right foot."),
+        Driver("rusty", "Jack Brabham", 1, 36, 60, 38, 34, Specialty.CLUTCH, 0.045, "Mechanic first. Feels the clutch through his boots."),
+        Driver("pavel", "Niki Lauda", 2, 48, 52, 74, 50, Specialty.GEARS, 0.07, "Exact and unhurried. Rows a box faster than you can say the gear."),
+        Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 76, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives."),
+        Driver("tanaka", "James Hunt", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Charming and quick off the line."),
+        Driver("gus", "Jackie Stewart", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Calm, careful and clever. Wins by being tidy."),
+        Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.15, "The Professor. Lives on the bite point."),
+        Driver("viktor", "Ayrton Senna", 3, 64, 60, 62, 90, Specialty.REVS, 0.13, "Counts the curve in his head. Shifts exactly there."),
+        Driver("ace", "Juan Manuel Fangio", 3, 78, 76, 80, 76, Specialty.ALL_ROUNDER, 0.22, "The old master. Sharp everywhere, and he bills for it."),
     )
 
     fun byId(id: String): Driver? = roster.firstOrNull { it.id == id }

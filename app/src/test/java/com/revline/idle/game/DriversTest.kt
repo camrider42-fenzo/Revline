@@ -95,8 +95,8 @@ class DriversTest {
 
     @Test fun resultNoteNamesTheDriverAndFee() {
         val s = GameState(prestiges = 1)
-        val note = Racing.stripNote(s, field, true, 11.0, 12.0, false, false, "Gus Harlan", 85.0)
-        assertTrue(note, note.contains("Gus Harlan") && note.contains("fee"))
+        val note = Racing.stripNote(s, field, true, 11.0, 12.0, false, false, "Jackie Stewart", 85.0)
+        assertTrue(note, note.contains("Jackie Stewart") && note.contains("fee"))
         val plain = Racing.stripNote(s, field, true, 11.0, 12.0, false, false)
         assertFalse(plain, plain.contains("Driver"))
     }
