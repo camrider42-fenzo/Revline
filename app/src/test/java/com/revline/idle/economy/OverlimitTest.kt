@@ -55,8 +55,8 @@ class OverlimitTest {
             kit.stats.peakCoolantC > plain.stats.peakCoolantC + 8.0 || kit.stats.peakEgtC > plain.stats.peakEgtC + 40.0,
         )
         assertTrue(
-            "cruise mpg ${kit.stats.cruiseMpg} vs goal ${Block.V8.mpgGoal}",
-            kit.stats.cruiseMpg >= Block.V8.mpgGoal,
+            "mpg at the profit pedal ${kit.profit.mpg} vs goal ${Block.V8.mpgGoal}",
+            kit.profit.mpg >= Block.V8.mpgGoal,
         )
     }
 

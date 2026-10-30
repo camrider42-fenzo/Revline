@@ -34,7 +34,8 @@ class ResearchPaceTest {
             )
             val run = play(start)
             owned += run.state.researched.size
-            val s = Logic.sheet(run.state).stats
+            val runSheet = Logic.sheet(run.state)
+            val s = runSheet.stats
             val b = Block.forPrestige(index)
             lines += String.format(
                 Locale.US,
@@ -47,7 +48,7 @@ class ResearchPaceTest {
                 run.rpPerSec,
                 run.dyno,
                 run.state.researchPoints,
-                s.peakHorsepower, b.hpGoal, s.peakTorqueLbFt, b.torqueGoal, s.cruiseMpg, b.mpgGoal,
+                s.peakHorsepower, b.hpGoal, s.peakTorqueLbFt, b.torqueGoal, runSheet.profit.mpg, b.mpgGoal,
             )
             assertTrue(lines.joinToString("\n"), run.cleared)
             researched = run.state.researched

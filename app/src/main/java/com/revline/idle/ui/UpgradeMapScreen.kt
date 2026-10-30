@@ -125,7 +125,7 @@ fun PartsScreen(
     val opening = if (ui.phase == DynoPhase.IDLE) ui.game.throttle else 1.0
     val soakRate = EngineSim.soakPer10s(ui.sheet.params, ui.rpm, opening)
     val suggestion = remember(ui.sheet.stats, live.heatSoakC, live.fuelLimited, soakRate, ui.game.upgrades, ui.game.prestiges) {
-        Bottleneck.suggest(ui.game, ui.sheet.stats, live, soakRate)
+        Bottleneck.suggest(ui.game, ui.sheet.stats, ui.sheet.profit.mpg, live, soakRate)
     }
     val aimGoal = AimGoal.from(ui.game.aimGoal)
     val aim = remember(
@@ -528,7 +528,7 @@ private fun PartsStatus(ui: UiModel, live: com.revline.idle.model.OperatingPoint
     val stats = ui.sheet.stats
     Text(
         "${formatDollars(ui.game.money)}   ${formatDollars(ui.sheet.incomePerSec)}/s    " +
-            "sheet ${formatPower(stats.peakHorsepower)} hp  ${formatPower(stats.peakTorqueLbFt)} lb-ft  ${String.format(Locale.US, "%.1f", stats.cruiseMpg)} mpg",
+            "sheet ${formatPower(stats.peakHorsepower)} hp  ${formatPower(stats.peakTorqueLbFt)} lb-ft  ${String.format(Locale.US, "%.1f", ui.sheet.profit.mpg)} mpg@\$",
         color = Lime,
         fontFamily = FontFamily.Monospace,
         fontSize = 11.sp,
@@ -553,6 +553,7 @@ private fun Forecast(ui: UiModel, delta: StatDelta) {
     val stats = ui.sheet.stats
     ForecastRow("Peak hp", stats.peakHorsepower, stats.peakHorsepower + delta.peakHp, "hp")
     ForecastRow("Torque", stats.peakTorqueLbFt, stats.peakTorqueLbFt + delta.peakTorque, "lb-ft")
+    ForecastRow("MPG@\$ (profit pedal)", ui.sheet.profit.mpg, ui.sheet.profit.mpg + delta.profitMpg, "mpg")
     ForecastRow("Cruise", stats.cruiseMpg, stats.cruiseMpg + delta.cruiseMpg, "mpg")
     Text(
         "Contract  ${signed(delta.payPerSec, if (kotlin.math.abs(delta.payPerSec) < 0.1) 3 else 2)}/s at this pedal",

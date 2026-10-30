@@ -42,7 +42,7 @@ fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit) {
         )
         Text(
             "Sheet ${formatPower(stats.peakHorsepower)} hp   ${formatPower(stats.peakTorqueLbFt)} lb-ft   " +
-                "${String.format(Locale.US, "%.1f", stats.cruiseMpg)} mpg   ${formatDollars(ui.sheet.incomePerSec)}/s",
+                "${String.format(Locale.US, "%.1f", ui.sheet.profit.mpg)} mpg@\$   ${formatDollars(ui.sheet.incomePerSec)}/s",
             color = Lime,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,

@@ -83,6 +83,7 @@ object Income {
 }
 
 object Prestige {
+    /** [mpg] is the live mpg at the pedal that pays the most, not the cruise figure. */
     fun meets(hp: Double, torque: Double, mpg: Double, block: Block, racing: Boolean = false): Boolean =
         hp >= block.sheetHp(racing) && torque >= block.sheetTorque(racing) && mpg >= block.sheetMpg(racing)
 
@@ -90,10 +91,12 @@ object Prestige {
      * One point for clearing the sheet. Each stat then adds four points per time
      * it beats its own target, so staying to build past the bar raises the
      * multiplier. A stat that is only just over does not cancel the others.
+     * mpg only gates. It is read at the profit pedal, where it falls as the build gets
+     * stronger, so beating the mpg goal is not rewarded.
      */
     fun knowledgeGain(hp: Double, torque: Double, mpg: Double, block: Block, racing: Boolean = false): Int {
         if (!meets(hp, torque, mpg, block, racing)) return 0
-        val depth = surplus(hp, block.sheetHp(racing)) + surplus(torque, block.sheetTorque(racing)) + surplus(mpg, block.sheetMpg(racing))
+        val depth = surplus(hp, block.sheetHp(racing)) + surplus(torque, block.sheetTorque(racing))
         return kotlin.math.floor(1.0 + depth * 4.0 + 1e-9).toInt().coerceIn(1, 16)
     }
 

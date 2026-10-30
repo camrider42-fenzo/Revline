@@ -62,7 +62,7 @@ class SheetAimTest {
         val mark = SheetAim.farthest(
             now.peakHorsepower / block.hpGoal,
             now.peakTorqueLbFt / block.torqueGoal,
-            now.cruiseMpg / block.mpgGoal,
+            Logic.sheet(state).profit.mpg / block.mpgGoal,
         )
         assertEquals(mark, aim.mark)
         val id = aim.upgradeId
@@ -78,7 +78,7 @@ class SheetAimTest {
             return when (mark) {
                 SheetMark.POWER -> stats.peakHorsepower
                 SheetMark.TORQUE -> stats.peakTorqueLbFt
-                SheetMark.CRUISE -> stats.cruiseMpg
+                SheetMark.CRUISE -> Logic.sheet(state.copy(upgrades = upgrades)).profit.mpg
             }
         }
         fun left(value: Double) = (goal - value).coerceAtLeast(0.0)

@@ -40,13 +40,15 @@ class BlockLadderTest {
         val misses = mutableListOf<String>()
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
-            val stock = Logic.sheet(GameState(prestiges = index, racing = true)).stats
-            if (com.revline.idle.economy.Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stock.cruiseMpg, block, true)) {
+            val stockSheet = Logic.sheet(GameState(prestiges = index, racing = true))
+            val stock = stockSheet.stats
+            if (com.revline.idle.economy.Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stockSheet.profit.mpg, block, true)) {
                 misses += "${block.title} stock race already clears"
             }
-            val built = Logic.sheet(GameState(prestiges = index, racing = true, researched = research, upgrades = maxed)).stats
-            if (!com.revline.idle.economy.Prestige.meets(built.peakHorsepower, built.peakTorqueLbFt, built.cruiseMpg, block, true)) {
-                misses += "${block.title} maxed race ${built.peakHorsepower.toInt()}/${built.peakTorqueLbFt.toInt()}/${"%.1f".format(built.cruiseMpg)} vs ${block.sheetHp(true).toInt()}/${block.sheetTorque(true).toInt()}/${"%.1f".format(block.sheetMpg(true))}"
+            val builtSheet = Logic.sheet(GameState(prestiges = index, racing = true, researched = research, upgrades = maxed))
+            val built = builtSheet.stats
+            if (!com.revline.idle.economy.Prestige.meets(built.peakHorsepower, built.peakTorqueLbFt, builtSheet.profit.mpg, block, true)) {
+                misses += "${block.title} maxed race ${built.peakHorsepower.toInt()}/${built.peakTorqueLbFt.toInt()}/${"%.1f".format(builtSheet.profit.mpg)} vs ${block.sheetHp(true).toInt()}/${block.sheetTorque(true).toInt()}/${"%.1f".format(block.sheetMpg(true))}"
             }
             assertTrue(Logic.paramsFrom(GameState(prestiges = index, racing = true)).redlineRpm > block.redlineRpm)
             assertTrue(Logic.paramsFrom(GameState(prestiges = index, racing = true)).blockTitle.startsWith("Race "))

@@ -84,18 +84,22 @@ class MpgRealismTest {
     }
 
     @Test
-    fun aStockEngineMissesItsMpgGoalSoTheGateIsReal() {
-        // The moped, the thumper and the inline four lose mpg when fully built (more
-        // power, more pumping), so their goals sit under the maxed build, which is below
-        // stock. Those three are held back by power and by price. The other five also need mpg.
-        val lightweights = setOf(Block.MOPED, Block.THUMPER, Block.INLINE_FOUR)
+    fun theMpgGateIsReadAtTheProfitPedalSoAStockEngineIsHeldBackByPowerNotMpg() {
+        // The pedal that pays the most burns more as the build gets stronger, so the mpg
+        // goals sit under the weakest build that must clear. Stock passes mpg on every
+        // engine and is stopped by horsepower and torque, which stock never reaches.
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
-            if (block in lightweights) continue
-            val stock = Logic.sheet(GameState(prestiges = index)).stats
-            assertTrue("${block.title} stock ${stock.cruiseMpg} vs ${block.mpgGoal}", stock.cruiseMpg < block.mpgGoal)
-            // Power alone is not enough. The same build with mpg in the goal's reach clears.
-            assertFalse(Prestige.meets(stock.peakHorsepower * 10, stock.peakTorqueLbFt * 10, stock.cruiseMpg, block))
+            val sheet = Logic.sheet(GameState(prestiges = index))
+            assertTrue("${block.title} stock ${sheet.profit.mpg} vs ${block.mpgGoal}", sheet.profit.mpg >= block.mpgGoal)
+            assertFalse(
+                "${block.title} stock power",
+                Prestige.meets(sheet.stats.peakHorsepower, sheet.stats.peakTorqueLbFt, sheet.profit.mpg, block),
+            )
+            // Power with a short mpg number does not clear.
+            assertFalse(
+                Prestige.meets(sheet.stats.peakHorsepower * 10, sheet.stats.peakTorqueLbFt * 10, block.mpgGoal - 0.05, block),
+            )
         }
     }
 

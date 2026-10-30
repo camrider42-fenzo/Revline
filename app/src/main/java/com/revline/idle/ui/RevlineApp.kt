@@ -364,12 +364,13 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Stat("HP", formatPower(s.peakHorsepower), Lime, Modifier.weight(1f))
             Stat("TQ", formatPower(s.peakTorqueLbFt), Amber, Modifier.weight(1f))
-            Stat("MPG", String.format(Locale.US, "%.1f", s.cruiseMpg), if (s.cruiseMpg < 12.0) Amber else White, Modifier.weight(1f))
+            Stat("MPG@\$", String.format(Locale.US, "%.1f", ui.sheet.profit.mpg), if (ui.sheet.profit.mpg < Block.forPrestige(ui.game.prestiges).sheetMpg(ui.game.racing)) Amber else White, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
         Text(
             "Sheet peak. Now ${formatPower(live.horsepower)} hp, ${formatPower(live.torqueLbFt)} lb-ft, " +
-                "${String.format(Locale.US, "%.1f", live.mpg)} mpg at this pedal.",
+                "${String.format(Locale.US, "%.1f", live.mpg)} mpg at this pedal. MPG@\$ is mpg at the best-paying pedal, " +
+                "${(ui.sheet.profit.throttle * 100).toInt()}% on this build. Cruise ${String.format(Locale.US, "%.1f", s.cruiseMpg)} mpg.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -427,7 +428,7 @@ fun EngineStrip(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Text("${formatDollars(ui.sheet.incomePerSec)}/s", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
         }
         Text(
-            "Sheet ${formatPower(s.peakHorsepower)} hp   ${formatPower(s.peakTorqueLbFt)} lb-ft   ${String.format(Locale.US, "%.1f", s.cruiseMpg)} mpg",
+            "Sheet ${formatPower(s.peakHorsepower)} hp   ${formatPower(s.peakTorqueLbFt)} lb-ft   ${String.format(Locale.US, "%.1f", ui.sheet.profit.mpg)} mpg@\$",
             color = Lime,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -555,7 +556,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
     val next = Block.forPrestige(ui.game.prestiges + 1)
     val racing = ui.game.racing
     val stats = ui.sheet.stats
-    val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block, racing)
+    val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, ui.sheet.profit.mpg, block, racing)
     val nextMultiplier = Prestige.multiplier(ui.game.knowledge + gain)
     val free = Logic.knowledgeFree(ui.game)
     val onLast = ui.game.prestiges >= Block.entries.lastIndex
@@ -574,7 +575,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
             modifier = Modifier.padding(top = 8.dp),
         )
         Text(
-            "The sheet has to clear power, torque, and cruise economy together.",
+            "The sheet has to clear power, torque, and mpg at the profit pedal together. That is the pedal that pays the most on this build, ${(ui.sheet.profit.throttle * 100).toInt()}% open now, not the cruise figure.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
@@ -582,7 +583,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
         )
         SheetTarget("Power", stats.peakHorsepower, block.sheetHp(racing), "hp")
         SheetTarget("Torque", stats.peakTorqueLbFt, block.sheetTorque(racing), "lb-ft")
-        SheetTarget("Cruise", stats.cruiseMpg, block.sheetMpg(racing), "mpg")
+        SheetTarget("Profit mpg @ ${(ui.sheet.profit.throttle * 100).toInt()}% pedal", ui.sheet.profit.mpg, block.sheetMpg(racing), "mpg")
         Text(
             "Street next  ${fmtGoal(next.sheetHp(false))} hp  ${fmtGoal(next.sheetTorque(false))} lb-ft  ${fmtGoal(next.sheetMpg(false))} mpg",
             color = White,
@@ -608,7 +609,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
         )
         if (gain == 1) {
             Text(
-                "This is the sheet minimum. Power, torque, or cruise past the target raises the payout, up to 16.",
+                "This is the sheet minimum. Power or torque past the target raises the payout, up to 16. The mpg number only has to clear.",
                 color = Amber,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
@@ -712,7 +713,7 @@ private fun DevSwitch(on: Boolean) {
     }
 }
 
-private fun fmtGoal(value: Double): String = String.format(Locale.US, "%.0f", value)
+private fun fmtGoal(value: Double): String = String.format(Locale.US, if (value < 10.0) "%.1f" else "%.0f", value)
 
 @Composable
 private fun SheetTarget(name: String, now: Double, goal: Double, unit: String) {

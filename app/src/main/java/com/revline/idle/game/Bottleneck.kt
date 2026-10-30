@@ -17,7 +17,7 @@ object Bottleneck {
      * What to work on. A climbing head beats a dyno note, a dyno note beats the
      * rebuild sheet, and a clear sheet points at whichever bay still has the most left.
      */
-    fun suggest(state: GameState, stats: EngineStats, live: OperatingPoint, soakPer10s: Double): Suggestion {
+    fun suggest(state: GameState, stats: EngineStats, profitMpg: Double, live: OperatingPoint, soakPer10s: Double): Suggestion {
         if (live.heatSoakC >= 10.0 && soakPer10s > 0.35) {
             return Suggestion(
                 Effect.COOLING,
@@ -38,14 +38,14 @@ object Bottleneck {
         val block = Block.forPrestige(state.prestiges)
         val hp = stats.peakHorsepower / block.sheetHp(state.racing)
         val tq = stats.peakTorqueLbFt / block.sheetTorque(state.racing)
-        val mpg = stats.cruiseMpg / block.sheetMpg(state.racing)
+        val mpg = profitMpg / block.sheetMpg(state.racing)
         if (minOf(hp, tq, mpg) < 1.0) {
-            val worst = listOf(hp to "power", tq to "torque", mpg to "cruise").minBy { it.first }
-            return if (worst.second == "cruise") {
+            val worst = listOf(hp to "power", tq to "torque", mpg to "profit").minBy { it.first }
+            return if (worst.second == "profit") {
                 Suggestion(
                     Effect.ECONOMY,
                     "Economy",
-                    "Cruise is the short number. ${one(stats.cruiseMpg)} mpg against a ${one(block.sheetMpg(state.racing))} mpg sheet.",
+                    "Mpg at the profit pedal is the short number. ${mpgText(profitMpg)} mpg against a ${mpgText(block.sheetMpg(state.racing))} mpg sheet.",
                 )
             } else {
                 Suggestion(
@@ -94,6 +94,9 @@ object Bottleneck {
         val body = String.format(java.util.Locale.US, "%.1f", kotlin.math.abs(rate))
         return if (rate >= 0.0) "+$body" else "−$body"
     }
+
+    private fun mpgText(value: Double): String =
+        String.format(java.util.Locale.US, if (value < 10.0) "%.1f" else "%.0f", value)
 
     private fun one(value: Double): String = String.format(java.util.Locale.US, "%.0f", value)
 }

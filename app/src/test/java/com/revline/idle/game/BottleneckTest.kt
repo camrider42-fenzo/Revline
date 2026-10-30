@@ -12,7 +12,7 @@ class BottleneckTest {
         val state = GameState()
         val sheet = Logic.sheet(state)
         val live = EngineSim.point(sheet.params, 2500.0, 0.4, 0.0)
-        val tip = Bottleneck.suggest(state, sheet.stats, live, soakPer10s = 0.0)
+        val tip = Bottleneck.suggest(state, sheet.stats, sheet.profit.mpg, live, soakPer10s = 0.0)
         assertEquals(Effect.POWER, tip.effect)
         assertTrue(tip.detail.contains("hp"))
     }
@@ -22,7 +22,7 @@ class BottleneckTest {
         val state = GameState(soakC = 24.0, throttle = 0.8)
         val sheet = Logic.sheet(state)
         val live = EngineSim.point(sheet.params, sheet.params.redlineRpm * 0.8, 0.85, 24.0)
-        val tip = Bottleneck.suggest(state, sheet.stats, live, soakPer10s = 2.4)
+        val tip = Bottleneck.suggest(state, sheet.stats, sheet.profit.mpg, live, soakPer10s = 2.4)
         assertEquals(Effect.COOLING, tip.effect)
         assertTrue(tip.detail.contains("10 seconds"))
     }

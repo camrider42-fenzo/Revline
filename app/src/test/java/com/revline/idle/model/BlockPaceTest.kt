@@ -50,9 +50,10 @@ class BlockPaceTest {
         val misses = mutableListOf<String>()
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
-            val stats = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = maxed)).stats
-            val line = "${block.title} maxed ${"%.1f".format(stats.peakHorsepower)}/${"%.1f".format(stats.peakTorqueLbFt)}/${"%.1f".format(stats.cruiseMpg)}"
-            if (!Prestige.meets(stats.peakHorsepower, stats.peakTorqueLbFt, stats.cruiseMpg, block)) misses += line
+            val sheet = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = maxed))
+            val stats = sheet.stats
+            val line = "${block.title} maxed ${"%.1f".format(stats.peakHorsepower)}/${"%.1f".format(stats.peakTorqueLbFt)}/${"%.1f".format(sheet.profit.mpg)}"
+            if (!Prestige.meets(stats.peakHorsepower, stats.peakTorqueLbFt, sheet.profit.mpg, block)) misses += line
         }
         assertTrue(misses.joinToString("\n"), misses.isEmpty())
     }
@@ -64,7 +65,7 @@ class BlockPaceTest {
         assertTrue("sixty share $share", share in 0.55..0.65)
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
-            fun stats(upgrades: Map<String, Int>) = Logic.sheet(
+            fun sheetOf(upgrades: Map<String, Int>) = Logic.sheet(
                 GameState(
                     prestiges = index,
                     knowledge = index,
@@ -72,19 +73,22 @@ class BlockPaceTest {
                     upgrades = upgrades,
                     fuel = FuelKind.PREMIUM_93,
                 ),
-            ).stats
-            val stock = Logic.sheet(GameState(prestiges = index)).stats
-            assertFalse(block.title, Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stock.cruiseMpg, block))
-            val thin = stats(forty)
-            val wide = stats(sixty)
+            )
+            val stockSheet = Logic.sheet(GameState(prestiges = index))
+            val stock = stockSheet.stats
+            assertFalse(block.title, Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stockSheet.profit.mpg, block))
+            val thinSheet = sheetOf(forty)
+            val wideSheet = sheetOf(sixty)
+            val thin = thinSheet.stats
+            val wide = wideSheet.stats
             assertFalse(
                 "${block.title} forty ${thin.peakHorsepower.toInt()}/${thin.peakTorqueLbFt.toInt()}",
-                Prestige.meets(thin.peakHorsepower, thin.peakTorqueLbFt, thin.cruiseMpg, block),
+                Prestige.meets(thin.peakHorsepower, thin.peakTorqueLbFt, thinSheet.profit.mpg, block),
             )
             assertTrue(
-                "${block.title} sixty ${"%.1f".format(wide.peakHorsepower)}/${"%.1f".format(wide.peakTorqueLbFt)}/${"%.1f".format(wide.cruiseMpg)} " +
+                "${block.title} sixty ${"%.1f".format(wide.peakHorsepower)}/${"%.1f".format(wide.peakTorqueLbFt)}/${"%.1f".format(wideSheet.profit.mpg)} " +
                     "vs ${block.hpGoal}/${block.torqueGoal}/${block.mpgGoal}",
-                Prestige.meets(wide.peakHorsepower, wide.peakTorqueLbFt, wide.cruiseMpg, block),
+                Prestige.meets(wide.peakHorsepower, wide.peakTorqueLbFt, wideSheet.profit.mpg, block),
             )
         }
     }
@@ -288,7 +292,7 @@ class BlockPaceTest {
         val block = Block.forPrestige(state.prestiges)
         return "hp ${"%.1f".format(stats.peakHorsepower)}/${block.hpGoal} " +
             "tq ${"%.1f".format(stats.peakTorqueLbFt)}/${block.torqueGoal} " +
-            "mpg ${"%.1f".format(stats.cruiseMpg)}/${block.mpgGoal}"
+            "mpg@profit ${"%.1f".format(sheet.profit.mpg)}/${block.mpgGoal}"
     }
 
     private data class Run(val cleared: Boolean, val hours: Double, val researched: Set<String>, val note: String)

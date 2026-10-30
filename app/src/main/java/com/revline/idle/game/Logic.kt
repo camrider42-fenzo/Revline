@@ -25,6 +25,20 @@ data class Sheet(
     val incomePerSec: Double,
     val rpPerSec: Double,
     val multiplier: Double,
+) {
+    /** The pedal that pays the most on this build, and the mpg the engine shows there. */
+    val profit: ProfitStop by lazy { Logic.profitStop(params, stats, multiplier) }
+}
+
+/**
+ * The best-paying stop on the pedal. [mpg] is the live, class-capped mpg at that stop,
+ * the same number the dyno readout shows when the pedal is held there.
+ */
+data class ProfitStop(
+    val throttle: Double,
+    val rpm: Double,
+    val mpg: Double,
+    val incomePerSec: Double,
 )
 
 data class StatDelta(
@@ -40,6 +54,8 @@ data class StatDelta(
     val peakHp: Double,
     val peakTorque: Double,
     val cruiseMpg: Double,
+    /** Change in mpg at the profit pedal, which is what the rebuild sheet uses. */
+    val profitMpg: Double = 0.0,
     val payPerSec: Double,
 )
 
@@ -94,10 +110,18 @@ object Logic {
      * Pedal opening that pays the most once the crank has caught the stop.
      * Sampled every 5%. Flooring it is not assumed to be the answer.
      */
-    fun bestThrottle(state: GameState): Double {
+    fun bestThrottle(state: GameState): Double = profitStop(state).throttle
+
+    fun profitStop(state: GameState): ProfitStop {
         val params = paramsFrom(state)
-        val stats = EngineSim.evaluate(params)
-        val mult = Prestige.multiplier(state.knowledge)
+        return profitStop(params, EngineSim.evaluate(params), Prestige.multiplier(state.knowledge))
+    }
+
+    /**
+     * Walks the pedal in 5% steps, takes the stop with the highest contract pay, and reads
+     * the live mpg at it. The multiplier scales every stop alike, so it never moves the answer.
+     */
+    fun profitStop(params: EngineParams, stats: EngineStats, mult: Double): ProfitStop {
         var bestT = 0.05
         var bestPay = -1.0
         var t = 0.05
@@ -110,7 +134,10 @@ object Logic {
             }
             t += 0.05
         }
-        return bestT.coerceIn(0.0, 1.0)
+        val throttle = bestT.coerceIn(0.0, 1.0)
+        val rpm = targetRpm(params.redlineRpm, throttle, params.idleRpm)
+        val point = EngineSim.point(params, rpm, loadFor(throttle))
+        return ProfitStop(throttle, rpm, point.mpg, bestPay.coerceAtLeast(0.0))
     }
 
     /**
@@ -682,6 +709,7 @@ object Logic {
             peakHp = next.stats.peakHorsepower - now.stats.peakHorsepower,
             peakTorque = next.stats.peakTorqueLbFt - now.stats.peakTorqueLbFt,
             cruiseMpg = next.stats.cruiseMpg - now.stats.cruiseMpg,
+            profitMpg = next.profit.mpg - now.profit.mpg,
             payPerSec = next.incomePerSec - now.incomePerSec,
         )
     }
@@ -736,11 +764,12 @@ object Logic {
     }
 
     fun canPrestige(state: GameState): Boolean {
-        val stats = sheet(state).stats
+        val sheet = sheet(state)
+        val stats = sheet.stats
         return Prestige.meets(
             stats.peakHorsepower,
             stats.peakTorqueLbFt,
-            stats.cruiseMpg,
+            sheet.profit.mpg,
             Block.forPrestige(state.prestiges),
             state.racing,
         )
@@ -760,11 +789,12 @@ object Logic {
     fun newGame(): GameState = GameState(money = startingMoney(0))
 
     fun prestige(state: GameState, racing: Boolean = false): GameState {
-        val stats = sheet(state).stats
+        val sheet = sheet(state)
+        val stats = sheet.stats
         val gain = Prestige.knowledgeGain(
             stats.peakHorsepower,
             stats.peakTorqueLbFt,
-            stats.cruiseMpg,
+            sheet.profit.mpg,
             Block.forPrestige(state.prestiges),
             state.racing,
         )
