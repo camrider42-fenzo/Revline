@@ -249,10 +249,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         save()
     }
 
-    fun finishMeet(won: Boolean, time: Double, rival: Double) {
+    fun finishMeet(won: Boolean, time: Double, rival: Double, jumped: Boolean = false) {
         val strip = ui.strip ?: return
-        val note = Racing.stripNote(ui.game, strip.field, won, time, rival, strip.ladder)
-        val game = Racing.award(ui.game, strip.field, won, strip.ladder)
+        val note = Racing.stripNote(ui.game, strip.field, won && !jumped, time, rival, strip.ladder, jumped)
+        val game = Racing.award(ui.game, strip.field, won && !jumped, strip.ladder)
         val sheet = if (game == ui.game) ui.sheet else Logic.sheet(game)
         publish(ui.copy(game = game, sheet = sheet, strip = null, raceNote = note))
         save()

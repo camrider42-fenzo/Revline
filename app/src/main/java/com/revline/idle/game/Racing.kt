@@ -447,8 +447,12 @@ object Racing {
     }
 
     /** [state] is the car before the purse is paid, so the ladder rung is the one just run. */
-    fun stripNote(state: GameState, field: Field, won: Boolean, time: Double, rival: Double, ladder: Boolean): String {
-        val clock = String.format(Locale.US, "%.2fs vs %.2fs", time, rival)
+    const val JUMP_NOTE = "RED LIGHT — jumped the start"
+
+    fun stripNote(state: GameState, field: Field, won: Boolean, time: Double, rival: Double, ladder: Boolean, jumped: Boolean = false): String {
+        // A red light loses whatever the clock says.
+        val won = won && !jumped
+        val clock = if (jumped) JUMP_NOTE else String.format(Locale.US, "%.2fs vs %.2fs", time, rival)
         if (field.stake > 0.0) {
             if (state.devMode || field.purse <= 0.0) {
                 val verdict = if (won) "The run was good enough." else "The run was short."

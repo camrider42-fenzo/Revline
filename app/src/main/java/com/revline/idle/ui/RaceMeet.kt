@@ -57,7 +57,7 @@ fun RaceMeet(
     setup: RaceDrive.Setup,
     field: Racing.Field,
     yourPace: Double,
-    onFinished: (Boolean, Double, Double) -> Unit,
+    onFinished: (Boolean, Double, Double, Boolean) -> Unit,
     crank: EngineCrank,
     params: EngineParams,
     hear: Boolean,
@@ -71,13 +71,14 @@ fun RaceMeet(
         RaceDrive.rivalSeconds(setup, yourPace, field.pace)
     }
     var throttle by remember { mutableFloatStateOf(0f) }
-    var clutchShown by remember { mutableFloatStateOf(0f) }
+    // Staged with the clutch on the floor. The pedal stays there until a foot touches it.
+    var clutchShown by remember { mutableFloatStateOf(1f) }
     var frame by remember { mutableStateOf(Frame(rpm = setup.idle)) }
     var settled by remember { mutableStateOf(false) }
-    fun settle(won: Boolean) {
+    fun settle(won: Boolean, jumped: Boolean = false) {
         if (settled) return
         settled = true
-        onFinished(won, hands.run.time, rivalTime)
+        onFinished(won, hands.run.time, rivalTime, jumped)
     }
     DisposableEffect(Unit) {
         onDispose { settle(false) }
@@ -87,37 +88,41 @@ fun RaceMeet(
         var countdown = COUNTDOWN_S
         var lights = 1.35f
         val limit = (96.0 * finish / RaceDrive.FINISH_M).coerceIn(48.0, 170.0)
-        while (isActive && !settled && hands.run.distance < finish && hands.run.time < limit) {
+        while (isActive && !settled && !hands.run.jumped && hands.run.distance < finish && hands.run.time < limit) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0.0 else ((now - last) / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 last = now
-                if (!hands.clutchHeld) {
+                if (!hands.clutchHeld && hands.clutchTouched) {
                     hands.clutch = RaceDrive.releaseClutch(hands.clutch, dt)
                     clutchShown = hands.clutch.toFloat()
                 }
-                // Five seconds of count before the tree wakes. Nothing on the strip runs and no clock starts.
-                if (countdown > 0f) {
-                    countdown -= dt.toFloat()
+                // Five seconds of count, then the tree. The engine is live the whole time, so the tach follows the
+                // throttle. The road is not: no clock runs, and a clutch that grabs enough to roll the car is a red light.
+                if (countdown > 0f || lights > 0f) {
+                    if (countdown > 0f) countdown -= dt.toFloat() else lights -= dt.toFloat()
+                    RaceDrive.stage(setup, hands.run, hands.throttle, dt, hands.clutch)
                     frame = snap(hands.run, lights, rivalTime, finish, done = false, won = false, countdown = countdown)
+                    if (hear) {
+                        val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
+                        crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
+                    }
                     return@withFrameNanos
                 }
-                // The pedal sticks, so it can be set while the tree is lit. The car waits for green.
-                if (lights > 0.0) {
-                    lights -= dt.toFloat()
-                    frame = snap(hands.run, lights, rivalTime, finish, done = false, won = false)
-                    return@withFrameNanos
-                }
-                val shift = hands.shift && hands.clutch > 0.62
+                val shift = hands.shift && hands.clutch > RaceDrive.SHIFT_PEDAL
                 hands.shift = false
                 RaceDrive.step(setup, hands.run, hands.throttle, shift, dt, hands.clutch)
                 frame = snap(hands.run, 0f, rivalTime, finish, done = false, won = false)
                 if (hear) {
-                    val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.time) else hands.run.rpm
+                    val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                     crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
                 }
             }
         }
-        if (!settled && isActive) {
+        if (!settled && isActive && hands.run.jumped) {
+            frame = snap(hands.run, 0f, rivalTime, finish, done = true, won = false).copy(jumped = true)
+            delay(1500)
+            settle(false, jumped = true)
+        } else if (!settled && isActive) {
             val won = hands.run.distance >= finish && hands.run.time <= rivalTime
             frame = snap(hands.run, 0f, rivalTime, finish, done = true, won = won)
             delay(900)
@@ -125,6 +130,7 @@ fun RaceMeet(
         }
     }
     val banner = when {
+        frame.jumped -> "RED LIGHT"
         frame.done && frame.won -> "CAUGHT THEM"
         frame.done -> "SHORT"
         frame.countdown > 0f -> "STAGE"
@@ -136,6 +142,7 @@ fun RaceMeet(
         else -> "GO"
     }
     val bannerColor = when {
+        frame.jumped -> Red
         frame.countdown > 0f || frame.lights > 0f -> Amber
         frame.done && frame.won -> Lime
         frame.done || frame.spinning || frame.limiter -> Red
@@ -158,15 +165,15 @@ fun RaceMeet(
             val lamp = size.minDimension * 0.28f
             val y = size.height * 0.55f
             val xs = listOf(0.32f, 0.44f, 0.56f, 0.68f)
-            val colors = listOf(Amber, Amber, Amber, if (frame.done && !frame.won) Red else Lime)
-            val lit = listOf(
+            val colors = if (frame.jumped) List(4) { Red } else listOf(Amber, Amber, Amber, if (frame.done && !frame.won) Red else Lime)
+            val lit = if (frame.jumped) List(4) { true } else listOf(
                 frame.lights < 1.2f,
                 frame.lights < 0.8f,
                 frame.lights < 0.4f,
                 frame.lights <= 0f,
             )
             glowLine(Olive, Offset(size.width * 0.22f, y), Offset(size.width * 0.78f, y), stroke, 0.35f)
-            if (frame.countdown > 0f) {
+            if (frame.countdown > 0f && !frame.jumped) {
                 countdownDigit(ceil(frame.countdown).toInt().coerceIn(1, 5), Offset(size.width * 0.5f, y), size.height * 0.34f, stroke)
                 return@Canvas
             }
@@ -179,28 +186,29 @@ fun RaceMeet(
             val left = 18f
             val right = size.width - 18f
             val span = right - left
-            val yourGas = if (frame.lights > 0f) 0.15f else (frame.rpm / setup.redline).toFloat().coerceIn(0.2f, 1f)
+            val yourGas = (frame.rpm / setup.redline).toFloat().coerceIn(0.2f, 1f)
             val theirGas = if (frame.lights > 0f) 0.05f else 0.55f
-            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, 0f, stroke, rivalId, false, frame.time.toFloat(), theirGas)
-            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.slip, stroke, yourId, yourMid, frame.time.toFloat(), yourGas)
+            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, 0f, stroke, rivalId, false, frame.clock.toFloat(), theirGas)
+            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.slip, stroke, yourId, yourMid, frame.clock.toFloat(), yourGas)
             gantry(Olive, left, 6f, size.height - 4f, stroke, 0.55f)
             val finishColor = if (frame.done && frame.won) Lime else if (frame.done) Red else White
             gantry(finishColor, right, 6f, size.height - 4f, stroke, 1f)
         }
         val gapM = frame.distance - frame.rival
         Text(
-            if (frame.countdown > 0f) "COUNTDOWN" else if (frame.lights > 0f) "LIGHTS" else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
-            color = if (frame.lights > 0f || frame.countdown > 0f) Olive else if (gapM >= 0) Lime else Red,
+            if (frame.jumped) "JUMPED THE START" else if (frame.countdown > 0f) "COUNTDOWN" else if (frame.lights > 0f) "LIGHTS" else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
+            color = if (frame.jumped) Red else if (frame.lights > 0f || frame.countdown > 0f) Olive else if (gapM >= 0) Lime else Red,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
-        val canShift = frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > 0.62f
+        val canShift = frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > RaceDrive.SHIFT_PEDAL.toFloat()
         Row(Modifier.fillMaxWidth().height(128.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(Modifier.width(60.dp).fillMaxHeight()) {
                 Text("CLUTCH", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ClutchPedal(
                     clutchShown.toDouble(),
                     onDepression = {
+                        hands.clutchTouched = true
                         hands.clutch = it
                         clutchShown = it.toFloat()
                     },
@@ -238,7 +246,7 @@ fun RaceMeet(
                     stroke * 1.2f,
                     1f,
                 )
-                val shownRpm = if (frame.limiter) RevLimiter.rpm(setup.redline, frame.time) else frame.rpm
+                val shownRpm = if (frame.limiter) RevLimiter.rpm(setup.redline, frame.clock) else frame.rpm
                 val frac = (shownRpm / setup.redline).toFloat().coerceIn(0f, 1.08f)
                 val ang = Math.toRadians((start + sweep * frac).toDouble())
                 val tail = Offset(c.x - (cos(ang) * r * 0.12).toFloat(), c.y - (sin(ang) * r * 0.12).toFloat())
@@ -280,7 +288,7 @@ fun RaceMeet(
             modifier = Modifier.padding(top = 2.dp),
         )
         Text(
-            hookAdvice(setup) + " Shift at the lime mark. Clutch in, then let it spring back.",
+            hookAdvice(setup) + " Hold the clutch in and rev it on the tree. Ease out through the blue bite band on green. Out of the band early is a red light. Shift at the lime mark.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -346,7 +354,8 @@ private fun DrawScope.countdownDigit(digit: Int, center: Offset, half: Float, st
 
 private class Hands(val run: RaceDrive.Run) {
     var throttle: Double = 0.0
-    var clutch: Double = 0.0
+    var clutch: Double = 1.0
+    var clutchTouched: Boolean = false
     var clutchHeld: Boolean = false
     var shift: Boolean = false
 }
@@ -363,9 +372,11 @@ private data class Frame(
     val spinning: Boolean = false,
     val slip: Float = 0f,
     val limiter: Boolean = false,
+    val clock: Double = 0.0,
     val rival: Float = 0f,
     val done: Boolean = false,
     val won: Boolean = false,
+    val jumped: Boolean = false,
 )
 
 private fun snap(
@@ -388,6 +399,7 @@ private fun snap(
     spinning = run.spinning,
     slip = run.slip.toFloat(),
     limiter = run.limiter,
+    clock = run.clock,
     rival = (finish * (run.time / rivalTime)).toFloat().coerceAtMost(finish.toFloat()),
     done = done,
     won = won,

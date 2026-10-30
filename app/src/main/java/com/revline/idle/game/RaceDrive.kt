@@ -1,13 +1,17 @@
 package com.revline.idle.game
 
 import com.revline.idle.data.GameState
+import com.revline.idle.model.Block
+import com.revline.idle.model.EngineSim
 import kotlin.math.exp
 import kotlin.math.pow
 
 /**
  * A quarter-mile you have to drive. The launch spins if the throttle asks for
- * more than the tires can hold. The clutch cuts that ask: 0 is engaged, 1 is
- * the pedal on the floor. The box you fitted sets the ratios and how long a
+ * more than the tires can hold. The clutch cuts that ask: pedal travel 0 is up
+ * and engaged, 1 is on the floor. The clutch only grabs inside a bite band
+ * ([BITE_START] down to [BITE_FULL]): below the band the engine is free of the
+ * road, above it the engine has the road. The box you fitted sets the ratios and how long a
  * shift takes. Sitting on the limiter does not count as a shift.
  */
 object RaceDrive {
@@ -15,6 +19,23 @@ object RaceDrive {
     const val WHEEL_R = 0.33
     const val SLIP_EDGE = 0.3
     private const val SLIP_FADE_S = 0.45
+
+    /** Pedal travel where the clutch first grabs. Further up (smaller) it takes more of the engine. Further down it is open. */
+    const val BITE_START = 0.72
+
+    /** Pedal travel where the clutch has all of the engine. Above this on the slot it is fully engaged. */
+    const val BITE_FULL = 0.28
+
+    /** The clutch is out far enough to row the gearbox. Just inside the open end of the band. */
+    const val SHIFT_PEDAL = 0.66
+
+    /** A tiny share of grab is still open for practical purposes: the engine revs free of the road. */
+    private const val OPEN_BELOW = 0.004
+
+    /** The car has rolled this far on the tree. That is a jump start. */
+    const val JUMP_M = 0.02
+
+    private const val DECAY_SHARE = 0.55
 
     data class Setup(
         val peakHp: Double,
@@ -29,6 +50,8 @@ object RaceDrive {
         val drag: Double,
         val shiftSeconds: Double,
         val distanceM: Double = FINISH_M,
+        /** Sets how fast the engine can spin up. Big blocks have more to turn. */
+        val displacementCc: Double = 1000.0,
     )
 
     data class Run(
@@ -43,6 +66,10 @@ object RaceDrive {
         var slip: Double = 0.0,
         var limiter: Boolean = false,
         var hooked: Boolean = false,
+        /** Engine seconds: ticks on the tree too, where [time] (the race clock) does not. Drives the limiter's cut. */
+        var clock: Double = 0.0,
+        /** Rolled before green. The race is lost. */
+        var jumped: Boolean = false,
     )
 
     fun setup(state: GameState): Setup {
@@ -79,7 +106,49 @@ object RaceDrive {
             drag = drag,
             shiftSeconds = box.shift,
             distanceM = Racing.lengthOf(state.raceLength).meters,
+            displacementCc = Block.forPrestige(state.prestiges).let {
+                EngineSim.displacementCc(it.boreMm, it.strokeMm, it.cylinders)
+            },
         )
+    }
+
+    /**
+     * Share of the gap to the throttle's rpm the engine closes each second with the clutch open.
+     * A 50cc single winds up almost at once. A 6.5L V12 has a lot more crank and flywheel to move.
+     */
+    fun revRate(setup: Setup): Double =
+        (4.6 * (1000.0 / setup.displacementCc.coerceAtLeast(40.0)).pow(0.22)).coerceIn(2.4, 9.0)
+
+    /** How much of the engine the clutch passes at this pedal travel. 0 open, 1 locked. Smooth through the bite band. */
+    fun engagement(pedal: Double): Double {
+        val t = ((BITE_START - pedal.coerceIn(0.0, 1.0)) / (BITE_START - BITE_FULL)).coerceIn(0.0, 1.0)
+        return t * t * (3.0 - 2.0 * t)
+    }
+
+    /** The pedal travel that passes this share of the engine. The inverse of [engagement]. */
+    fun pedalFor(engagement: Double): Double {
+        val want = engagement.coerceIn(0.0, 1.0)
+        var lo = BITE_FULL
+        var hi = BITE_START
+        repeat(40) {
+            val mid = (lo + hi) / 2.0
+            if (engagement(mid) > want) lo = mid else hi = mid
+        }
+        return (lo + hi) / 2.0
+    }
+
+    /**
+     * The tree. The engine runs for real: revs follow the throttle, the limiter cuts, the needle falls when you
+     * lift. The race clock and the road do not. If the clutch grabs enough to roll the car it is a jump start.
+     * Returns true once the car has rolled.
+     */
+    fun stage(setup: Setup, run: Run, throttle: Double, dt: Double, clutch: Double): Boolean {
+        if (run.jumped) return true
+        val clock = run.time
+        drive(setup, run, throttle, false, dt, clutch)
+        run.time = clock
+        if (run.distance > JUMP_M) run.jumped = true
+        return run.jumped
     }
 
     fun fresh(setup: Setup): Run = Run(rpm = setup.idle)
@@ -105,7 +174,7 @@ object RaceDrive {
         val stepDt = dt.coerceIn(0.0, 0.05)
         val th = throttle.coerceIn(0.0, 1.0)
         val depression = clutch.coerceIn(0.0, 1.0)
-        val engagement = 1.0 - depression
+        val engagement = engagement(depression)
         if (shift && run.shiftLeft <= 0.0 && run.gear < setup.ratios.size) {
             run.gear += 1
             run.shiftLeft = setup.shiftSeconds
@@ -127,13 +196,10 @@ object RaceDrive {
             advance(run, stepDt)
             return
         }
-        if (engagement < 0.08) {
+        if (engagement < OPEN_BELOW) {
             if (run.gear == 1 && run.speed < 14.0) run.hooked = false
-            val flare = setup.idle + th * (setup.redline - setup.idle)
-            run.rpm += (flare - run.rpm) * stepDt * 4.0
-            run.rpm = run.rpm.coerceIn(setup.idle * 0.8, setup.redline * 1.05)
+            freeRev(setup, run, th, stepDt)
             run.spinning = false
-            run.limiter = run.rpm >= setup.redline * 0.98
             val dragA = dragForce(setup, run.speed) / setup.massKg
             run.speed = (run.speed - dragA * stepDt).coerceAtLeast(0.0)
             advance(run, stepDt)
@@ -157,7 +223,7 @@ object RaceDrive {
                 run.spinning = false
                 val locked = biteRpm.coerceAtLeast(roadRpm)
                 val flare = setup.idle + th * (setup.redline - setup.idle)
-                val target = if (engagement >= 0.92) locked else roadRpm * engagement + flare * depression
+                val target = if (engagement >= 0.92) locked else roadRpm * engagement + flare * (1.0 - engagement)
                 run.rpm += (target - run.rpm) * stepDt * 4.0
                 val accel = (requested - dragForce(setup, run.speed)) / setup.massKg
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
@@ -185,20 +251,20 @@ object RaceDrive {
                     road
                 } else {
                     val flare = setup.idle + th * (setup.redline - setup.idle)
-                    (road * engagement + flare * depression).coerceAtLeast(setup.idle * 0.8)
+                    (road * engagement + flare * (1.0 - engagement)).coerceAtLeast(setup.idle * 0.8)
                 }
             }
         }
         advance(run, stepDt)
     }
 
-    /** Pedal travel that lets full throttle leave without breaking the tires. 0 means the tires already hold it. */
+    /** Pedal travel (inside the bite band) that lets full throttle leave without breaking the tires. 0 means the tires already hold it. */
     fun clutchForLaunch(setup: Setup): Double {
         val bite = setup.idle + (setup.redline * 0.74 - setup.idle)
         val full = torqueNm(setup, bite) * setup.efficiency * setup.ratios[0] * setup.finalDrive / WHEEL_R
         if (full <= setup.gripN * 0.96) return 0.0
         val engagement = (setup.gripN * 0.96 / full).coerceIn(0.2, 0.92)
-        return 1.0 - engagement
+        return pedalFor(engagement)
     }
 
     /** Spring the pedal back to engaged. A foot that is still on it should not call this. */
@@ -250,9 +316,23 @@ object RaceDrive {
         return best
     }
 
+    /** Clutch open: the engine is only fighting its own inertia. It climbs fast, falls slower, and bounces off the limiter. */
+    private fun freeRev(setup: Setup, run: Run, th: Double, dt: Double) {
+        val reach = setup.redline * 0.98
+        val target = if (th < 0.02) setup.idle else setup.idle + th * (setup.redline * 1.06 - setup.idle)
+        val k = revRate(setup) * (if (target >= run.rpm) 1.0 else DECAY_SHARE)
+        if (!(run.limiter && target >= reach)) {
+            run.rpm += (target - run.rpm) * (dt * k).coerceAtMost(1.0)
+            run.rpm = run.rpm.coerceIn(setup.idle * 0.8, setup.redline * 1.05)
+            run.limiter = run.rpm >= reach && target >= reach
+        }
+        if (run.limiter) run.rpm = RevLimiter.rpm(setup.redline, run.clock)
+    }
+
     private fun advance(run: Run, dt: Double) {
         run.distance += run.speed * dt
         run.time += dt
+        run.clock += dt
     }
 
     private fun roadRpm(speed: Double, overall: Double): Double =

@@ -35,6 +35,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.RevLimiter
 import com.revline.idle.model.OperatingPoint
 import kotlinx.coroutines.isActive
@@ -237,6 +238,8 @@ fun ThrottlePedal(
 /**
  * Same plate as the throttle. Travel sticks while the foot is down.
  * Letting go springs it back to engaged, which is the top of the slot.
+ * The cyan band is the bite: the clutch starts to grab at its lower edge and has the whole engine
+ * at its upper edge. The plate turns cyan while it is inside, lime with the clutch in below it and amber with it out above it.
  */
 @Composable
 fun ClutchPedal(
@@ -250,6 +253,7 @@ fun ClutchPedal(
         animationSpec = tween(durationMillis = 80),
         label = "clutch",
     )
+    val biting = shown < RaceDrive.BITE_START && shown > RaceDrive.BITE_FULL
     Box(modifier) {
         Canvas(
             Modifier
@@ -273,25 +277,41 @@ fun ClutchPedal(
                     }
                 },
         ) {
+            biteBand()
             val color = when {
-                shown < 0.08f -> Lime
-                shown < 0.7f -> Amber
-                else -> Red
+                biting -> Cyan
+                shown <= RaceDrive.BITE_FULL -> Amber
+                else -> Lime
             }
             pedalPlate(shown, color)
         }
         Text(
             when {
-                shown < 0.04f -> "IN"
-                shown > 0.85f -> "OUT"
-                else -> "${(shown * 100).toInt()}%"
+                biting -> "BITE"
+                shown <= RaceDrive.BITE_FULL -> "OUT"
+                else -> "IN"
             },
-            color = White,
+            color = if (biting) Cyan else White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
         )
     }
+}
+
+/** Where the plate sits on the slot for a pedal travel. */
+private fun plateY(h: Float, travel: Double): Float = h * 0.10f + travel.toFloat() * (h * 0.68f)
+
+/** The bite range on the slot: edges at where the clutch starts to grab and where it has everything. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.biteBand() {
+    val w = size.width
+    val h = size.height
+    val stroke = (w / 26f).coerceIn(1.6f, 3.2f)
+    val top = plateY(h, RaceDrive.BITE_FULL) + h * 0.08f
+    val bottom = plateY(h, RaceDrive.BITE_START) + h * 0.08f
+    drawRect(Cyan.copy(alpha = 0.16f), Offset(w * 0.22f, top), androidx.compose.ui.geometry.Size(w * 0.56f, bottom - top))
+    glowLine(Cyan, Offset(w * 0.22f, top), Offset(w * 0.78f, top), stroke, 0.7f)
+    glowLine(Cyan, Offset(w * 0.22f, bottom), Offset(w * 0.78f, bottom), stroke, 0.7f)
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.pedalPlate(shown: Float, color: androidx.compose.ui.graphics.Color) {
