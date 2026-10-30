@@ -72,8 +72,9 @@ object RaceDrive {
         var jumped: Boolean = false,
     )
 
-    fun setup(state: GameState): Setup {
-        val sheet = Logic.sheet(state)
+    fun setup(state: GameState): Setup = setup(state, Logic.sheet(state))
+
+    fun setup(state: GameState, sheet: Sheet): Setup {
         val body = Racing.car(state)
         val box = body.spec.gearbox
         val axle = body.spec.axle
@@ -342,7 +343,7 @@ object RaceDrive {
         0.5 * 1.22 * setup.drag * speed * speed
 
     /** lb-ft curve that peaks mid-range and will not make more horsepower than the engine has. */
-    private fun torqueNm(setup: Setup, rpm: Double): Double {
+    fun torqueNm(setup: Setup, rpm: Double): Double {
         val span = (setup.redline - setup.idle).coerceAtLeast(500.0)
         val x = ((rpm - setup.idle) / span).coerceIn(0.0, 1.2)
         val shape = exp(-((x - 0.72).pow(2.0)) / 0.05)

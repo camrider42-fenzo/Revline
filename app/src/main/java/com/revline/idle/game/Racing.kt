@@ -449,7 +449,12 @@ object Racing {
     /** [state] is the car before the purse is paid, so the ladder rung is the one just run. */
     const val JUMP_NOTE = "RED LIGHT — jumped the start"
 
-    fun stripNote(state: GameState, field: Field, won: Boolean, time: Double, rival: Double, ladder: Boolean, jumped: Boolean = false): String {
+    fun stripNote(state: GameState, field: Field, won: Boolean, time: Double, rival: Double, ladder: Boolean, jumped: Boolean = false, driver: String? = null, fee: Double = 0.0): String {
+        val tail = if (driver == null) "" else if (fee > 0.0) " Driver $driver, fee ${formatDollars(fee)}." else " Driver $driver, no fee."
+        return stripBody(state, field, won, time, rival, ladder, jumped) + tail
+    }
+
+    private fun stripBody(state: GameState, field: Field, won: Boolean, time: Double, rival: Double, ladder: Boolean, jumped: Boolean): String {
         // A red light loses whatever the clock says.
         val won = won && !jumped
         val clock = if (jumped) JUMP_NOTE else String.format(Locale.US, "%.2fs vs %.2fs", time, rival)

@@ -41,6 +41,10 @@ data class GameState(
     val throttle: Double = 0.18,
     /** Screw positions. Missing keys are the stock stop. Locked screws are ignored. */
     val tune: Map<String, Double> = emptyMap(),
+    /** Drivers on the roster you have hired (ids). Hiring is free. A driver charges a fee only for a race he drives. */
+    val hiredDrivers: Set<String> = emptySet(),
+    /** The hired driver the race screen's toggle has selected. Blank drives it yourself. */
+    val driverId: String = "",
     /** Testing switch: parts and studies cost nothing. Gates still apply. */
     val devMode: Boolean = false,
     /** Stops the bench drawing and the speaker. The contract keeps paying. */
