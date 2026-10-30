@@ -240,9 +240,9 @@ fun RaceScreen(
             modifier = Modifier.padding(top = 4.dp),
         )
         Text("DRIVELINE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        ChipRow(Racing.axles.map { it.id to it.name }, state.driveline) { id ->
-            val axle = Racing.axles.first { it.id == id }
-            if (axle.study != null && axle.study !in state.raceStudies) onStudy(axle.study) else onPart("axle", id)
+        ChipRow(Racing.axles.map { it.id to Racing.gate(state, "axle", it.id, it.name).label }, state.driveline) { id ->
+            val gate = Racing.gate(state, "axle", id, Racing.axles.first { it.id == id }.name)
+            if (gate.study != null) onStudy(gate.study) else onPart("axle", id)
         }
         Text("TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         Text(

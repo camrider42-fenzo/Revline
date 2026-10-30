@@ -209,11 +209,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
     fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }
     fun setAimGoal(goal: AimGoal) = mutate { it.copy(aimGoal = goal.name) }
-    fun studyRace(id: String) = race { Racing.study(it, id) to null }
+    fun studyRace(id: String) = race {
+        val next = Racing.study(it, id)
+        next to if (next != it) "Studied ${Racing.studies.first { s -> s.id == id }.name}. Tap again to fit it." else Racing.studyBlocked(it, id)
+    }
     fun fitChassis(id: String) = race { Racing.fitChassis(it, id) to null }
-    fun fitRace(kind: String, id: String) = race { Racing.fitPart(it, kind, id) to null }
+    fun fitRace(kind: String, id: String) = race {
+        val next = Racing.fitPart(it, kind, id)
+        next to if (next != it) "Fitted." else Racing.partBlocked(it, kind, id)
+    }
     fun setCooling(slots: Int) = race { Racing.setSlots(it, slots) to null }
-    fun setFinal(id: String) = race { Racing.setFinal(it, id) to null }
+    fun setFinal(id: String) = race {
+        val next = Racing.setFinal(it, id)
+        next to if (next != it) "Fitted." else Racing.partBlocked(it, "final", id)
+    }
     fun setLength(id: String) = race { Racing.setLength(it, id) to null }
 
     fun openQuick(tier: Racing.Tier) = openStrip(ladder = false) { Racing.fieldForQuick(it, tier) to it }

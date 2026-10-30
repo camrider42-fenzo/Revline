@@ -565,13 +565,45 @@ object Racing {
         val on = fitted(state, kind, id)
         val study = partStudy(kind, id)
         if (!on && study != null && study !in state.raceStudies) {
-            val cost = studies.first { it.id == study }.cost.toInt()
-            return Gate("$name · $cost RP", study)
+            val node = studies.first { it.id == study }
+            val lock = when {
+                node.minPrestige > state.prestiges -> "rebuild ${node.minPrestige}"
+                node.requires != null && node.requires !in state.raceStudies -> "after ${studies.first { it.id == node.requires }.name}"
+                else -> null
+            }
+            return Gate("$name · ${lock ?: "${node.cost.toInt()} RP"}", study)
         }
         val base = rawPrice(kind, id)
         val owned = base <= 0.0 || "$kind:$id" in state.raceOwned || on
         if (!owned) return Gate("$name · ${formatDollars(partPrice(state, kind, id))}", null)
         return Gate(name, null)
+    }
+
+    /** Why a tap on this study did nothing, or null when it would go through. */
+    fun studyBlocked(state: GameState, id: String): String? {
+        val node = studies.find { it.id == id } ?: return null
+        if (id in state.raceStudies) return null
+        if (node.minPrestige > state.prestiges) return "${node.name} opens after rebuild ${node.minPrestige}."
+        if (node.requires != null && node.requires !in state.raceStudies) {
+            return "Study ${studies.first { it.id == node.requires }.name} before ${node.name}."
+        }
+        if (!state.devMode && state.researchPoints < node.cost) {
+            return "${node.name} needs ${node.cost.toInt()} RP. You have ${state.researchPoints.toInt()}."
+        }
+        return null
+    }
+
+    /** Why a tap on this part did nothing, or null when it would go through. */
+    fun partBlocked(state: GameState, kind: String, id: String): String? {
+        if (fitted(state, kind, id)) return null
+        val study = partStudy(kind, id)
+        if (study != null && study !in state.raceStudies) return studyBlocked(state, study)
+        val owned = rawPrice(kind, id) <= 0.0 || "$kind:$id" in state.raceOwned
+        val price = partPrice(state, kind, id)
+        if (!owned && !state.devMode && state.money < price) {
+            return "Needs ${formatDollars(price)}. You have ${formatDollars(state.money)}."
+        }
+        return null
     }
 
     fun setSlots(state: GameState, slots: Int): GameState {
