@@ -42,7 +42,20 @@ object Drivers {
         /** Share of the purse he charges for each race he drives. */
         val rate: Double,
         val bio: String,
+        /** Circuit stats (0..100, higher is better). Corner entry and mid-corner speed. */
+        val cornering: Int = 50,
+        /** How late and how hard he gets on the brakes. */
+        val braking: Int = 50,
+        /** Throttle application out of the turn: traction, and wheelspin kept in check. */
+        val acceleration: Int = 50,
+        /** How often he makes a mistake. LOWER IS BETTER: 0 never errs, 100 errs all the time. */
+        val mistakes: Int = 50,
+        /** Mechanical sympathy: short-shifts when the engine hurts, spares it. Less wear, less failure risk, less power fade. */
+        val care: Int = 50,
     ) {
+        /** Overall rating out of 100, see [overall]. */
+        val overall: Int get() = Drivers.overall(this)
+
         fun stat(stat: Stat): Int = when (stat) {
             Stat.THROTTLE -> throttle
             Stat.CLUTCH -> clutch
@@ -50,6 +63,22 @@ object Drivers {
             Stat.DYNO -> dyno
         }
     }
+
+    /**
+     * Overall rating out of 100: a weighted mean of all nine stats, where [Driver.mistakes] counts as consistency
+     * (100 - mistakes), so a mistake-prone driver is rated lower. Weights sum to 1.00:
+     * cornering 0.18, consistency 0.15, braking 0.13, acceleration 0.12, throttle 0.10, engine care 0.10,
+     * shifting 0.09, dyno 0.07, clutch 0.06. The circuit stats carry 0.68 of it and the strip stats 0.32.
+     */
+    val OVERALL_WEIGHTS: Map<String, Double> = linkedMapOf(
+        "cornering" to 0.18, "consistency" to 0.15, "braking" to 0.13, "acceleration" to 0.12, "throttle" to 0.10,
+        "care" to 0.10, "shifting" to 0.09, "dyno" to 0.07, "clutch" to 0.06,
+    )
+
+    fun overall(d: Driver): Int = Math.round(
+        0.18 * d.cornering + 0.15 * (100 - d.mistakes) + 0.13 * d.braking + 0.12 * d.acceleration +
+            0.10 * d.throttle + 0.10 * d.care + 0.09 * d.shifting + 0.07 * d.dyno + 0.06 * d.clutch,
+    ).toInt()
 
     /** Engine blocks (rebuilds) it takes to meet each tier. */
     fun tierUnlock(tier: Int): Int = when (tier) {
@@ -59,17 +88,20 @@ object Drivers {
     }
 
     val roster: List<Driver> = listOf(
-        Driver("dusty", "Graham Hill", 1, 42, 40, 44, 38, Specialty.ALL_ROUNDER, 0.015, "Tidy and unflappable. Keeps it pointed straight."),
-        Driver("mina", "Stirling Moss", 1, 66, 40, 34, 40, Specialty.GRIP, 0.035, "Smooth as silk. Soft right foot."),
-        Driver("rusty", "Jack Brabham", 1, 36, 60, 38, 34, Specialty.CLUTCH, 0.045, "Mechanic first. Feels the clutch through his boots."),
-        Driver("pavel", "Niki Lauda", 2, 48, 52, 74, 50, Specialty.GEARS, 0.07, "Exact and unhurried. Rows a box faster than you can say the gear."),
-        Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 76, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives."),
-        Driver("tanaka", "James Hunt", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Charming and quick off the line."),
-        Driver("gus", "Jackie Stewart", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Calm, careful and clever. Wins by being tidy."),
-        Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.15, "The Professor. Lives on the bite point."),
-        Driver("viktor", "Ayrton Senna", 3, 64, 60, 62, 90, Specialty.REVS, 0.13, "Counts the curve in his head. Shifts exactly there."),
-        Driver("ace", "Juan Manuel Fangio", 3, 78, 76, 80, 76, Specialty.ALL_ROUNDER, 0.22, "The old master. Sharp everywhere, and he bills for it."),
+        Driver("dusty", "Graham Hill", 1, 42, 40, 44, 38, Specialty.ALL_ROUNDER, 0.015, "Tidy and unflappable. Keeps it pointed straight.", cornering = 44, braking = 42, acceleration = 40, mistakes = 40, care = 50),
+        Driver("mina", "Stirling Moss", 1, 66, 40, 34, 40, Specialty.GRIP, 0.035, "Smooth as silk. Soft right foot.", cornering = 62, braking = 48, acceleration = 46, mistakes = 40, care = 55),
+        Driver("rusty", "Jack Brabham", 1, 36, 60, 38, 34, Specialty.CLUTCH, 0.045, "Mechanic first. Feels the clutch through his boots.", cornering = 38, braking = 44, acceleration = 50, mistakes = 46, care = 66),
+        Driver("pavel", "Niki Lauda", 2, 48, 52, 74, 50, Specialty.GEARS, 0.07, "Exact and unhurried. Rows a box faster than you can say the gear.", cornering = 58, braking = 60, acceleration = 54, mistakes = 28, care = 74),
+        Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 76, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives.", cornering = 70, braking = 62, acceleration = 66, mistakes = 66, care = 36),
+        Driver("tanaka", "James Hunt", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Charming and quick off the line.", cornering = 62, braking = 54, acceleration = 72, mistakes = 64, care = 40),
+        Driver("gus", "Jackie Stewart", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Calm, careful and clever. Wins by being tidy.", cornering = 66, braking = 64, acceleration = 58, mistakes = 32, care = 68),
+        Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.15, "The Professor. Lives on the bite point.", cornering = 70, braking = 74, acceleration = 62, mistakes = 20, care = 88),
+        Driver("viktor", "Ayrton Senna", 3, 64, 60, 62, 90, Specialty.REVS, 0.13, "Counts the curve in his head. Shifts exactly there.", cornering = 92, braking = 78, acceleration = 86, mistakes = 36, care = 48),
+        Driver("ace", "Juan Manuel Fangio", 3, 78, 76, 80, 76, Specialty.ALL_ROUNDER, 0.22, "The old master. Sharp everywhere, and he bills for it.", cornering = 76, braking = 76, acceleration = 74, mistakes = 26, care = 72),
     )
+
+    /** The player at the wheel on a circuit: a middling driver across the board. Never a roster entry, never paid. */
+    val you = Driver("", "You", 0, 50, 50, 50, 50, Specialty.ALL_ROUNDER, 0.0, "That is you.", cornering = 50, braking = 50, acceleration = 50, mistakes = 50, care = 50)
 
     fun byId(id: String): Driver? = roster.firstOrNull { it.id == id }
 

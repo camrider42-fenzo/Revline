@@ -22,7 +22,7 @@ object DriverBuilds {
         return all.take(count).associate { it.id to it.maxLevel } + extra
     }
 
-    private fun base(p: Int, build: Racing.Build, tire: String, box: String, line: String, share: Double, rev: Boolean = false): GameState {
+    fun make(p: Int, build: Racing.Build, tire: String, box: String, line: String, share: Double, rev: Boolean = false): GameState {
         val body = Racing.groupChassis(p, build)
         return GameState(
             prestiges = p,
@@ -43,10 +43,19 @@ object DriverBuilds {
 
     /** Five setups that stress different hands. */
     fun forBlock(p: Int): List<Build> = listOf(
-        Build("grip hog", base(p, Racing.Build.LIGHT, "bias", "four", "open", 0.9)),
-        Build("hooked sleeper", base(p, Racing.Build.HEAVY, "slick", "crash", "cv", 0.45)),
-        Build("rev monster", base(p, Racing.Build.MEDIUM, "radial", "four", "lsd", 1.0, rev = true)),
-        Build("dog club", base(p, Racing.Build.MEDIUM, "slick", "dog", "irs", 0.8)),
-        Build("close street", base(p, Racing.Build.MEDIUM, "radial", "close", "lsd", 0.6)),
+        Build("grip hog", make(p, Racing.Build.LIGHT, "bias", "four", "open", 0.9)),
+        Build("hooked sleeper", make(p, Racing.Build.HEAVY, "slick", "crash", "cv", 0.45)),
+        Build("rev monster", make(p, Racing.Build.MEDIUM, "radial", "four", "lsd", 1.0, rev = true)),
+        Build("dog club", make(p, Racing.Build.MEDIUM, "slick", "dog", "irs", 0.8)),
+        Build("close street", make(p, Racing.Build.MEDIUM, "radial", "close", "lsd", 0.6)),
+    )
+
+    /** Five builds that differ in what they are good at, for circuit work: same era, different bias. */
+    fun orientations(p: Int): List<Build> = listOf(
+        Build("power", make(p, Racing.Build.HEAVY, "slick", "dog", "irs", 1.0, rev = true).copy(finalDrive = "tall")),
+        Build("grip", make(p, Racing.Build.HEAVY, "slick", "crash", "cv", 0.45)),
+        Build("light", make(p, Racing.Build.LIGHT, "slick", "close", "irs", 0.5).copy(finalDrive = "short")),
+        Build("balanced", make(p, Racing.Build.MEDIUM, "slick", "dog", "irs", 0.8)),
+        Build("street", make(p, Racing.Build.MEDIUM, "radial", "close", "lsd", 0.6)),
     )
 }
