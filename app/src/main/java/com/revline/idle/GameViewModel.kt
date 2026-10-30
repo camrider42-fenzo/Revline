@@ -14,6 +14,7 @@ import com.revline.idle.game.Drivers.Driver
 import com.revline.idle.game.Drivers
 import com.revline.idle.game.Logic
 import com.revline.idle.game.RaceDrive
+import com.revline.idle.game.Circuits
 import com.revline.idle.game.Racing
 import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
@@ -55,6 +56,10 @@ data class UiModel(
     val strip: Strip? = null,
     /** True while the crank is on the fuel cut, on the bench or on a dyno pull. */
     val limiter: Boolean = false,
+    /** The last circuit race, shown on the race screen until the next one starts. */
+    val circuitOutcome: Circuits.Outcome? = null,
+    /** True while a circuit race is being simulated. */
+    val circuitBusy: Boolean = false,
 )
 
 class GameViewModel(app: Application) : AndroidViewModel(app) {
@@ -292,6 +297,30 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             ),
         )
         if (hand.fee > 0.0) save()
+    }
+
+    /** Pays the entry and the driver, simulates the race off the main thread, then pays the prize and any engine rebuild. */
+    fun runCircuit(id: String) {
+        if (ui.circuitBusy || ui.strip != null) return
+        val circuit = Circuits.all.firstOrNull { it.id == id } ?: return
+        when (val entry = Circuits.open(ui.game)) {
+            is Circuits.Entry.Refused -> publish(ui.copy(raceNote = entry.note))
+            is Circuits.Entry.Paid -> {
+                val paid = entry.state
+                publish(ui.copy(game = paid, circuitBusy = true, circuitOutcome = null, raceNote = null))
+                save()
+                val seed = System.nanoTime()
+                viewModelScope.launch {
+                    val outcome = withContext(Dispatchers.Default) {
+                        Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed)
+                    }
+                    // The till has moved on since the lights went green: pay onto what is there now.
+                    val game = ui.game.let { it.copy(money = (it.money + outcome.prize - outcome.repair).coerceAtLeast(0.0)) }
+                    publish(ui.copy(game = game, circuitBusy = false, circuitOutcome = outcome))
+                    save()
+                }
+            }
+        }
     }
 
     fun hireDriver(id: String) = race { state ->

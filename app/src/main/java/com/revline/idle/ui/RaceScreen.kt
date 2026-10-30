@@ -25,6 +25,10 @@ import androidx.compose.runtime.remember
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.revline.idle.game.Drivers
+import com.revline.idle.game.Circuits
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import com.revline.idle.game.RaceDrive
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -49,6 +53,7 @@ fun RaceScreen(
     onStake: () -> Unit,
     onHire: (String) -> Unit = {},
     onPick: (String) -> Unit = {},
+    onCircuit: (String) -> Unit = {},
 ) {
     val state = ui.game
     val car = Racing.car(state)
@@ -130,6 +135,8 @@ fun RaceScreen(
             fontSize = 12.sp,
         )
         LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
+
+        CircuitSection(ui, car, onPick, onCircuit)
 
         DriverRoster(state, forecast, onHire)
 
@@ -426,6 +433,12 @@ private fun DriverRoster(state: com.revline.idle.data.GameState, forecast: Map<S
             }
             Text(driver.bio, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             Drivers.Stat.entries.forEach { stat -> StatBar(stat.title, driver.stat(stat), Drivers.statOf(driver.specialty) == stat) }
+            Text("CIRCUIT  overall ${driver.overall}/100", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
+            StatBar("cornering", driver.cornering, false)
+            StatBar("braking", driver.braking, false)
+            StatBar("accel", driver.acceleration, false)
+            StatBar("mistakes", driver.mistakes, false, lowerIsBetter = true)
+            StatBar("engine care", driver.care, false)
             Text(
                 "Fee ${String.format(Locale.US, "%.1f", driver.rate * 100)}% of the purse  (rung ${formatDollars(rungFee(state, driver))})" +
                     if (fit != null) "   ${fit.fit.label}  ${String.format(Locale.US, "%.0f", fit.jumpRate * 100)}% red lights" else "",
@@ -447,12 +460,122 @@ private fun DriverRoster(state: com.revline.idle.data.GameState, forecast: Map<S
 }
 
 @Composable
-private fun StatBar(label: String, value: Int, spec: Boolean) {
+private fun StatBar(label: String, value: Int, spec: Boolean, lowerIsBetter: Boolean = false) {
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
         Text(label, color = if (spec) Lime else White, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(72.dp))
         Row(Modifier.width(140.dp).height(8.dp).border(1.dp, Olive)) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(value / 100f).background(if (spec) Lime else White))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(value / 100f).background(if (spec) Lime else if (lowerIsBetter) Amber else White))
         }
-        Text("  $value", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+        Text("  $value" + if (lowerIsBetter) "  lower is better" else "", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun CircuitSection(ui: UiModel, car: Racing.Car, onPick: (String) -> Unit, onRun: (String) -> Unit) {
+    val state = ui.game
+    var circuitId by rememberSaveable { mutableStateOf(Circuits.all.first().id) }
+    val circuit = Circuits.all.firstOrNull { it.id == circuitId } ?: Circuits.all.first()
+    val picked = Drivers.selected(state)
+    val hands = picked ?: Drivers.you
+    val hired = Drivers.hired(state)
+    Text("CIRCUIT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+    Text(
+        "A few laps round a real circuit against seven rivals, simulated with your car. No picture, just the result. Tires, axle, gearbox, final drive, weight, cooling and power all change the lap. The driver's cornering, braking, acceleration, mistakes and engine care change it too.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    ChipRow(Circuits.all.map { it.id to it.name.substringBefore('-').uppercase(Locale.US) }, circuit.id) { circuitId = it }
+    Text(
+        "${circuit.name}, ${circuit.place}  ${String.format(Locale.US, "%.3f", circuit.lapKm)} km  ${circuit.corners} corners  ${circuit.laps} laps  full throttle ${circuit.fullThrottlePct}%",
+        color = Cyan,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 6.dp),
+    )
+    Text(circuit.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+    val favors = remember(circuit.id) { Circuits.favors(circuit) }
+    val emphasis = remember(circuit.id) { Circuits.emphasis(circuit) }
+    Text(
+        "FAVORS ${favors.joinToString(" and ") { it.title }}",
+        color = Lime,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    Circuits.Aspect.entries.forEach { a -> StatBar(a.title.lowercase(Locale.US), (emphasis.getValue(a) * 50).toInt().coerceIn(0, 100), a in favors) }
+    val fit by produceState<Double?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.prestiges) {
+        value = withContext(Dispatchers.Default) { Circuits.fitPercent(Circuits.carOf(state, ui.sheet), circuit, state.prestiges, picked) }
+    }
+    fit?.let {
+        Text(
+            String.format(Locale.US, "Your build here: %+.1f%% a lap against the field's par car", it),
+            color = if (it >= 2.0) Lime else if (it >= -1.0) White else Amber,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+    Text("DRIVER", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+    ChipRow(listOf("" to "YOU") + hired.map { it.id to it.name.uppercase(Locale.US) }, picked?.id ?: "", onPick)
+    Text(
+        "${hands.name}  overall ${hands.overall}  corner ${hands.cornering}  brake ${hands.braking}  accel ${hands.acceleration}  mistakes ${hands.mistakes} (lower is better)  care ${hands.care}",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+    val entry = Circuits.entry(state)
+    val fee = Circuits.fee(state, picked)
+    Text(
+        "Entry ${formatDollars(entry)}" + (if (fee > 0.0) "  driver ${formatDollars(fee)}" else "") +
+            "  winner's purse ${formatDollars(Circuits.winnerPurse(state))}  engine rebuild ${formatDollars(Circuits.repair(state))}",
+        color = Cyan,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    val can = !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
+    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id) }, Modifier.padding(top = 6.dp))
+    ui.circuitOutcome?.let { o ->
+        val r = o.result
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, if (r.retired != null) Red else Lime).padding(8.dp)) {
+            Text(
+                if (r.retired != null) "${r.circuit.name}: DNF" else "${r.circuit.name}: P${r.position} of ${r.field}",
+                color = if (r.retired != null) Red else Lime,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+            )
+            Text("Driver ${r.driver}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            if (r.retired != null) Text(r.retired, color = Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            else Text("Total ${Circuits.clock(r.totalTime)}  best lap ${Circuits.clock(r.bestLap)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Text(
+                "Laps " + r.lapTimes.joinToString("  ") { Circuits.clock(it) },
+                color = White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+            )
+            Text(
+                if (r.incidents.isEmpty()) "Incidents: none" else "Incidents: " + r.incidents.joinToString("; "),
+                color = if (r.incidents.isEmpty()) White else Amber,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+            )
+            Text(
+                "Entry ${formatDollars(o.entry)}" + (if (o.fee > 0.0) "  driver ${formatDollars(o.fee)}" else "") +
+                    "  prize ${formatDollars(o.prize)}" + (if (o.repair > 0.0) "  engine rebuild ${formatDollars(o.repair)}" else ""),
+                color = Cyan,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+            )
+            r.grid.forEachIndexed { i, f ->
+                Text(
+                    "${i + 1}. ${f.name}  " + if (f.out) "DNF" else Circuits.clock(f.time),
+                    color = if (f.you) Lime else White,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                )
+            }
+        }
     }
 }
