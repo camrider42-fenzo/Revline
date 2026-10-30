@@ -35,6 +35,7 @@ import com.revline.idle.game.Racing
 import com.revline.idle.game.RevLimiter
 import com.revline.idle.model.EngineParams
 import java.util.Locale
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.delay
@@ -76,6 +77,7 @@ fun RaceMeet(
     }
     LaunchedEffect(setup) {
         var last = 0L
+        var countdown = COUNTDOWN_S
         var lights = 1.35f
         val limit = (96.0 * finish / RaceDrive.FINISH_M).coerceIn(48.0, 170.0)
         while (isActive && !settled && hands.run.distance < finish && hands.run.time < limit) {
@@ -85,6 +87,12 @@ fun RaceMeet(
                 if (!hands.clutchHeld) {
                     hands.clutch = RaceDrive.releaseClutch(hands.clutch, dt)
                     clutchShown = hands.clutch.toFloat()
+                }
+                // Five seconds of count before the tree wakes. Nothing on the strip runs and no clock starts.
+                if (countdown > 0f) {
+                    countdown -= dt.toFloat()
+                    frame = snap(hands.run, lights, rivalTime, finish, done = false, won = false, countdown = countdown)
+                    return@withFrameNanos
                 }
                 // The pedal sticks, so it can be set while the tree is lit. The car waits for green.
                 if (lights > 0.0) {
@@ -112,6 +120,7 @@ fun RaceMeet(
     val banner = when {
         frame.done && frame.won -> "CAUGHT THEM"
         frame.done -> "SHORT"
+        frame.countdown > 0f -> "STAGE"
         frame.lights > 0.7f -> "READY"
         frame.lights > 0f -> "SET"
         frame.shiftLeft > 0.0 -> "SHIFT"
@@ -120,7 +129,7 @@ fun RaceMeet(
         else -> "GO"
     }
     val bannerColor = when {
-        frame.lights > 0f -> Amber
+        frame.countdown > 0f || frame.lights > 0f -> Amber
         frame.done && frame.won -> Lime
         frame.done || frame.spinning || frame.limiter -> Red
         frame.shiftLeft > 0.0 -> Amber
@@ -150,6 +159,10 @@ fun RaceMeet(
                 frame.lights <= 0f,
             )
             glowLine(Olive, Offset(size.width * 0.22f, y), Offset(size.width * 0.78f, y), stroke, 0.35f)
+            if (frame.countdown > 0f) {
+                countdownDigit(ceil(frame.countdown).toInt().coerceIn(1, 5), Offset(size.width * 0.5f, y), size.height * 0.34f, stroke)
+                return@Canvas
+            }
             xs.forEachIndexed { index, at ->
                 stageLamp(colors[index], Offset(size.width * at, y), lamp, stroke, lit[index])
             }
@@ -169,8 +182,8 @@ fun RaceMeet(
         }
         val gapM = frame.distance - frame.rival
         Text(
-            if (frame.lights > 0f) "LIGHTS" else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
-            color = if (frame.lights > 0f) Olive else if (gapM >= 0) Lime else Red,
+            if (frame.countdown > 0f) "COUNTDOWN" else if (frame.lights > 0f) "LIGHTS" else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
+            color = if (frame.lights > 0f || frame.countdown > 0f) Olive else if (gapM >= 0) Lime else Red,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
@@ -259,7 +272,7 @@ fun RaceMeet(
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 6.dp),
         )
-        val canShift = frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > 0.62f
+        val canShift = frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > 0.62f
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LineButton(
                 if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT",
@@ -272,6 +285,28 @@ fun RaceMeet(
     }
 }
 
+private const val COUNTDOWN_S = 5f
+
+// Seven-segment strokes (top, top-right, bottom-right, bottom, bottom-left, top-left, middle) for 1..5.
+private val digitSegments = mapOf(
+    1 to "0110000", 2 to "1101101", 3 to "1111001", 4 to "0110011", 5 to "1011011",
+)
+
+private fun DrawScope.countdownDigit(digit: Int, center: Offset, half: Float, stroke: Float) {
+    val on = digitSegments.getValue(digit)
+    val w = half * 0.55f
+    val l = center.x - w
+    val r = center.x + w
+    val t = center.y - half
+    val b = center.y + half
+    val ends = listOf(
+        Offset(l, t) to Offset(r, t), Offset(r, t) to Offset(r, center.y), Offset(r, center.y) to Offset(r, b),
+        Offset(l, b) to Offset(r, b), Offset(l, center.y) to Offset(l, b), Offset(l, t) to Offset(l, center.y),
+        Offset(l, center.y) to Offset(r, center.y),
+    )
+    ends.forEachIndexed { i, (from, to) -> if (on[i] == '1') glowLine(Amber, from, to, stroke * 1.4f, 1.15f) }
+}
+
 private class Hands(val run: RaceDrive.Run) {
     var throttle: Double = 0.0
     var clutch: Double = 0.0
@@ -281,6 +316,7 @@ private class Hands(val run: RaceDrive.Run) {
 
 private data class Frame(
     val lights: Float = 1.35f,
+    val countdown: Float = COUNTDOWN_S,
     val gear: Int = 1,
     val rpm: Double = 900.0,
     val speed: Double = 0.0,
@@ -301,8 +337,10 @@ private fun snap(
     finish: Double,
     done: Boolean,
     won: Boolean,
+    countdown: Float = 0f,
 ): Frame = Frame(
     lights = lights.coerceAtLeast(0f),
+    countdown = countdown.coerceAtLeast(0f),
     gear = run.gear,
     rpm = run.rpm,
     speed = run.speed,
