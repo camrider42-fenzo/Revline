@@ -1,6 +1,12 @@
 package com.revline.idle.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -187,7 +194,20 @@ fun RaceMeet(
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
+        val canShift = frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > 0.62f
         Row(Modifier.fillMaxWidth().height(128.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.width(60.dp).fillMaxHeight()) {
+                Text("CLUTCH", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                ClutchPedal(
+                    clutchShown.toDouble(),
+                    onDepression = {
+                        hands.clutch = it
+                        clutchShown = it.toFloat()
+                    },
+                    onHeld = { hands.clutchHeld = it },
+                    modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
+                )
+            }
             Canvas(Modifier.weight(1f).fillMaxHeight()) {
                 val stroke = (size.minDimension / 70f).coerceIn(1.6f, 3f)
                 val c = Offset(size.width * 0.5f, size.height * 0.78f)
@@ -226,19 +246,10 @@ fun RaceMeet(
                 glowLine(if (hot) Red else Lime, tail, tip, stroke * 1.25f, 1.15f)
                 glowCircle(if (frame.spinning) Red else Lime, stroke * 2.2f, c, stroke, filled = true)
             }
-            Column(Modifier.width(68.dp).fillMaxHeight()) {
-                Text("CLUTCH", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-                ClutchPedal(
-                    clutchShown.toDouble(),
-                    onDepression = {
-                        hands.clutch = it
-                        clutchShown = it.toFloat()
-                    },
-                    onHeld = { hands.clutchHeld = it },
-                    modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
-                )
+            Box(Modifier.width(60.dp).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
+                SquareShift(if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT", canShift) { hands.shift = true }
             }
-            Column(Modifier.width(68.dp).fillMaxHeight()) {
+            Column(Modifier.width(60.dp).fillMaxHeight()) {
                 Text("THROTTLE", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ThrottlePedal(
                     throttle.toDouble(),
@@ -272,16 +283,23 @@ fun RaceMeet(
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 6.dp),
         )
-        val canShift = frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > 0.62f
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LineButton(
-                if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT",
-                canShift,
-                { hands.shift = true },
-                Modifier.weight(1f),
-            )
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
             LineButton("BAIL", !frame.done, { settle(false) }, Modifier.weight(1f))
         }
+    }
+}
+
+@Composable
+private fun SquareShift(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val color = if (enabled) Lime else Olive
+    Box(
+        Modifier
+            .size(60.dp)
+            .border(BorderStroke(1.dp, color))
+            .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = color, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
     }
 }
 
