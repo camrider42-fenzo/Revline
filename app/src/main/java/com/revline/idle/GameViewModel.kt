@@ -10,6 +10,8 @@ import com.revline.idle.data.GameState
 import com.revline.idle.data.SaveRepository
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.AimGoal
+import com.revline.idle.game.Drivers.Driver
+import com.revline.idle.game.Drivers
 import com.revline.idle.game.Logic
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Racing
@@ -36,6 +38,11 @@ data class Strip(
     val field: Racing.Field,
     val yourPace: Double,
     val ladder: Boolean,
+    /** Who is at the wheel for this run. Null is the player. */
+    val driver: Driver? = null,
+    /** What he was paid when the lights came up. */
+    val fee: Double = 0.0,
+    val seed: Long = 0L,
 )
 
 data class UiModel(
@@ -232,17 +239,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun openStake() {
         if (ui.strip != null) return
         val opened = Racing.openStake(ui.game, System.nanoTime())
+        val hand = opened?.let { (g, f) -> Drivers.charge(g, f) }
+        if (opened != null && hand == null) {
+            val who = Drivers.selected(ui.game)
+            publish(ui.copy(raceNote = "${who?.name ?: "The driver"} wants his fee on top of the stake. The till is short."))
+            return
+        }
         if (opened == null) {
             val cost = Racing.stakeCost(ui.game.prestiges)
             publish(ui.copy(raceNote = "The stake is ${formatDollars(cost)}. The till is short."))
             return
         }
-        val (game, field) = opened
+        val field = opened.second
+        val game = hand!!.state
         publish(
             ui.copy(
                 game = game,
                 sheet = Logic.sheet(game),
-                strip = Strip(RaceDrive.setup(game), field, Racing.car(game).pace, ladder = false),
+                strip = Strip(RaceDrive.setup(game), field, Racing.car(game).pace, ladder = false, driver = hand.driver, fee = hand.fee, seed = System.nanoTime()),
                 raceNote = null,
             ),
         )
@@ -251,7 +265,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun finishMeet(won: Boolean, time: Double, rival: Double, jumped: Boolean = false) {
         val strip = ui.strip ?: return
-        val note = Racing.stripNote(ui.game, strip.field, won && !jumped, time, rival, strip.ladder, jumped)
+        val note = Racing.stripNote(ui.game, strip.field, won && !jumped, time, rival, strip.ladder, jumped, strip.driver?.name, strip.fee)
         val game = Racing.award(ui.game, strip.field, won && !jumped, strip.ladder)
         val sheet = if (game == ui.game) ui.sheet else Logic.sheet(game)
         publish(ui.copy(game = game, sheet = sheet, strip = null, raceNote = note))
@@ -260,13 +274,37 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun openStrip(ladder: Boolean, fieldOf: (GameState) -> Pair<Racing.Field, GameState>) {
         if (ui.strip != null) return
-        val (field, game) = fieldOf(ui.game)
+        val (field, before) = fieldOf(ui.game)
+        val hand = Drivers.charge(before, field)
+        if (hand == null) {
+            val who = Drivers.selected(before)
+            val fee = who?.let { Drivers.fee(before, it, field) } ?: 0.0
+            publish(ui.copy(raceNote = "${who?.name ?: "The driver"} wants ${formatDollars(fee)} to drive this one. The till is short. Drive yourself or pick someone cheaper."))
+            return
+        }
+        val game = hand.state
         publish(
             ui.copy(
-                strip = Strip(RaceDrive.setup(game), field, Racing.car(game).pace, ladder),
+                game = game,
+                sheet = if (game == ui.game) ui.sheet else Logic.sheet(game),
+                strip = Strip(RaceDrive.setup(game), field, Racing.car(game).pace, ladder, hand.driver, hand.fee, System.nanoTime()),
                 raceNote = null,
             ),
         )
+        if (hand.fee > 0.0) save()
+    }
+
+    fun hireDriver(id: String) = race { state ->
+        val driver = Drivers.byId(id)
+        val next = Drivers.hire(state, id)
+        next to if (driver != null && next != state) "${driver.name} hired. Pick him on the race screen." else null
+    }
+
+    /** Blank drives yourself. A driver the till could not pay for the ladder rung is refused. */
+    fun pickDriver(id: String) = race { state ->
+        val driver = Drivers.byId(id)
+        val next = Drivers.select(state, id)
+        next to if (driver != null && next == state && id.isNotEmpty() && id !in state.hiredDrivers) "Hire ${driver.name} first." else null
     }
 
     private fun race(block: (GameState) -> Pair<GameState, String?>) {

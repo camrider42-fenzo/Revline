@@ -134,6 +134,9 @@ fun RevlineApp(vm: GameViewModel) {
                         yourId = ui.game.chassis,
                         yourMid = ui.game.chassis == "r5" && ui.game.enginePlace == "MID",
                         rivalId = strip.field.rivalId,
+                        driver = strip.driver,
+                        fee = strip.fee,
+                        seed = strip.seed,
                     )
                 } else {
                     when (tab.value) {
@@ -152,6 +155,8 @@ fun RevlineApp(vm: GameViewModel) {
                             vm::openQuick,
                             vm::openLadder,
                             vm::openStake,
+                            vm::hireDriver,
+                            vm::pickDriver,
                         )
                         Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
                     }

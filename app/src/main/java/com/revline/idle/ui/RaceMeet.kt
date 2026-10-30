@@ -37,6 +37,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.economy.formatDollars
+import com.revline.idle.game.AutoRace
+import com.revline.idle.game.Drivers
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Racing
 import com.revline.idle.game.RevLimiter
@@ -64,9 +66,14 @@ fun RaceMeet(
     yourId: String,
     yourMid: Boolean,
     rivalId: String,
+    driver: Drivers.Driver? = null,
+    fee: Double = 0.0,
+    seed: Long = 0L,
 ) {
     val finish = setup.distanceM
-    val hands = remember { Hands(RaceDrive.fresh(setup)) }
+    // A hired driver works the same three controls through the same sim. The player watches.
+    val auto = remember(setup, driver, seed) { driver?.let { AutoRace(setup, Drivers.skills(it, setup), seed) } }
+    val hands = remember(auto) { Hands(auto?.run ?: RaceDrive.fresh(setup)) }
     val rivalTime = remember(setup, yourPace, field.pace) {
         RaceDrive.rivalSeconds(setup, yourPace, field.pace)
     }
@@ -83,7 +90,7 @@ fun RaceMeet(
     DisposableEffect(Unit) {
         onDispose { settle(false) }
     }
-    LaunchedEffect(setup) {
+    LaunchedEffect(auto) {
         var last = 0L
         var countdown = COUNTDOWN_S
         var lights = 1.35f
@@ -92,6 +99,17 @@ fun RaceMeet(
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0.0 else ((now - last) / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 last = now
+                if (auto != null) {
+                    auto.advance(dt)
+                    throttle = auto.throttle.toFloat()
+                    clutchShown = auto.clutch.toFloat()
+                    frame = snap(auto.run, auto.lights, rivalTime, finish, done = false, won = false, countdown = auto.countdown)
+                    if (hear) {
+                        val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
+                        crank.publish(params, voiceRpm.toFloat(), auto.throttle.toFloat(), true, auto.run.limiter)
+                    }
+                    return@withFrameNanos
+                }
                 if (!hands.clutchHeld && hands.clutchTouched) {
                     hands.clutch = RaceDrive.releaseClutch(hands.clutch, dt)
                     clutchShown = hands.clutch.toFloat()
@@ -158,6 +176,12 @@ fun RaceMeet(
         val length = Racing.Length.entries.firstOrNull { kotlin.math.abs(it.meters - finish) < 1.0 }?.title ?: "strip"
         Text("${field.title.uppercase(Locale.US)}  $length", color = White, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
         Text(field.detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+        if (driver != null) {
+            Text(
+                "DRIVER ${driver.name.uppercase(Locale.US)}  fee paid ${if (fee > 0.0) formatDollars(fee) else "none"}",
+                color = Amber, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp),
+            )
+        }
         Text(purse, color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(banner, color = bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
         Canvas(Modifier.fillMaxWidth().height(40.dp).padding(top = 4.dp)) {
@@ -201,18 +225,19 @@ fun RaceMeet(
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
-        val canShift = frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > RaceDrive.SHIFT_PEDAL.toFloat()
+        val canShift = auto == null && frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > RaceDrive.SHIFT_PEDAL.toFloat()
         Row(Modifier.fillMaxWidth().height(128.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(Modifier.width(60.dp).fillMaxHeight()) {
                 Text("CLUTCH", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ClutchPedal(
                     clutchShown.toDouble(),
                     onDepression = {
+                        if (auto != null) return@ClutchPedal
                         hands.clutchTouched = true
                         hands.clutch = it
                         clutchShown = it.toFloat()
                     },
-                    onHeld = { hands.clutchHeld = it },
+                    onHeld = { if (auto == null) hands.clutchHeld = it },
                     modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
                 )
             }
@@ -258,14 +283,15 @@ fun RaceMeet(
             SpinLamp(frame.spinning, frame.slip, Modifier.align(Alignment.TopCenter))
             }
             Box(Modifier.width(60.dp).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
-                SquareShift(if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT", canShift) { hands.shift = true }
+                SquareShift(if (auto != null) "AUTO" else if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT", canShift) { hands.shift = true }
             }
             Column(Modifier.width(60.dp).fillMaxHeight()) {
                 Text("THROTTLE", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ThrottlePedal(
                     throttle.toDouble(),
-                    enabled = !frame.done,
+                    enabled = !frame.done && auto == null,
                     onThrottle = {
+                        if (auto != null) return@ThrottlePedal
                         throttle = it.toFloat()
                         hands.throttle = it
                     },
@@ -288,7 +314,7 @@ fun RaceMeet(
             modifier = Modifier.padding(top = 2.dp),
         )
         Text(
-            hookAdvice(setup) + " Hold the clutch in and rev it on the tree. Ease out through the blue bite band on green. Out of the band early is a red light. Shift at the lime mark.",
+            if (driver != null) "${driver.name} is driving. Clutch, throttle and shifts are his. Watch the tach." else hookAdvice(setup) + " Hold the clutch in and rev it on the tree. Ease out through the blue bite band on green. Out of the band early is a red light. Shift at the lime mark.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

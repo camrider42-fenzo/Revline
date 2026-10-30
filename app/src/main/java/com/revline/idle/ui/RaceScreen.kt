@@ -7,7 +7,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,7 +19,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.revline.idle.game.Drivers
+import com.revline.idle.game.RaceDrive
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -37,6 +47,8 @@ fun RaceScreen(
     onQuick: (Racing.Tier) -> Unit,
     onLadder: () -> Unit,
     onStake: () -> Unit,
+    onHire: (String) -> Unit = {},
+    onPick: (String) -> Unit = {},
 ) {
     val state = ui.game
     val car = Racing.car(state)
@@ -82,6 +94,11 @@ fun RaceScreen(
             fontSize = 12.sp,
         )
         ChipRow(Racing.Length.entries.map { it.id to it.title }, state.raceLength, onLength)
+        val setup = RaceDrive.setup(state, ui.sheet)
+        val forecast by produceState<Map<String, Drivers.Forecast>>(emptyMap(), setup) {
+            value = withContext(Dispatchers.Default) { Drivers.forecast(setup).associateBy { it.driver.id } }
+        }
+        DriverToggle(state, forecast, onPick)
         Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
             "Club is a heavy car. National is a medium one. International is a light car with a milder engine. You drive the distance above.",
@@ -113,6 +130,8 @@ fun RaceScreen(
             fontSize = 12.sp,
         )
         LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
+
+        DriverRoster(state, forecast, onHire)
 
         Text("CHASSIS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp))
         Text(
@@ -335,5 +354,105 @@ private fun ChipRow(options: List<Pair<String, String>>, selected: String, onPic
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
         }
+    }
+}
+
+/** Fee on the next ladder rung, the race a driver is most often hired for. */
+private fun rungFee(state: com.revline.idle.data.GameState, driver: Drivers.Driver): Double =
+    Drivers.fee(state, driver, Racing.fieldForLadder(state))
+
+@Composable
+private fun DriverToggle(state: com.revline.idle.data.GameState, forecast: Map<String, Drivers.Forecast>, onPick: (String) -> Unit) {
+    Text("DRIVER", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+    val hired = Drivers.hired(state)
+    val picked = Drivers.selected(state)
+    if (hired.isEmpty()) {
+        Text(
+            "You drive. Hire someone below and he can take any race for a share of its purse.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+    } else {
+        Text(
+            if (picked == null) "DRIVE MYSELF. No fee." else "${picked.name} drives for ${(picked.rate * 100).let { String.format(Locale.US, "%.1f", it) }}% of the purse, paid when the lights come up.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+    }
+    val options = listOf("" to "DRIVE MYSELF") + hired.map { it.id to it.name.uppercase(Locale.US) }
+    ChipRow(options, picked?.id ?: "", onPick)
+    if (picked != null) {
+        val fit = forecast[picked.id]
+        Text(
+            "Rung fee ${formatDollars(rungFee(state, picked))}" + if (fit != null) "  ${fit.fit.label} for this car" else "",
+            color = Cyan,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun DriverRoster(state: com.revline.idle.data.GameState, forecast: Map<String, Drivers.Forecast>, onHire: (String) -> Unit) {
+    Text("DRIVERS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+    Text(
+        "Hiring is free. A driver costs a share of each purse, paid when he drives. Each runs the same car you do, with his own hands. A specialist beats a better all-rounder on the car he suits, so read the fit.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    Drivers.roster.forEach { driver ->
+        val open = Drivers.unlocked(state, driver)
+        val hired = driver.id in state.hiredDrivers
+        val fit = forecast[driver.id]
+        Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            Text(
+                "${driver.name}  tier ${driver.tier}  ${driver.specialty.title}",
+                color = if (open) Cyan else Olive,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+            )
+            if (!open) {
+                Text(
+                    "Signs after ${Drivers.tierUnlock(driver.tier)} rebuilds.",
+                    color = Olive,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                )
+                return@Column
+            }
+            Text(driver.bio, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            Drivers.Stat.entries.forEach { stat -> StatBar(stat.title, driver.stat(stat), Drivers.statOf(driver.specialty) == stat) }
+            Text(
+                "Fee ${String.format(Locale.US, "%.1f", driver.rate * 100)}% of the purse  (rung ${formatDollars(rungFee(state, driver))})" +
+                    if (fit != null) "   ${fit.fit.label}  ${String.format(Locale.US, "%.0f", fit.jumpRate * 100)}% red lights" else "",
+                color = when (fit?.fit) {
+                    Drivers.Fit.BEST -> Lime
+                    Drivers.Fit.GOOD -> Cyan
+                    Drivers.Fit.FAIR -> Amber
+                    Drivers.Fit.POOR -> Red
+                    null -> White
+                },
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            if (hired) Text("HIRED", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            else LineButton("Hire ${driver.name.substringBefore(' ')}", true, { onHire(driver.id) }, Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun StatBar(label: String, value: Int, spec: Boolean) {
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
+        Text(label, color = if (spec) Lime else White, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(72.dp))
+        Row(Modifier.width(140.dp).height(8.dp).border(1.dp, Olive)) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(value / 100f).background(if (spec) Lime else White))
+        }
+        Text("  $value", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
     }
 }
