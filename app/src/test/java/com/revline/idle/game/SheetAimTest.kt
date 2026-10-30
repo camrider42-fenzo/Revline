@@ -47,7 +47,7 @@ class SheetAimTest {
         fun read(stats: EngineStats, from: GameState): Double = when (goal) {
             AimGoal.POWER -> stats.peakHorsepower
             AimGoal.TORQUE -> stats.peakTorqueLbFt
-            AimGoal.CRUISE -> stats.cruiseMpg
+            AimGoal.CRUISE -> Logic.sheet(from).profit.mpg
             AimGoal.PAY -> Logic.sheet(from).incomePerSec
         }
         return read(after, next) - read(before, state)

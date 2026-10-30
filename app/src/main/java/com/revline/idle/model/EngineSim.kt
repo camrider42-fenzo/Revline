@@ -108,6 +108,12 @@ data class EngineParams(
      * Higher burns less fuel for the same road load.
      */
     val economy: Double = 1.0,
+    /**
+     * What the same parts do to the mpg the dyno reads under load, at any pedal.
+     * Cruise keeps its small [economy] figure. This one is the lever on the rebuild
+     * mpg gate. It does not touch the paycheck, which reads the raw fuel burn.
+     */
+    val profitEconomy: Double = 1.0,
     /** What this vehicle class gets out of the same fuel: a moped is light, a V12 car is not. */
     val mpgScale: Double = 1.0,
     /** The best mpg a vehicle of this class can ever show. Nothing stacks past it. */
@@ -560,7 +566,7 @@ object EngineSim {
         val gulp = if (plate) 1.0 + 1.8 * open.pow(5.0) * (0.65 + richFraction) else 1.0
         val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon * gulp
         val rawMpg = (60.0 / gallonsPerHour.coerceAtLeast(1e-5)).coerceIn(0.4, 400.0)
-        val mpg = boundMpg(rawMpg, params.mpgCap)
+        val mpg = boundMpg(rawMpg * params.profitEconomy.coerceIn(1.0, 3.0), params.mpgCap)
         return OperatingPoint(
             rpm = rpm,
             horsepower = hp,

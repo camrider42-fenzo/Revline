@@ -91,8 +91,8 @@ object Prestige {
      * One point for clearing the sheet. Each stat then adds four points per time
      * it beats its own target, so staying to build past the bar raises the
      * multiplier. A stat that is only just over does not cancel the others.
-     * mpg only gates. It is read at the profit pedal, where it falls as the build gets
-     * stronger, so beating the mpg goal is not rewarded.
+     * mpg only gates. It is read at the profit pedal, which a maxed engine drops to a
+     * low opening, so a big mpg surplus there is not a sign of a better build and is not paid.
      */
     fun knowledgeGain(hp: Double, torque: Double, mpg: Double, block: Block, racing: Boolean = false): Int {
         if (!meets(hp, torque, mpg, block, racing)) return 0

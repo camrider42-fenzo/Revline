@@ -27,7 +27,7 @@ data class Sheet(
     val multiplier: Double,
 ) {
     /** The pedal that pays the most on this build, and the mpg the engine shows there. */
-    val profit: ProfitStop by lazy { Logic.profitStop(params, stats, multiplier) }
+    val profit: ProfitStop by lazy { Logic.profitStop(params, stats, multiplier, Logic.GATE_CAP) }
 }
 
 /**
@@ -112,20 +112,26 @@ object Logic {
      */
     fun bestThrottle(state: GameState): Double = profitStop(state).throttle
 
-    fun profitStop(state: GameState): ProfitStop {
+    /** Highest pedal the rebuild mpg gate will look at. Past it, power parts and a shot of nitrous pay more, but they drink. */
+    const val GATE_CAP = 0.5
+
+    /** All seven economy parts at their top level lift the mpg read under load by this much, 1.6 meaning +160%. */
+    const val PROFIT_ECONOMY_GAIN = 1.6
+
+    fun profitStop(state: GameState, cap: Double = 1.0): ProfitStop {
         val params = paramsFrom(state)
-        return profitStop(params, EngineSim.evaluate(params), Prestige.multiplier(state.knowledge))
+        return profitStop(params, EngineSim.evaluate(params), Prestige.multiplier(state.knowledge), cap)
     }
 
     /**
      * Walks the pedal in 5% steps, takes the stop with the highest contract pay, and reads
      * the live mpg at it. The multiplier scales every stop alike, so it never moves the answer.
      */
-    fun profitStop(params: EngineParams, stats: EngineStats, mult: Double): ProfitStop {
+    fun profitStop(params: EngineParams, stats: EngineStats, mult: Double, cap: Double = 1.0): ProfitStop {
         var bestT = 0.05
         var bestPay = -1.0
         var t = 0.05
-        while (t <= 1.001) {
+        while (t <= cap + 0.001) {
             val rpm = targetRpm(params.redlineRpm, t, params.idleRpm)
             val pay = incomeAt(params, rpm, stats.reliability, mult, t, stats)
             if (pay > bestPay) {
@@ -358,6 +364,17 @@ object Logic {
                 0.030 * jets +
                 0.035 * afr
             )
+        fun part(level: Int, max: Int) = (level.toDouble() / max).coerceIn(0.0, 1.0).pow(0.7)
+        // The first level of each part is the one you feel most, so the curve is a little concave.
+        val profitEconomy = 1.0 + PROFIT_ECONOMY_GAIN * (
+            0.12 * part(boot, 4) +
+                0.10 * part(tip, 3) +
+                0.14 * part(needle, 3) +
+                0.18 * part(cai, 4) +
+                0.14 * part(catback, 4) +
+                0.14 * part(jets, 4) +
+                0.18 * part(afr, 6)
+            )
         val pipe = exhaustNote(
             backpressure = bp,
             headers = headers,
@@ -438,6 +455,7 @@ object Logic {
                 ).coerceIn(0.7, 5.0),
             exhaustNote = pipe,
             economy = economy,
+            profitEconomy = profitEconomy,
             mpgScale = block.mpgScale(),
             mpgCap = block.mpgCap(),
         )

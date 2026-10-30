@@ -84,16 +84,13 @@ class MpgRealismTest {
     }
 
     @Test
-    fun theMpgGateIsReadAtTheProfitPedalSoAStockEngineIsHeldBackByPowerNotMpg() {
-        // The pedal that pays the most burns more as the build gets stronger, so the mpg
-        // goals sit under the weakest build that must clear. Stock passes mpg on every
-        // engine and is stopped by horsepower and torque, which stock never reaches.
+    fun aStockEngineMissesItsMpgGoalAndPowerStillGatesTheRebuild() {
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
             val sheet = Logic.sheet(GameState(prestiges = index))
-            assertTrue("${block.title} stock ${sheet.profit.mpg} vs ${block.mpgGoal}", sheet.profit.mpg >= block.mpgGoal)
+            assertTrue("${block.title} stock ${sheet.profit.mpg} vs ${block.mpgGoal}", sheet.profit.mpg < block.mpgGoal)
             assertFalse(
-                "${block.title} stock power",
+                "${block.title} stock",
                 Prestige.meets(sheet.stats.peakHorsepower, sheet.stats.peakTorqueLbFt, sheet.profit.mpg, block),
             )
             // Power with a short mpg number does not clear.

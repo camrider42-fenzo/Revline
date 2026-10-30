@@ -6,6 +6,7 @@ import com.revline.idle.game.Bottleneck
 import com.revline.idle.game.Logic
 import com.revline.idle.game.ResearchTree
 import com.revline.idle.game.SheetAim
+import com.revline.idle.game.Upgrade
 import com.revline.idle.game.Upgrades
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,19 +27,96 @@ class ProfitMpgTest {
     )
 
     @Test
-    fun theProfitPedalIsTheSameOneTheGameUsesAndNoStepPaysMore() {
+    fun theGatePedalIsTheBestPayingStopUnderTheCap() {
         for (index in Block.entries.indices) {
             for (state in builds(index)) {
                 val sheet = Logic.sheet(state)
-                assertEquals(Logic.bestThrottle(state), sheet.profit.throttle, 1e-9)
+                assertEquals(Logic.profitStop(state, Logic.GATE_CAP).throttle, sheet.profit.throttle, 1e-9)
+                assertTrue(sheet.profit.throttle <= Logic.GATE_CAP + 1e-9)
                 val params = sheet.params
                 val mult = Prestige.multiplier(state.knowledge)
                 var t = 0.05
-                while (t <= 1.001) {
+                while (t <= Logic.GATE_CAP + 0.001) {
                     val pay = Logic.incomeAt(params, Logic.targetRpm(params.redlineRpm, t, params.idleRpm), sheet.stats.reliability, mult, t, sheet.stats)
                     assertTrue("${Block.forPrestige(index).title} t=$t pays $pay vs ${sheet.profit.incomePerSec}", pay <= sheet.profit.incomePerSec + 1e-9)
                     t += 0.05
                 }
+                // The open search the game's pace tests use is not capped and never pays less.
+                val open = Logic.profitStop(state)
+                assertEquals(Logic.bestThrottle(state), open.throttle, 1e-9)
+                assertTrue(open.incomePerSec >= sheet.profit.incomePerSec - 1e-9)
+            }
+        }
+    }
+
+    @Test
+    fun theCapKeepsNitrousAndBoostOutOfTheReading() {
+        // Uncapped, the best-paying stop on a fully built big engine is flat out and reads the
+        // 0.4 mpg floor. At the cap it reads a real figure and clears the goal.
+        for (block in listOf(Block.TRIPLE, Block.INLINE_FOUR, Block.V6, Block.V8, Block.V12)) {
+            val state = GameState(prestiges = block.ordinal, knowledge = block.ordinal, researched = research, upgrades = maxed)
+            val sheet = Logic.sheet(state)
+            val open = Logic.profitStop(state)
+            assertTrue("${block.title} open ${open.mpg} at ${open.throttle}", open.mpg < 3.0 && open.mpg < sheet.profit.mpg / 5 && open.throttle > Logic.GATE_CAP)
+            assertTrue("${block.title} capped ${sheet.profit.mpg}", sheet.profit.mpg >= block.mpgGoal)
+        }
+    }
+
+    private val economyIds = listOf("boot", "tip", "needle", "cold_air", "catback", "jets", "afr_map")
+    private fun economyOnly(level: (Upgrade) -> Int): Map<String, Int> =
+        economyIds.associateWith { id -> Upgrades.all.first { it.id == id }.let(level) }
+
+    @Test
+    fun economyPartsLiftTheMpgReadUnderLoadAndEachLevelCounts() {
+        for (index in Block.THUMPER.ordinal..Block.V12.ordinal) {
+            val block = Block.forPrestige(index)
+            for (id in economyIds) {
+                val max = Upgrades.all.first { it.id == id }.maxLevel
+                var last = Logic.sheet(GameState(prestiges = index, researched = research)).params.profitEconomy
+                assertEquals(1.0, last, 1e-9)
+                for (level in 1..max) {
+                    val params = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = mapOf(id to level))).params
+                    assertTrue("${block.title} $id L$level ${params.profitEconomy} after $last", params.profitEconomy > last + 0.01)
+                    last = params.profitEconomy
+                }
+            }
+            val all = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = economyOnly { it.maxLevel })).params
+            assertEquals(1.0 + Logic.PROFIT_ECONOMY_GAIN, all.profitEconomy, 1e-9)
+            val params = all.copy(profitEconomy = 1.0)
+            for (load in listOf(0.2, 0.6, 1.0)) {
+                val plain = EngineSim.point(params, params.redlineRpm * 0.6, load, 0.0)
+                val tuned = EngineSim.point(all, params.redlineRpm * 0.6, load, 0.0)
+                // A class that already sits near its realism cap has little room left to lift.
+                val room = if (plain.mpg < block.mpgCap() * 0.5) 1.15 else 1.02
+                assertTrue("${block.title} load $load ${tuned.mpg} vs ${plain.mpg}", tuned.mpg > plain.mpg * room)
+                assertTrue(tuned.mpg < block.mpgCap())
+                assertEquals("the paycheck reads the raw burn", plain.efficiency, tuned.efficiency, 1e-9)
+            }
+        }
+    }
+
+    @Test
+    fun everyEngineStockMissesTheGoalAndTheEconomyPartsAreAPathToIt() {
+        for (index in Block.entries.indices) {
+            val block = Block.forPrestige(index)
+            val stock = Logic.sheet(GameState(prestiges = index))
+            assertTrue("${block.title} stock ${stock.profit.mpg} vs ${block.mpgGoal}", stock.profit.mpg < block.mpgGoal)
+            val eco = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = economyOnly { it.maxLevel }))
+            assertTrue("${block.title} economy only ${eco.profit.mpg} vs ${block.mpgGoal}", eco.profit.mpg >= block.mpgGoal)
+            // The economy parts alone do not rebuild the engine. The power is still the other half.
+            assertFalse(block.title, Logic.canPrestige(GameState(prestiges = index, researched = research, upgrades = economyOnly { it.maxLevel }, money = 1e12)))
+        }
+    }
+
+    @Test
+    fun theFortyAndSixtyBuildsKeepTheirPlaceAgainstTheGoal() {
+        for (index in Block.entries.indices) {
+            val block = Block.forPrestige(index)
+            val sixty = Logic.sheet(GameState(prestiges = index, knowledge = index, researched = research, upgrades = BlockPaceTest.sixty))
+            assertTrue("${block.title} sixty ${sixty.profit.mpg} vs ${block.mpgGoal}", sixty.profit.mpg >= block.mpgGoal)
+            for (racing in listOf(false, true)) {
+                val full = Logic.sheet(GameState(prestiges = index, racing = racing, researched = research, upgrades = maxed))
+                assertTrue("${block.title} race=$racing ${full.profit.mpg}", full.profit.mpg >= block.sheetMpg(racing))
             }
         }
     }
@@ -107,6 +185,6 @@ class ProfitMpgTest {
         val aim = SheetAim.recommend(GameState(prestiges = Block.TWIN.ordinal), com.revline.idle.game.AimGoal.CRUISE)
         assertNotEquals("", aim.detail)
         assertTrue(aim.headline.isNotEmpty())
-        assertEquals("CRUISE", com.revline.idle.game.AimGoal.CRUISE.short)
+        assertEquals("MPG@$", com.revline.idle.game.AimGoal.CRUISE.short)
     }
 }

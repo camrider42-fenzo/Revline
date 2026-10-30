@@ -24,7 +24,7 @@ enum class AimGoal {
         get() = when (this) {
             POWER -> "HP"
             TORQUE -> "TQ"
-            CRUISE -> "CRUISE"
+            CRUISE -> "MPG@\$"
             PAY -> "$/s"
         }
 
@@ -124,25 +124,29 @@ object SheetAim {
 
     /** mpg at the best-paying pedal, which is the number the rebuild sheet judges. */
     private fun profitMpg(state: GameState, params: com.revline.idle.model.EngineParams, stats: EngineStats): Double =
-        Logic.profitStop(params, stats, Prestige.multiplier(state.knowledge)).mpg
+        Logic.profitStop(params, stats, Prestige.multiplier(state.knowledge), Logic.GATE_CAP).mpg
 
     /**
      * The open part whose next level raises [goal] the most.
-     * Horsepower and torque are the sheet peaks, and CRUISE is the road-load mpg. The rebuild sheet reads mpg at the profit pedal instead. $/s is the contract at the pedal you are holding.
+     * Horsepower and torque are the sheet peaks. mpg is read at the profit pedal, the way the rebuild sheet reads it. $/s is the contract at the pedal you are holding.
      */
     private fun toward(state: GameState, goal: AimGoal): Aim {
-        val now = EngineSim.evaluate(Logic.paramsFrom(state))
+        val nowParams = Logic.paramsFrom(state)
+        val now = EngineSim.evaluate(nowParams)
         val beforePay = if (goal == AimGoal.PAY) contract(state, now) else 0.0
-        val before = reading(now, beforePay, goal)
+        val beforeMpg = if (goal == AimGoal.CRUISE) profitMpg(state, nowParams, now) else 0.0
+        val before = reading(now, beforePay, beforeMpg, goal)
         var best: Gain? = null
         for (upgrade in Upgrades.all) {
             val level = state.upgrades[upgrade.id] ?: 0
             if (level >= upgrade.maxLevel) continue
             if (Logic.lockReason(state, upgrade.id) != null) continue
             val nextState = state.copy(upgrades = state.upgrades + (upgrade.id to level + 1))
-            val next = EngineSim.evaluate(Logic.paramsFrom(nextState))
+            val nextParams = Logic.paramsFrom(nextState)
+            val next = EngineSim.evaluate(nextParams)
             val afterPay = if (goal == AimGoal.PAY) contract(nextState, next) else 0.0
-            val after = reading(next, afterPay, goal)
+            val afterMpg = if (goal == AimGoal.CRUISE) profitMpg(nextState, nextParams, next) else 0.0
+            val after = reading(next, afterPay, afterMpg, goal)
             val gain = after - before
             if (gain < floor(goal)) continue
             val pick = Gain(upgrade.id, gain, after, Logic.upgradeCost(state, upgrade.id))
@@ -184,10 +188,10 @@ object SheetAim {
             Block.forPrestige(state.prestiges).payScale()
     }
 
-    private fun reading(stats: EngineStats, pay: Double, goal: AimGoal): Double = when (goal) {
+    private fun reading(stats: EngineStats, pay: Double, profitMpg: Double, goal: AimGoal): Double = when (goal) {
         AimGoal.POWER -> stats.peakHorsepower
         AimGoal.TORQUE -> stats.peakTorqueLbFt
-        AimGoal.CRUISE -> stats.cruiseMpg
+        AimGoal.CRUISE -> profitMpg
         AimGoal.PAY -> pay
     }
 

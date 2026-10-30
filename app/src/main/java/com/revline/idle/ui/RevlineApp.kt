@@ -369,8 +369,8 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
         }
         Text(
             "Sheet peak. Now ${formatPower(live.horsepower)} hp, ${formatPower(live.torqueLbFt)} lb-ft, " +
-                "${String.format(Locale.US, "%.1f", live.mpg)} mpg at this pedal. MPG@\$ is mpg at the best-paying pedal, " +
-                "${(ui.sheet.profit.throttle * 100).toInt()}% on this build. Cruise ${String.format(Locale.US, "%.1f", s.cruiseMpg)} mpg.",
+                "${String.format(Locale.US, "%.1f", live.mpg)} mpg at this pedal. MPG@\$ is mpg at the best-paying pedal up to ${(Logic.GATE_CAP * 100).toInt()}%, " +
+                "${(ui.sheet.profit.throttle * 100).toInt()}% on this build. Economy parts lift it. Cruise ${String.format(Locale.US, "%.1f", s.cruiseMpg)} mpg.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -575,7 +575,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
             modifier = Modifier.padding(top = 8.dp),
         )
         Text(
-            "The sheet has to clear power, torque, and mpg at the profit pedal together. That is the pedal that pays the most on this build, ${(ui.sheet.profit.throttle * 100).toInt()}% open now, not the cruise figure.",
+            "The sheet has to clear power, torque, and mpg at the profit pedal together. That is the pedal that pays the most on this build, looking no higher than ${(Logic.GATE_CAP * 100).toInt()}%. It is ${(ui.sheet.profit.throttle * 100).toInt()}% open now, not the cruise figure. The economy parts are what lift this number.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
@@ -583,7 +583,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
         )
         SheetTarget("Power", stats.peakHorsepower, block.sheetHp(racing), "hp")
         SheetTarget("Torque", stats.peakTorqueLbFt, block.sheetTorque(racing), "lb-ft")
-        SheetTarget("Profit mpg @ ${(ui.sheet.profit.throttle * 100).toInt()}% pedal", ui.sheet.profit.mpg, block.sheetMpg(racing), "mpg")
+        SheetTarget("Profit mpg @ ${(ui.sheet.profit.throttle * 100).toInt()}% pedal (cap ${(Logic.GATE_CAP * 100).toInt()}%)", ui.sheet.profit.mpg, block.sheetMpg(racing), "mpg")
         Text(
             "Street next  ${fmtGoal(next.sheetHp(false))} hp  ${fmtGoal(next.sheetTorque(false))} lb-ft  ${fmtGoal(next.sheetMpg(false))} mpg",
             color = White,
@@ -713,7 +713,7 @@ private fun DevSwitch(on: Boolean) {
     }
 }
 
-private fun fmtGoal(value: Double): String = String.format(Locale.US, if (value < 10.0) "%.1f" else "%.0f", value)
+private fun fmtGoal(value: Double): String = String.format(Locale.US, if (value < 10.0 || value % 1.0 > 1e-9) "%.1f" else "%.0f", value)
 
 @Composable
 private fun SheetTarget(name: String, now: Double, goal: Double, unit: String) {
