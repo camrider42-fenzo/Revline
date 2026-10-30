@@ -49,7 +49,7 @@ class EngineSimTest {
                 GameState(prestiges = Block.INLINE_FOUR.ordinal, upgrades = mapOf(upgrade.id to upgrade.maxLevel)),
             )
             val step = one.stats.cruiseMpg - stock.stats.cruiseMpg
-            if (step < 0.4) misses += "${upgrade.id} +1 only ${"%.2f".format(step)} mpg"
+            if (step < 0.2) misses += "${upgrade.id} +1 only ${"%.2f".format(step)} mpg"
             if (maxed.stats.cruiseMpg < one.stats.cruiseMpg + 0.2 && upgrade.maxLevel > 1) {
                 misses += "${upgrade.id} max ${"%.2f".format(maxed.stats.cruiseMpg)} vs +1 ${"%.2f".format(one.stats.cruiseMpg)}"
             }

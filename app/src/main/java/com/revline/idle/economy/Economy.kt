@@ -30,7 +30,7 @@ object Income {
      * Contract dollars per second at this pedal.
      * use        = (hpAtStop / peakHp)^0.85 * (torqueAtStop / peakTq)^0.15
      * powerScore = peakHp^1.62 * (1 + peakTq / 950) * use^1.85
-     * economyScore = (mpgAtStop / 28)^1.0 * (3.40 / dollarsPerGallon)^0.42
+     * economyScore = (efficiencyAtStop / 28)^1.0 * (3.40 / dollarsPerGallon)^0.42
      * heat       = condition^0.75
      * $/s = 0.0397 * powerScore * economyScore * (reliability/100)^1.15 * heat * multiplier
      *
@@ -56,7 +56,7 @@ object Income {
         val tqUse = (point.torqueLbFt / peakTq).coerceIn(0.0, 1.0)
         val use = (hpUse.pow(0.85) * tqUse.pow(0.15)).coerceIn(0.04, 1.0)
         val power = peakHp.pow(HP_EXP) * (1.0 + peakTq / 950.0) * use.pow(USE_EXP)
-        val mpgScore = (point.mpg.coerceAtLeast(0.8) / MPG_REF).pow(ECONOMY_EXP)
+        val mpgScore = (point.efficiency.coerceAtLeast(0.8) / MPG_REF).pow(ECONOMY_EXP)
         val pump = FuelKind.PUMP_87.dollarsPerGallon
         val priceScore = (pump / dollarsPerGallon.coerceAtLeast(0.5)).pow(PRICE_EXP)
         val health = if (ideal) 1.0 else (reliability / 100.0).coerceIn(0.42, 1.0)

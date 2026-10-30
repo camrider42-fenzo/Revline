@@ -108,6 +108,10 @@ data class EngineParams(
      * Higher burns less fuel for the same road load.
      */
     val economy: Double = 1.0,
+    /** What this vehicle class gets out of the same fuel: a moped is light, a V12 car is not. */
+    val mpgScale: Double = 1.0,
+    /** The best mpg a vehicle of this class can ever show. Nothing stacks past it. */
+    val mpgCap: Double = 95.0,
 )
 
 data class OperatingPoint(
@@ -141,7 +145,13 @@ data class OperatingPoint(
     val unresolvedKnock: Double,
     val fuelLimited: Boolean,
     /** Miles per gallon if this fuel flow were asked to hold 60 mph. Falls as the pull drinks more. */
+    /** What a trip computer would read at this stop. Bounded by the vehicle class. */
     val mpg: Double = 0.0,
+    /**
+     * Fuel-use score the contract pays on, the old unbounded 60 / gallons-per-hour.
+     * It is never shown. [mpg] is, and it cannot pass what the class can really do.
+     */
+    val efficiency: Double = 0.0,
     /** Throttle-plate load, 1.0 on a dyno pull. */
     val load: Double = 1.0,
     /** Degrees the intake charge picked up from the head and the bay after the cooler. */
@@ -328,7 +338,19 @@ object EngineSim {
             params.fuel.stoichAfr).coerceIn(0.70, 1.40)
         val mFuel = fuelW / (params.fuel.lhvJPerKg * comb * (cruiseEconomyFactor(cruiseLambda) / cruiseEconomyFactor(mapLambda)))
         val mpg = 60.0 / (mFuel * 3600.0 / params.fuel.kgPerGallon)
-        return (mpg * params.economy.coerceIn(1.0, 2.4)).coerceIn(8.0, 95.0)
+        return boundMpg(mpg * params.economy.coerceIn(1.0, 2.4) * params.mpgScale, params.mpgCap).coerceAtLeast(5.0)
+    }
+
+    /**
+     * Smooth ceiling on mpg. Parts, cam, mixture, and compression each add a
+     * little, and they used to multiply without a limit. Here the sum rolls off
+     * toward the class [cap] and never reaches it, so no stack of parts can pass
+     * what a vehicle of that class can really do. Well under the cap the value
+     * is almost untouched.
+     */
+    fun boundMpg(raw: Double, cap: Double): Double {
+        val x = raw.coerceAtLeast(0.0) / cap.coerceAtLeast(1.0)
+        return raw.coerceAtLeast(0.0) / (1.0 + x * x * x).pow(1.0 / 3.0)
     }
 
     private fun reliability(params: EngineParams, curve: List<OperatingPoint>): Pair<Double, List<String>> {
@@ -537,7 +559,8 @@ object EngineSim {
         val richFraction = ((stoich - afr) / stoich).coerceAtLeast(0.0)
         val gulp = if (plate) 1.0 + 1.8 * open.pow(5.0) * (0.65 + richFraction) else 1.0
         val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon * gulp
-        val mpg = (60.0 / gallonsPerHour.coerceAtLeast(1e-5)).coerceIn(0.4, 400.0)
+        val rawMpg = (60.0 / gallonsPerHour.coerceAtLeast(1e-5)).coerceIn(0.4, 400.0)
+        val mpg = boundMpg(rawMpg, params.mpgCap)
         return OperatingPoint(
             rpm = rpm,
             horsepower = hp,
@@ -569,6 +592,7 @@ object EngineSim {
             unresolvedKnock = unresolved,
             fuelLimited = limited,
             mpg = mpg,
+            efficiency = rawMpg,
         )
     }
 

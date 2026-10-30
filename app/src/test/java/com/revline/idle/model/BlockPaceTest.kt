@@ -44,6 +44,7 @@ class BlockPaceTest {
 
     @Test
     fun aMaxedEngineStillClearsTheSheet() {
+        // Buying every part must never leave a player stuck below the sheet.
         val research = ResearchTree.all.map { it.id }.toSet()
         val maxed = Upgrades.all.associate { it.id to it.maxLevel }
         val misses = mutableListOf<String>()
@@ -146,7 +147,7 @@ class BlockPaceTest {
     }
 
     @Test
-    fun aShopThatRebuildsWhenTheSheetClearsTakesAboutNinetyMinutes() {
+    fun aShopThatRebuildsWhenTheSheetClearsTakesAboutTwoHoursAndGrowsEachEngine() {
         var researched = emptySet<String>()
         var carriedRp = 0.0
         val lines = mutableListOf<String>()
@@ -167,11 +168,12 @@ class BlockPaceTest {
             carriedRp = run.state.researchPoints * 0.20
         }
         println(lines.joinToString("\n"))
-        val bad = lines.filter { line ->
-            val hours = line.substringAfter("  ").substringBefore(" h").toDouble()
-            hours !in 0.75..2.0
-        }
+        val hours = lines.map { it.substringAfter("  ").substringBefore(" h").toDouble() }
+        val bad = hours.indices.filter { hours[it] !in (TARGET_HOURS[it] * 0.85)..(TARGET_HOURS[it] * 1.15) }
         assertTrue(lines.joinToString("\n"), bad.isEmpty())
+        assertTrue("each rebuild takes longer than the last: $hours", hours.zipWithNext().all { (a, b) -> b > a })
+        // The old sheet cleared in about 0.8 to 1.9 hours per engine, 7 hours across all eight.
+        assertTrue("total ${hours.sum()} h", hours.sum() > 7.0 * 2.0)
     }
 
     private fun clearSheet(start: GameState): Clear {
@@ -253,7 +255,7 @@ class BlockPaceTest {
     private data class Clear(val cleared: Boolean, val hours: Double, val state: GameState, val note: String)
 
     @Test
-    fun eachEngineShopFitsInAnHourOrTwo() {
+    fun eachEngineShopFitsInAFewHours() {
         var researched = setOf("premium")
         val lines = mutableListOf<String>()
         for (index in Block.entries.indices) {
@@ -268,7 +270,7 @@ class BlockPaceTest {
             val run = buyBasket(start, sixty)
             lines += "${block.title}  ${"%.2f".format(run.hours)} h  ${run.note}"
             assertTrue(lines.joinToString("\n"), run.cleared)
-            assertTrue("${block.title} ${run.hours} h", run.hours in 0.85..2.8)
+            assertTrue("${block.title} ${run.hours} h", run.hours in 1.3..7.0)
             researched = run.researched
         }
         println(lines.joinToString("\n"))
@@ -292,6 +294,9 @@ class BlockPaceTest {
     private data class Run(val cleared: Boolean, val hours: Double, val researched: Set<String>, val note: String)
 
     companion object {
+        /** Hours of play to clear each engine's sheet, moped first. Was 0.8 to 1.0 each. */
+        val TARGET_HOURS = listOf(1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0)
+
         /** About 60% of the part list, including the research-gated pieces a shop actually reaches. */
         val sixty = mapOf(
             "lap" to 3, "gap" to 3, "boot" to 2, "tip" to 2, "needle" to 2,

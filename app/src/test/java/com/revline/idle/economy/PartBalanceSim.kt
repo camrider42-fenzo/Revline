@@ -50,7 +50,7 @@ class PartBalanceSim {
             val level = bits[1]
             val block = bits[2]
             val minutes = bits[3].toDoubleOrNull() ?: return@filter false
-            level == "1" && block == "MOPED" && minutes !in 1.5..6.5
+            level == "1" && block == "MOPED" && minutes !in (1.5 * Block.MOPED.rebuildPace())..(6.5 * Block.MOPED.rebuildPace())
         }
         assertTrue(bad.joinToString("\n"), bad.isEmpty())
     }

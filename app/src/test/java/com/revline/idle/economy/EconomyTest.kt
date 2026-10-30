@@ -203,7 +203,8 @@ class EconomyTest {
                 .filter { Logic.lockReason(state, it.id) == null }
                 .minOf { Logic.upgradeCost(state, it.id) }
             val minutes = cheapest / pay / 60.0
-            assertTrue("${com.revline.idle.model.Block.forPrestige(index).title} first tool $minutes min", minutes < 3.5)
+            val pace = com.revline.idle.model.Block.forPrestige(index).rebuildPace()
+            assertTrue("${com.revline.idle.model.Block.forPrestige(index).title} first tool $minutes min", minutes < 3.5 * pace)
         }
     }
 
@@ -246,6 +247,7 @@ class EconomyTest {
         unresolvedKnock = 0.0,
         fuelLimited = false,
         mpg = mpg,
+        efficiency = mpg,
     )
 
 }

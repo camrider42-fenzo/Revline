@@ -35,7 +35,7 @@ class UpgradePriceProbe {
                 upgrade.id,
             )
             val minutes = cost / delta / 60.0
-            if (minutes !in 40.0..300.0) {
+            if (minutes !in 40.0..(300.0 * block.rebuildPace())) {
                 misses += "${upgrade.id} ${String.format(Locale.US, "%.0f", minutes)} min for ${String.format(Locale.US, "%+.2f", delta)}/s"
             }
         }
