@@ -57,7 +57,7 @@ class CircuitBalanceTest {
     @Test fun theDriverRatingPredictsTheResult() {
         val p = 3
         val b = DriverBuilds.orientations(p)[4]
-        val all = Drivers.roster + Drivers.you
+        val all = Drivers.roster // hired drivers only: the player cannot enter a circuit race
         val pos = HashMap<String, MutableList<Double>>(); val net = HashMap<String, MutableList<Double>>(); val dnf = HashMap<String, MutableList<Double>>()
         val wins = HashMap<String, Int>()
         say("== drivers on the par street car, p=$p, ${Circuits.all.size} circuits x 300 seeds: mean position / DNF% / net (entries per race)")
@@ -75,7 +75,7 @@ class CircuitBalanceTest {
         val overall = all.map { it.overall.toDouble() }
         val r = correlation(overall, meanPos)
         say("correlation of overall with mean position: %.2f".format(r))
-        say("best driver per circuit (by mean position): " + wins.entries.sortedByDescending { it.value }.joinToString { "${Drivers.roster.firstOrNull { d -> d.id == it.key }?.name ?: "You"} x${it.value}" })
+        say("best driver per circuit (by mean position): " + wins.entries.sortedByDescending { it.value }.joinToString { "${Drivers.roster.firstOrNull { d -> d.id == it.key }?.name} x${it.value}" })
         say("overall / mean pos / mean DNF% / mean net: " + all.joinToString("; ") { "${it.name.substringAfterLast(' ')} ${it.overall}/%.2f/%.0f/%+.2f".format(pos.getValue(it.id).average(), dnf.getValue(it.id).average() * 100, net.getValue(it.id).average()) })
         assertTrue("overall vs position $r", r < -0.85)
         // Nobody is best everywhere.
@@ -98,7 +98,7 @@ class CircuitBalanceTest {
             val b = DriverBuilds.orientations(p)[4]
             val cells = Circuits.all.map { CircuitBalanceSim.cell(p, b, it, Drivers.you) }
             val pos = cells.map { it.position }.average(); val dnf = cells.map { it.dnf }.average()
-            say("par street car, You, p=$p: mean position %.2f, DNF %.1f%%, mean net %+.2f entries".format(pos, dnf * 100, cells.map { it.net }.average()))
+            say("par street car, neutral baseline driver (all 50s, NOT selectable in the game), p=$p: mean position %.2f, DNF %.1f%%, mean net %+.2f entries".format(pos, dnf * 100, cells.map { it.net }.average()))
             assertTrue("p=$p position $pos", pos in 4.0..5.8)
             assertTrue("p=$p dnf $dnf", dnf in 0.03..0.25)
             assertTrue(cells.all { it.position in 3.5..6.5 })

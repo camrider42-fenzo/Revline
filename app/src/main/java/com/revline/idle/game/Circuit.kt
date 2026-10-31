@@ -543,8 +543,8 @@ object Circuits {
     const val FEE_SHARE = 0.7
 
     /** A driver is paid a share of the winner's purse, whatever he finishes. */
-    fun fee(state: GameState, driver: Drivers.Driver?): Double =
-        if (state.devMode || driver == null) 0.0 else FEE_SHARE * driver.rate * winnerPurse(state)
+    fun fee(state: GameState, driver: Drivers.Driver): Double =
+        if (state.devMode) 0.0 else FEE_SHARE * driver.rate * winnerPurse(state)
 
     /** The bill when the engine lets go: the rebuild, a quarter of the entry. */
     fun repair(state: GameState): Double = 0.25 * entry(state)
@@ -552,18 +552,28 @@ object Circuits {
     sealed class Entry {
         data class Refused(val note: String) : Entry()
         /** The till after entry and fee, before the race pays. */
-        data class Paid(val state: GameState, val driver: Drivers.Driver?, val fee: Double, val entry: Double) : Entry()
+        data class Paid(val state: GameState, val driver: Drivers.Driver, val fee: Double, val entry: Double) : Entry()
     }
 
-    /** Takes the entry fee and the driver's fee at the start. Nothing is refunded. */
-    fun open(state: GameState): Entry {
-        val driver = Drivers.selected(state)
+    const val HIRE_NOTE = "Hire a driver to enter circuit races"
+
+    /**
+     * The driver who takes the wheel in a circuit race: always a hired one, never the player. [preferredId] is the
+     * circuit picker's choice; when it is blank, stale or no longer hired, it is the first hired driver. Null if none is hired.
+     */
+    fun entrant(state: GameState, preferredId: String = ""): Drivers.Driver? {
+        val hired = Drivers.hired(state)
+        return hired.firstOrNull { it.id == preferredId } ?: hired.firstOrNull()
+    }
+
+    /** Takes the entry fee and the driver's fee at the start. Nothing is refunded. Needs a hired driver. */
+    fun open(state: GameState, preferredId: String = ""): Entry {
+        val driver = entrant(state, preferredId) ?: return Entry.Refused("$HIRE_NOTE.")
         val entry = entry(state)
         val fee = fee(state, driver)
         if (!state.devMode && state.money < entry + fee) {
-            val who = driver?.name ?: "The entry"
             return Entry.Refused(
-                if (fee > 0.0) "$who wants ${formatDollars(fee)} on top of the ${formatDollars(entry)} entry. The till is short."
+                if (fee > 0.0) "${driver.name} wants ${formatDollars(fee)} on top of the ${formatDollars(entry)} entry. The till is short."
                 else "The entry is ${formatDollars(entry)}. The till is short.",
             )
         }
@@ -573,9 +583,8 @@ object Circuits {
     data class Outcome(val result: Result, val prize: Double, val repair: Double, val fee: Double, val entry: Double, val note: String)
 
     /** Runs the race for a paid entry and works out what comes back. [state] is the car and the field's level, as at the start. */
-    fun finish(state: GameState, car: Car, circuit: Circuit, driver: Drivers.Driver?, fee: Double, entry: Double, seed: Long): Outcome {
-        val who = driver ?: Drivers.you
-        val result = race(plan(car, circuit, who), who, parPlan(state.prestiges, circuit), seed)
+    fun finish(state: GameState, car: Car, circuit: Circuit, driver: Drivers.Driver, fee: Double, entry: Double, seed: Long): Outcome {
+        val result = race(plan(car, circuit, driver), driver, parPlan(state.prestiges, circuit), seed)
         val prize = prize(state, result.position, result.retired != null)
         val repair = if (result.engineFailed) repair(state) else 0.0
         return Outcome(result, prize, repair, fee, entry, note(result, prize, repair, fee, entry))
@@ -634,8 +643,8 @@ object Circuits {
     fun favors(circuit: Circuit): List<Aspect> = emphasis(circuit).entries.sortedByDescending { it.value }.take(2).map { it.key }
 
     /** Your lap against the field's par car, in percent of a lap. Positive is quicker. Mid-stat hands both sides. */
-    fun fitPercent(car: Car, circuit: Circuit, prestiges: Int, driver: Drivers.Driver?): Double {
-        val mine = plan(car, circuit, driver ?: Drivers.you).mean
+    fun fitPercent(car: Car, circuit: Circuit, prestiges: Int, driver: Drivers.Driver): Double {
+        val mine = plan(car, circuit, driver).mean
         val par = parPlan(prestiges, circuit).mean
         return (par - mine) / par * 100.0
     }

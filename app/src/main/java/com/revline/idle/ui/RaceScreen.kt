@@ -53,7 +53,7 @@ fun RaceScreen(
     onStake: () -> Unit,
     onHire: (String) -> Unit = {},
     onPick: (String) -> Unit = {},
-    onCircuit: (String) -> Unit = {},
+    onCircuit: (String, String) -> Unit = { _, _ -> },
 ) {
     val state = ui.game
     val car = Racing.car(state)
@@ -136,7 +136,7 @@ fun RaceScreen(
         )
         LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
 
-        CircuitSection(ui, car, onPick, onCircuit)
+        CircuitSection(ui, car, onCircuit)
 
         DriverRoster(state, forecast, onHire)
 
@@ -479,13 +479,14 @@ private fun aspectLabel(a: Circuits.Aspect) = when (a) {
 }
 
 @Composable
-private fun CircuitSection(ui: UiModel, car: Racing.Car, onPick: (String) -> Unit, onRun: (String) -> Unit) {
+private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String) -> Unit) {
     val state = ui.game
     var circuitId by rememberSaveable { mutableStateOf(Circuits.all.first().id) }
     val circuit = Circuits.all.firstOrNull { it.id == circuitId } ?: Circuits.all.first()
-    val picked = Drivers.selected(state)
-    val hands = picked ?: Drivers.you
+    // Circuit races are for hired drivers only. This pick is its own, so the drag-race toggle is left alone.
+    var driverPick by rememberSaveable { mutableStateOf(Drivers.selected(state)?.id ?: "") }
     val hired = Drivers.hired(state)
+    val picked = Circuits.entrant(state, driverPick)
     Text("CIRCUIT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
     Text(
         "A few laps round a real circuit against seven rivals, simulated with your car. No picture, just the result. Tires, axle, gearbox, final drive, weight, cooling and power all change the lap. The driver's cornering, braking, acceleration, mistakes and engine care change it too.",
@@ -513,7 +514,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onPick: (String) -> Uni
     )
     Circuits.Aspect.entries.forEach { a -> StatBar(aspectLabel(a), (emphasis.getValue(a) * 50).toInt().coerceIn(0, 100), a in favors) }
     val fit by produceState<Double?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.prestiges) {
-        value = withContext(Dispatchers.Default) { Circuits.fitPercent(Circuits.carOf(state, ui.sheet), circuit, state.prestiges, picked) }
+        value = withContext(Dispatchers.Default) { Circuits.fitPercent(Circuits.carOf(state, ui.sheet), circuit, state.prestiges, picked ?: Drivers.you) }
     }
     fit?.let {
         Text(
@@ -525,16 +526,32 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onPick: (String) -> Uni
         )
     }
     Text("DRIVER", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-    ChipRow(listOf("" to "YOU") + hired.map { it.id to it.name.uppercase(Locale.US) }, picked?.id ?: "", onPick)
-    Text(
-        "${hands.name}  overall ${hands.overall}  corner ${hands.cornering}  brake ${hands.braking}  accel ${hands.acceleration}  mistakes ${hands.mistakes} (lower is better)  care ${hands.care}",
-        color = White,
-        fontFamily = FontFamily.Monospace,
-        fontSize = 11.sp,
-        modifier = Modifier.padding(top = 2.dp),
-    )
+    if (picked == null) {
+        Text(
+            Circuits.HIRE_NOTE,
+            color = Amber,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text(
+            "Hire one from the DRIVERS list below. Circuit races are driven by your hired drivers, not by you.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+        )
+    } else {
+        ChipRow(hired.map { it.id to it.name.uppercase(Locale.US) }, picked.id) { driverPick = it }
+        Text(
+            "${picked.name}  overall ${picked.overall}  corner ${picked.cornering}  brake ${picked.braking}  accel ${picked.acceleration}  mistakes ${picked.mistakes} (lower is better)  care ${picked.care}",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
     val entry = Circuits.entry(state)
-    val fee = Circuits.fee(state, picked)
+    val fee = if (picked == null) 0.0 else Circuits.fee(state, picked)
     Text(
         "Entry ${formatDollars(entry)}" + (if (fee > 0.0) "  driver ${formatDollars(fee)}" else "") +
             "  winner's purse ${formatDollars(Circuits.winnerPurse(state))}  engine rebuild ${formatDollars(Circuits.repair(state))}",
@@ -543,8 +560,8 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onPick: (String) -> Uni
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 4.dp),
     )
-    val can = !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
-    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id) }, Modifier.padding(top = 6.dp))
+    val can = picked != null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
+    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "") }, Modifier.padding(top = 6.dp))
     ui.circuitOutcome?.let { o ->
         val r = o.result
         Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, if (r.retired != null) Red else Lime).padding(8.dp)) {

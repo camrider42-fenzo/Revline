@@ -246,8 +246,7 @@ class CircuitTest {
         val s = GameState(prestiges = 3, money = 1.0e9, hiredDrivers = setOf("ace"), driverId = "ace")
         val stake = Racing.stakeCost(3)
         assertEquals(0.5 * stake, Circuits.entry(s), 1e-6)
-        assertEquals(Circuits.FEE_SHARE * Drivers.byId("ace")!!.rate * 3.2 * 0.5 * stake, Circuits.fee(s, Drivers.byId("ace")), 1e-6)
-        assertEquals(0.0, Circuits.fee(s, null), 0.0)
+        assertEquals(Circuits.FEE_SHARE * Drivers.byId("ace")!!.rate * 3.2 * 0.5 * stake, Circuits.fee(s, Drivers.byId("ace")!!), 1e-6)
         assertEquals(3.2 * 0.5 * stake, Circuits.prize(s, 1, false), 1e-6)
         assertEquals(0.0, Circuits.prize(s, 1, true), 0.0)
         assertEquals(0.0, Circuits.prize(s, Circuits.FIELD, false), 0.0)
@@ -259,7 +258,7 @@ class CircuitTest {
 
     @Test fun entryChargesUpFrontAndRefusesWhenShort() {
         val stake = Racing.stakeCost(3)
-        val poor = GameState(prestiges = 3, money = 0.4 * stake)
+        val poor = GameState(prestiges = 3, money = 0.4 * stake, hiredDrivers = setOf("gus"), driverId = "gus")
         assertTrue(Circuits.open(poor) is Circuits.Entry.Refused)
         val ok = GameState(prestiges = 3, money = 10 * stake, hiredDrivers = setOf("gus"), driverId = "gus")
         val paid = Circuits.open(ok) as Circuits.Entry.Paid
@@ -270,14 +269,14 @@ class CircuitTest {
         val shortOfFee = GameState(prestiges = 3, money = Circuits.entry(ok) + 0.5 * Circuits.fee(ok, gus), hiredDrivers = setOf("gus"), driverId = "gus")
         assertTrue(Circuits.open(shortOfFee) is Circuits.Entry.Refused)
         // Dev mode is free.
-        val dev = GameState(prestiges = 3, money = 0.0, devMode = true)
+        val dev = GameState(prestiges = 3, money = 0.0, devMode = true, hiredDrivers = setOf("gus"))
         val free = Circuits.open(dev) as Circuits.Entry.Paid
         assertEquals(0.0, free.entry, 0.0)
         assertEquals(0.0, Circuits.prize(dev, 1, false), 0.0)
     }
 
     @Test fun finishPaysAndNames() {
-        val s = state().copy(money = 1.0e9)
+        val s = state().copy(money = 1.0e9, hiredDrivers = setOf("gus"), driverId = "gus")
         val paid = Circuits.open(s) as Circuits.Entry.Paid
         val out = Circuits.finish(s, Circuits.carOf(s), circuit("monza"), paid.driver, paid.fee, paid.entry, 7L)
         assertTrue(out.note.contains("Monza"))
@@ -285,5 +284,58 @@ class CircuitTest {
         assertEquals(out.result.engineFailed, out.repair > 0.0)
         assertNotNull(out.result)
         assertNull(null)
+    }
+
+    // ---- Circuit races are for hired drivers only.
+
+    @Test fun noHiredDriverMeansNoEntry() {
+        val rich = GameState(prestiges = 3, money = 1.0e12)
+        assertNull(Circuits.entrant(rich))
+        val refused = Circuits.open(rich) as Circuits.Entry.Refused
+        assertTrue(refused.note.contains("Hire a driver to enter circuit races"))
+        // Rich, dev mode, a stale selection and a driver who is not hired: still nobody at the wheel.
+        assertTrue(Circuits.open(rich.copy(devMode = true)) is Circuits.Entry.Refused)
+        assertTrue(Circuits.open(rich.copy(driverId = "ace")) is Circuits.Entry.Refused)
+        assertTrue(Circuits.open(rich, "ace") is Circuits.Entry.Refused)
+        assertTrue(Circuits.open(rich, "") is Circuits.Entry.Refused)
+        // Nothing is charged for a refusal.
+        assertEquals(1.0e12, rich.money, 0.0)
+    }
+
+    @Test fun theEntrantIsAlwaysAHiredDriver() {
+        val s = GameState(prestiges = 3, money = 1.0e12, hiredDrivers = setOf("gus", "ace"), driverId = "")
+        val hired = Drivers.hired(s)
+        // A blank pick (the old "You") falls back to the first hired driver, as does a stale or unhired id.
+        assertEquals(hired.first().id, Circuits.entrant(s, "")!!.id)
+        assertEquals(hired.first().id, Circuits.entrant(s, "nobody")!!.id)
+        assertEquals(hired.first().id, Circuits.entrant(s, "viktor")!!.id)
+        assertEquals("ace", Circuits.entrant(s, "ace")!!.id)
+        assertEquals("gus", Circuits.entrant(s, "gus")!!.id)
+        for (pick in listOf("", "nobody", "viktor", "gus", "ace")) {
+            val paid = Circuits.open(s, pick) as Circuits.Entry.Paid
+            assertTrue(paid.driver.id in s.hiredDrivers)
+            assertTrue(paid.driver.id.isNotEmpty())
+            assertTrue(paid.driver.name != "You")
+        }
+        // The drag-race toggle on "drive myself" does not stop a hired driver from entering.
+        assertEquals("ace", (Circuits.open(s, "ace") as Circuits.Entry.Paid).driver.id)
+    }
+
+    @Test fun theChosenDriverPaysHisOwnFee() {
+        val s = GameState(prestiges = 3, money = 1.0e12, hiredDrivers = setOf("gus", "ace"))
+        val gus = Circuits.open(s, "gus") as Circuits.Entry.Paid
+        val ace = Circuits.open(s, "ace") as Circuits.Entry.Paid
+        assertEquals(Circuits.fee(s, Drivers.byId("gus")!!), gus.fee, 1e-9)
+        assertEquals(Circuits.fee(s, Drivers.byId("ace")!!), ace.fee, 1e-9)
+        assertTrue(ace.fee > gus.fee)
+        assertTrue(gus.fee > 0.0)
+    }
+
+    @Test fun theRaceNeverNamesYou() {
+        val s = GameState(prestiges = 3, money = 1.0e12, hiredDrivers = setOf("gus"))
+        val paid = Circuits.open(s) as Circuits.Entry.Paid
+        val out = Circuits.finish(s, Circuits.carOf(s), circuit("monza"), paid.driver, paid.fee, paid.entry, 3L)
+        assertEquals("Jackie Stewart", out.result.driver)
+        assertTrue(out.result.grid.any { it.you && it.name == "Jackie Stewart" })
     }
 }

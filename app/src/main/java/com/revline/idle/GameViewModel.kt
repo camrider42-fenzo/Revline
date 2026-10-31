@@ -300,10 +300,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Pays the entry and the driver, simulates the race off the main thread, then pays the prize and any engine rebuild. */
-    fun runCircuit(id: String) {
+    fun runCircuit(id: String, driverId: String) {
         if (ui.circuitBusy || ui.strip != null) return
         val circuit = Circuits.all.firstOrNull { it.id == id } ?: return
-        when (val entry = Circuits.open(ui.game)) {
+        when (val entry = Circuits.open(ui.game, driverId)) {
             is Circuits.Entry.Refused -> publish(ui.copy(raceNote = entry.note))
             is Circuits.Entry.Paid -> {
                 val paid = entry.state
