@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -560,7 +562,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
     val picked = Circuits.entrant(state, driverPick)
     Text("CIRCUIT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
     Text(
-        "A few laps round a real circuit against seven rivals, simulated with your car. No picture, just the result. Tires, axle, gearbox, final drive, weight, cooling and power all change the lap. The driver's cornering, braking, acceleration, mistakes and engine care change it too.",
+        "A few laps round a real circuit against seven rivals, simulated with your car. The race then plays back on a map of the circuit. Tires, axle, gearbox, final drive, weight, cooling and power all change the lap. The driver's cornering, braking, acceleration, mistakes and engine care change it too.",
         color = White,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,
@@ -583,6 +585,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
         modifier = Modifier.padding(top = 6.dp),
     )
     Text(circuit.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+    CircuitMap(circuit, state.chassis, state.chassis == "r5" && state.enginePlace == "MID")
     val favors = remember(circuit.id) { Circuits.favors(circuit) }
     val emphasis = remember(circuit.id) { Circuits.emphasis(circuit) }
     Text(
@@ -791,6 +794,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
             Text("Driver ${r.driver}  ${Circuits.planText(r.orders)}, ${r.orders.pace.title.lowercase(Locale.US)}, ${r.weather.title.lowercase(Locale.US)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             if (r.retired != null) Text(r.retired, color = Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             else Text("Total ${Circuits.clock(r.totalTime)}  best lap ${Circuits.clock(r.bestLap)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            if (r.log.rows.isNotEmpty()) CircuitReplayView(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID", Modifier.padding(vertical = 4.dp))
             Text(
                 "Laps " + r.lapTimes.joinToString("  ") { Circuits.clock(it) },
                 color = White,
@@ -851,5 +855,24 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
                 )
             }
         }
+    }
+}
+
+/** The circuit seen from above, with your car and a rival on the front row. */
+@Composable
+private fun CircuitMap(circuit: Circuits.Circuit, chassis: String, mid: Boolean) {
+    val scenes = remember { CircuitSceneHolder() }
+    val title = circuit.name.substringBefore('-').uppercase(Locale.US)
+    val sub = String.format(Locale.US, "%.3f km  %d corners", circuit.lapKm, circuit.corners)
+    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().aspectRatio(1.6f).padding(top = 4.dp)) {
+        val scene = scenes.get(this, circuit.id, title, sub)
+        val geo = scene.geo
+        drawCircuitScene(
+            scene,
+            listOf(
+                CircuitCar(ReplayLook.rivalId(circuit.id), false, ReplayLook.red, Color.White, gridArc(geo, 0, -1), -geo.laneOffset),
+                CircuitCar(chassis, mid, ReplayLook.lime, ReplayLook.ink, gridArc(geo, 0, 1), geo.laneOffset),
+            ),
+        )
     }
 }
