@@ -49,6 +49,9 @@ object Season {
         "${it.position}. ${if (it.you) "YOU" else it.name}  ${it.team}  ${it.points} pts" + if (it.wins > 0) "  ${it.wins} win${if (it.wins > 1) "s" else ""}" else ""
     }
 
+    /** The venue the race screen moves to once a race is settled: the championship's next round, wrapping to round 1 after the last. */
+    fun venueAfter(update: Update): String = next(update.state).id
+
     /** The result of settling a race: the new state and what to tell the player about the championship. */
     data class Update(val state: GameState, val note: String)
 

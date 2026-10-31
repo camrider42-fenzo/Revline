@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -545,6 +546,14 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
     val state = ui.game
     var circuitId by rememberSaveable { mutableStateOf(Season.next(state).id) }
     val circuit = Circuits.all.firstOrNull { it.id == circuitId } ?: Circuits.all.first()
+    // The pick used to be set once and never moved. When a race finishes (a new outcome appears, not one already showing when the tab opened),
+    // the venue follows the championship to its next round. The chips still let the player pick any circuit afterwards.
+    val outcome = ui.circuitOutcome
+    val handled = remember { arrayOf(outcome) }
+    LaunchedEffect(outcome) {
+        if (outcome != null && outcome !== handled[0]) circuitId = Season.next(ui.game).id
+        handled[0] = outcome
+    }
     // Circuit races are for hired drivers only. This pick is its own, so the drag-race toggle is left alone.
     var driverPick by rememberSaveable { mutableStateOf(Drivers.selected(state)?.id ?: "") }
     val hired = Drivers.hired(state)

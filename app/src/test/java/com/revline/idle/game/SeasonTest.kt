@@ -128,4 +128,27 @@ class SeasonTest {
         assertEquals(base.money, back.money, 1e-9)
         assertFalse(back.seasonHistory.isNotEmpty())
     }
+
+    @Test fun theVenueFollowsTheChampionshipAfterEveryRace() {
+        var s = base
+        val ids = Circuits.all.map { it.id }
+        repeat(Season.ROUNDS) { round ->
+            // A free race somewhere else leaves the next round up, and the venue goes back to it.
+            val other = Circuits.all[(round + 3) % Season.ROUNDS]
+            val free = Season.settle(s, other, outcome(other, 2))
+            assertEquals(ids[round], Season.venueAfter(free))
+            // The championship round moves the venue on one circuit, and from round 8 wraps to round 1 of the new season.
+            val c = Season.next(s)
+            assertEquals(ids[round], c.id)
+            val u = Season.settle(s, c, outcome(c, 4))
+            assertEquals(ids[(round + 1) % Season.ROUNDS], Season.venueAfter(u))
+            s = u.state
+        }
+        assertEquals(0, s.seasonRound)
+        assertEquals(2, s.seasonNo)
+        assertEquals(ids.first(), Season.next(s).id)
+        // A retirement moves it on as well.
+        val c = Season.next(s)
+        assertEquals(ids[1], Season.venueAfter(Season.settle(s, c, outcome(c, 0))))
+    }
 }
