@@ -193,10 +193,26 @@ object Circuits {
         val brake: Double = 1.0,
         val lateral: Double = 1.0,
         val lowTorque: Double = 1.0,
+        /** Extra down-load per kg for each (m/s)^2: aero. */
+        val downforce: Double = 0.0,
+        /** Grip lost per lap by the tires, as a share, before the circuit's heat. */
+        val wear: Double = 0.0,
+        /** How often the driver makes a mistake, against his own rate. */
+        val mistakes: Double = 1.0,
+        /** The engine's chance of letting go, against a stock cooler. */
+        val hazard: Double = 1.0,
     )
 
-    fun carOf(state: GameState, sheet: Sheet = Logic.sheet(state)): Car =
-        Car(RaceDrive.setup(state, sheet), Racing.car(state).fade, sheet.stats.reliability)
+    /** The car on a circuit: the circuit tire, and everything the race components do there. */
+    fun carOf(state: GameState, sheet: Sheet = Logic.sheet(state)): Car {
+        val kit = Parts.kit(state)
+        val road = Racing.car(state, circuit = true)
+        return Car(
+            RaceDrive.setup(state, sheet, circuit = true), road.fade, sheet.stats.reliability,
+            brake = kit.brake, lateral = kit.lateral, lowTorque = kit.traction, downforce = kit.downforce,
+            wear = road.spec.tire.wear * kit.wear, mistakes = kit.mistakes, hazard = kit.hazard,
+        )
+    }
 
     /** What a driver does with it. All 0..1, from his [Drivers.Driver] stats and the specialty boost the car earns him. */
     data class Hands(
@@ -234,8 +250,11 @@ object Circuits {
     private fun shiftLate(h: Hands) = (1.0 - h.dyno) * 0.05
     private fun revCeiling(h: Hands, st: RaceDrive.Setup) = st.redline * (0.985 - 0.035 * h.care)
 
-    /** Brake ceiling in m/s2: the tires, or the brakes, whichever gives first. A heavy car out-brakes nobody. */
-    private fun brakeLimit(mass: Double, mu: Double) = min(mu * G, 14.5 - 0.0032 * mass).coerceAtLeast(3.0)
+    /**
+     * Brake ceiling in m/s2: the tires, or the brakes, whichever gives first. A heavy car out-brakes nobody.
+     * [down] is the downforce at this speed in m/s2 per kg, which presses the tires harder.
+     */
+    private fun brakeLimit(mass: Double, mu: Double, down: Double = 0.0) = min(mu * (G + down), 14.5 - 0.0032 * mass).coerceAtLeast(3.0)
 
     /** [power] is the share of engine power left after heat and wear. */
     fun lap(car: Car, circuit: Circuit, hands: Hands, power: Double = 1.0): Lap {
@@ -247,19 +266,27 @@ object Circuits {
         val sens = (1000.0 / m).pow(0.08)
         val muBase = st.gripN / (m * G) * sens
         val muCorner = muBase * cornerFrac(hands) * car.lateral
-        val aBrake = brakeLimit(m, muBase) * car.brake * brakeFrac(hands)
+        val kBrake = car.brake * brakeFrac(hands)
+        val df = car.downforce
         val roll = 0.012 * m * G
         val dragK = 0.5 * 1.22 * st.drag
 
-        val vLim = DoubleArray(n) { i -> if (circuit.radius[i] > 0.0) sqrt(muCorner * G * circuit.radius[i]) else SPEED_CAP }
+        // v^2 / r = mu (g + df v^2): downforce lifts the corner's speed ceiling as the speed rises.
+        val vLim = DoubleArray(n) { i ->
+            val r = circuit.radius[i]
+            if (r <= 0.0) SPEED_CAP else if (df <= 0.0) sqrt(muCorner * G * r) else {
+                val room = 1.0 / r - muCorner * df
+                if (room <= 1e-9) SPEED_CAP else min(SPEED_CAP, sqrt(muCorner * G / room))
+            }
+        }
         // Backward pass, round the lap twice: the speed you can still brake from.
         val vb = vLim.copyOf()
         repeat(2) {
             for (k in n - 1 downTo 0) {
                 val next = vb[(k + 1) % n]
                 val r = circuit.radius[k]
-                val fc = if (r > 0.0) sqrt((1.0 - (next * next / r / (muBase * G)).pow(2)).coerceAtLeast(0.0)) else 1.0
-                val a = aBrake * fc + (dragK * next * next + roll) / m
+                val fc = if (r > 0.0) sqrt((1.0 - (next * next / r / (muBase * (G + df * next * next))).pow(2)).coerceAtLeast(0.0)) else 1.0
+                val a = brakeLimit(m, muBase, df * next * next) * kBrake * fc + (dragK * next * next + roll) / m
                 val cand = sqrt(next * next + 2.0 * a * ds)
                 if (cand < vb[k]) vb[k] = cand
             }
@@ -294,7 +321,7 @@ object Circuits {
                     rpm = max(v / RaceDrive.WHEEL_R * st.ratios[gear - 1] * st.finalDrive * 9.5493, st.idle * 1.2)
                 }
                 val r = circuit.radius[i]
-                val fc = if (r > 0.0) sqrt((1.0 - (v * v / r / (muBase * G)).pow(2)).coerceAtLeast(0.0)) else 1.0
+                val fc = if (r > 0.0) sqrt((1.0 - (v * v / r / (muBase * (G + df * v * v))).pow(2)).coerceAtLeast(0.0)) else 1.0
                 var force = 0.0
                 var tracted = false
                 if (coast > 0.0) {
@@ -302,7 +329,7 @@ object Circuits {
                 } else if (rpm <= ceiling) {
                     val raw = RaceDrive.torqueNm(st, rpm) * st.ratios[gear - 1] * st.finalDrive * st.efficiency / RaceDrive.WHEEL_R *
                         power * aFrac * (if (v < 40.0) car.lowTorque else 1.0)
-                    val cap = muBase * m * G * fc
+                    val cap = muBase * m * (G + df * v * v) * fc
                     force = min(raw, cap)
                     tracted = raw > cap
                 }
@@ -338,7 +365,7 @@ object Circuits {
      * What the car and driver do when nothing goes wrong. Heat and wear drag the power down lap by lap. Deterministic:
      * the dice are rolled afterwards in [race].
      */
-    class Plan(val circuit: Circuit, val laps: List<Lap>, val failure: List<Double>, val hands: Hands) {
+    class Plan(val circuit: Circuit, val laps: List<Lap>, val failure: List<Double>, val hands: Hands, val mistakes: Double = 1.0) {
         val mean: Double get() = laps.map { it.time }.average()
         val fullThrottle: Double get() = laps.map { it.fullThrottle }.average()
         val top: Double get() = laps.maxOf { it.topKph }
@@ -347,7 +374,7 @@ object Circuits {
     fun plan(car: Car, circuit: Circuit, driver: Drivers.Driver): Plan {
         val hands = hands(driver, car.setup)
         val weak = ((99.0 - car.reliability) / 94.0).coerceIn(0.0, 1.0)
-        val rate = HAZARD * (0.3 + 3.0 * weak * weak) * (1.9 - 1.5 * hands.care)
+        val rate = HAZARD * (0.3 + 3.0 * weak * weak) * (1.9 - 1.5 * hands.care) * car.hazard
         val laps = ArrayList<Lap>()
         val failure = ArrayList<Double>()
         var wear = 0.0
@@ -355,14 +382,17 @@ object Circuits {
         for (k in 1..circuit.laps) {
             val heat = 1.0 - exp(-0.55 * circuit.heat * (k - 0.5) * (share / 0.6))
             val power = (1.0 - car.fade * heat) * (1.0 - min(0.12, 1.5 * wear))
-            val lap = lap(car, circuit, hands, power)
+            // Tires go off over the race, faster on a hot track. A level with no wear keeps the same car.
+            val worn = car.wear * (0.6 + 0.4 * circuit.heat) * (k - 0.5)
+            val shod = if (worn > 0.0) car.copy(setup = car.setup.copy(gripN = car.setup.gripN * (1.0 - worn))) else car
+            val lap = lap(shod, circuit, hands, power)
             share = lap.fullThrottle.coerceAtLeast(0.2)
             val hazard = 1.0 - exp(-rate * lap.strain * (1.0 + 0.6 * heat))
             wear += hazard
             laps.add(lap)
             failure.add(hazard)
         }
-        return Plan(circuit, laps, failure, hands)
+        return Plan(circuit, laps, failure, hands, car.mistakes)
     }
 
     data class Finisher(val name: String, val time: Double, val out: Boolean, val you: Boolean = false)
@@ -384,8 +414,8 @@ object Circuits {
 
     /** The seven rivals: how far off the par car each runs (fraction of lap time). Negative is quicker. */
     private val rivals = listOf(
-        "Jim Clark" to -0.060,
-        "John Surtees" to -0.035,
+        "Jim Clark" to -0.130,
+        "John Surtees" to -0.075,
         "Jochen Rindt" to -0.015,
         "Emerson Fittipaldi" to 0.005,
         "Mario Andretti" to 0.025,
@@ -427,7 +457,7 @@ object Circuits {
         var retired: String? = null
         var engine = false
         val h = plan.hands
-        val lambda = circuit.corners * 0.02 * (0.2 + 1.6 * h.mistakes)
+        val lambda = circuit.corners * 0.02 * (0.2 + 1.6 * h.mistakes) * plan.mistakes
         for ((index, base) in plan.laps.withIndex()) {
             val lapNo = index + 1
             if (dice.next() < plan.failure[index]) {
@@ -517,6 +547,7 @@ object Circuits {
             transmission = "close",
             driveline = "lsd",
             tire = "radial",
+            circuitTire = "street",
             raceStudies = Racing.studies.map { it.id }.toSet(),
         )
         carOf(state)
@@ -648,4 +679,12 @@ object Circuits {
         val par = parPlan(prestiges, circuit).mean
         return (par - mine) / par * 100.0
     }
+
+    /** Below this, a build is not on the same page as the field and a percentage only confuses. */
+    const val FIT_FLOOR = -25.0
+
+    /** The fit line for the circuit screen. A hopeless build reads as far off the pace, not as a huge negative number. */
+    fun fitText(fit: Double): String =
+        if (!fit.isFinite() || fit < FIT_FLOOR) "Your build here: far off the pace of the field's par car"
+        else String.format(java.util.Locale.US, "Your build here: %+.1f%% a lap against the field's par car", fit)
 }

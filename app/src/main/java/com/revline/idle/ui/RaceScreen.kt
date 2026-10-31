@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
+import com.revline.idle.game.Parts
 import com.revline.idle.game.Racing
 import java.util.Locale
 
@@ -239,6 +240,8 @@ fun RaceScreen(
             state.transmission,
             state.driveline,
             state.tire,
+            state.circuitTire,
+            state.kit,
             state.enginePlace,
             ui.sheet.stats.peakHorsepower.toInt(),
             ui.sheet.stats.peakTorqueLbFt.toInt(),
@@ -270,9 +273,9 @@ fun RaceScreen(
             val gate = Racing.gate(state, "axle", id, Racing.axles.first { it.id == id }.name)
             if (gate.study != null) onStudy(gate.study) else onPart("axle", id)
         }
-        Text("TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text("DRAG TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         Text(
-            "Bias-ply is what it rolled in on. A better tire is a study, then the price.",
+            "For the strip. Grip off the line, and nothing else. Circuit races use the circuit tires below, whatever is fitted here. A better tire is a study, then the price.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
@@ -281,6 +284,61 @@ fun RaceScreen(
             val tire = Racing.tires.first { it.id == id }
             val gate = Racing.gate(state, "tire", id, tire.name)
             if (gate.study != null) onStudy(gate.study) else onPart("tire", id)
+        }
+        Text("CIRCUIT TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "For corners and brakes. A softer tire grips more and wears faster, most on a hot circuit. Strips use the drag tires above. Costs a study, then the price.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        ChipRow(Racing.circuitTires.map { it.id to Racing.gate(state, "ctire", it.id, it.name).label }, state.circuitTire) { id ->
+            val tire = Racing.circuitTires.first { it.id == id }
+            val gate = Racing.gate(state, "ctire", id, tire.name)
+            if (gate.study != null) onStudy(gate.study) else onPart("ctire", id)
+        }
+        Racing.circuitTires.firstOrNull { it.id == state.circuitTire }?.let { t ->
+            Text(
+                String.format(Locale.US, "Grip %.2f, loses %.1f%% a lap on a mild track. For circuits only.", t.mu, t.wear * 100.0),
+                color = Cyan,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Text("CIRCUIT PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "Brakes, suspension, aero and the rest. Each moves a lap a lot and a drag run a little. A study, then the price. One level of a line is fitted at a time.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        Parts.lines.forEach { line ->
+            val now = Parts.level(state, line.id)
+            Text(line.title, color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+            Text(line.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            ChipRow(
+                listOf("0" to "Stock") + line.levels.mapIndexed { i, lv -> "${i + 1}" to Racing.gate(state, line.id, "${i + 1}", lv.name).label },
+                now.toString(),
+            ) { id ->
+                val gate = Racing.gate(state, line.id, id, line.level(id.toInt())?.name ?: "Stock")
+                if (gate.study != null) onStudy(gate.study) else onPart(line.id, id)
+            }
+            Text(
+                if (now == 0) "Stock." else "Fitted: ${line.level(now)?.name}. ${Parts.hint(line, now)}",
+                color = Cyan,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            line.level(now + 1)?.let { next ->
+                Text(
+                    "Next, ${next.name}: ${Parts.hint(line, now + 1)}",
+                    color = White,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                )
+            }
         }
         Text("LAYOUT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         if (body.places.size == 1) {
@@ -513,12 +571,12 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
         modifier = Modifier.padding(top = 4.dp),
     )
     Circuits.Aspect.entries.forEach { a -> StatBar(aspectLabel(a), (emphasis.getValue(a) * 50).toInt().coerceIn(0, 100), a in favors) }
-    val fit by produceState<Double?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.prestiges) {
+    val fit by produceState<Double?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.prestiges, state.circuitTire, state.kit) {
         value = withContext(Dispatchers.Default) { Circuits.fitPercent(Circuits.carOf(state, ui.sheet), circuit, state.prestiges, picked ?: Drivers.you) }
     }
     fit?.let {
         Text(
-            String.format(Locale.US, "Your build here: %+.1f%% a lap against the field's par car", it),
+            Circuits.fitText(it),
             color = if (it >= 2.0) Lime else if (it >= -1.0) White else Amber,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,

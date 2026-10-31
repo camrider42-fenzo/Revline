@@ -4,6 +4,8 @@ import com.revline.idle.model.FuelKind
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 
 @Serializable
@@ -22,7 +24,12 @@ data class GameState(
     /** Final drive. short launches harder and runs out of gear. tall is lazy off the line. */
     val finalDrive: String = "road",
     val driveline: String = "open",
+    /** The drag tire. The strip uses this one. Circuits use [circuitTire]. */
     val tire: String = "bias",
+    /** The circuit tire: street, sport, semi, racing. Owned and fitted apart from the drag tire. */
+    val circuitTire: String = "street",
+    /** Race components fitted, line id to level. A missing line is the stock part (level 0). */
+    val kit: Map<String, Int> = emptyMap(),
     /** Blank uses the chassis's own layout. */
     val driveType: String = "",
     val enginePlace: String = "",
@@ -59,8 +66,11 @@ data class GameState(
     val soakC: Double = 0.0,
     val savedAtEpochMs: Long = 0L,
     val dynoReadyAtEpochMs: Long = 0L,
-    val version: Int = 1,
+    val version: Int = SAVE_VERSION,
 )
+
+/** 1: one tire for drag and circuit. 2: separate drag and circuit tires, race components. */
+const val SAVE_VERSION = 2
 
 object SaveCodec {
     private val json = Json {
@@ -71,7 +81,32 @@ object SaveCodec {
 
     fun encode(state: GameState): String = json.encodeToString(state)
 
-    fun decode(text: String): GameState = json.decodeFromString(text)
+    /** A save with no version field is from before versions existed: version 1, whatever a new GameState defaults to. */
+    fun decode(text: String): GameState {
+        val tree = json.parseToJsonElement(text)
+        val stamped = if (tree is JsonObject && "version" !in tree) JsonObject(tree + ("version" to JsonPrimitive(1))) else tree
+        return migrate(json.decodeFromJsonElement(GameState.serializer(), stamped))
+    }
+
+    /**
+     * A version 1 save had one tire for every kind of race. The drag tire stays as it was. The circuit gets the nearest
+     * tire of its own for every tire the save had studied, bought or fitted, so nothing is lost and nothing is refunded.
+     */
+    fun migrate(state: GameState): GameState {
+        if (state.version >= SAVE_VERSION) return state
+        val studiedSport = "tire_race" in state.raceStudies || "tire_slick" in state.raceStudies
+        val studiedSemi = "tire_slick" in state.raceStudies
+        val ownsSport = "tire:race" in state.raceOwned || "tire:slick" in state.raceOwned || state.tire == "race" || state.tire == "slick"
+        val ownsSemi = "tire:slick" in state.raceOwned || state.tire == "slick"
+        val studies = state.raceStudies + listOfNotNull("ctire_sport".takeIf { studiedSport || ownsSport }, "ctire_semi".takeIf { studiedSemi || ownsSemi })
+        val owned = state.raceOwned + listOfNotNull("ctire:sport".takeIf { ownsSport }, "ctire:semi".takeIf { ownsSemi })
+        val fitted = when {
+            state.tire == "slick" -> "semi"
+            state.tire == "race" -> "sport"
+            else -> "street"
+        }
+        return state.copy(circuitTire = fitted, raceStudies = studies, raceOwned = owned, version = SAVE_VERSION)
+    }
 }
 
 class SaveRepository(private val dir: File) {

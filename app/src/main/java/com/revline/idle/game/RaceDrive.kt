@@ -74,8 +74,9 @@ object RaceDrive {
 
     fun setup(state: GameState): Setup = setup(state, Logic.sheet(state))
 
-    fun setup(state: GameState, sheet: Sheet): Setup {
-        val body = Racing.car(state)
+    /** [circuit] fits the circuit tire and leaves out the launch grip a stiffer car earns on the strip. */
+    fun setup(state: GameState, sheet: Sheet, circuit: Boolean = false): Setup {
+        val body = Racing.car(state, circuit)
         val box = body.spec.gearbox
         val axle = body.spec.axle
         var eff = box.efficiency * axle.efficiency
@@ -92,8 +93,9 @@ object RaceDrive {
             Racing.Drive.RWD -> 1.0
             Racing.Drive.AWD -> 1.08
         }
-        val grip = body.spec.tire.mu * axle.grip * balance * body.massKg * 9.81
-        val drag = body.spec.chassis.cd * body.spec.chassis.area * (1.0 + 0.018 * body.spec.slots) * body.spec.tire.drag
+        val kit = body.spec.kit
+        val grip = body.spec.tire.mu * axle.grip * balance * body.massKg * 9.81 * (if (circuit) 1.0 else kit.launch)
+        val drag = body.spec.chassis.cd * body.spec.chassis.area * (1.0 + 0.018 * body.spec.slots) * body.spec.tire.drag * kit.dragMult
         return Setup(
             peakHp = sheet.stats.peakHorsepower.coerceAtLeast(8.0),
             peakTqLbFt = sheet.stats.peakTorqueLbFt.coerceAtLeast(8.0),

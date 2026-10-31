@@ -86,6 +86,10 @@ object Racing {
         val study: String?,
         val minPrestige: Int,
         val price: Double,
+        /** True for a circuit tire. A drag tire is for the strip: launch grip. A circuit tire is for corners and brakes. */
+        val circuit: Boolean = false,
+        /** Circuit tires only: grip lost per lap (share of grip), before the track's heat and the setup. */
+        val wear: Double = 0.0,
     )
 
     data class Study(val id: String, val name: String, val detail: String, val cost: Double, val requires: String? = null, val minPrestige: Int = 0)
@@ -156,12 +160,26 @@ object Racing {
         Axle("cv", "CV shafts, plated diff", 0.94, 1.12, 30.0, "axle_cv", 5, 6400.0),
     )
 
+    /** Drag tires: launch grip on the strip. The fitted one is [GameState.tire]. */
     val tires = listOf(
         Tire("bias", "Bias-ply street", 0.82, 1.00, 32.0, null, 0, 0.0),
-        Tire("radial", "Period radial", 0.94, 1.00, 28.0, "tire_radial", 0, 400.0),
-        Tire("race", "Dunlop race", 1.08, 1.02, 24.0, "tire_race", 2, 1800.0),
-        Tire("slick", "Slick", 1.26, 1.05, 22.0, "tire_slick", 4, 4600.0),
+        Tire("radial", "Street radial", 0.94, 1.00, 28.0, "tire_radial", 0, 400.0),
+        Tire("race", "Drag radial", 1.08, 1.02, 24.0, "tire_race", 2, 1800.0),
+        Tire("slick", "Drag slick", 1.26, 1.05, 22.0, "tire_slick", 4, 4600.0),
     )
+
+    /**
+     * Circuit tires: grip in corners and under the brakes. The soft ones go off over a race, and faster on a hot track.
+     * The fitted one is [GameState.circuitTire]. A circuit uses these and a strip uses [tires], each automatically.
+     */
+    val circuitTires = listOf(
+        Tire("street", "Street tire", 0.94, 1.00, 28.0, null, 0, 0.0, circuit = true, wear = 0.004),
+        Tire("sport", "Sport tire", 1.04, 1.00, 27.0, "ctire_sport", 1, 900.0, circuit = true, wear = 0.005),
+        Tire("semi", "Semi-slick", 1.15, 1.02, 25.0, "ctire_semi", 3, 3200.0, circuit = true, wear = 0.010),
+        Tire("racing", "Racing slick", 1.27, 1.03, 23.0, "ctire_racing", 5, 8200.0, circuit = true, wear = 0.016),
+    )
+
+    fun tireById(id: String): Tire? = tires.find { it.id == id } ?: circuitTires.find { it.id == id }
 
     data class Final(val id: String, val name: String, val ratio: Double, val study: String?, val price: Double)
 
@@ -181,10 +199,24 @@ object Racing {
         Study("axle_lsd", "Limited-slip", "Both rear tires take the torque.", 50.0),
         Study("axle_irs", "Independent rear", "The live axle comes out. The unsprung weight goes with it.", 400.0, "axle_lsd", 2),
         Study("axle_cv", "Plated differential", "A clutch pack and CV joints. The late prototypes used them.", 1600.0, "axle_irs", 5),
-        Study("tire_radial", "Radials", "A belted tire. More grip, same rolling size.", 30.0),
-        Study("tire_race", "Race rubber", "A soft compound on a light wheel.", 280.0, "tire_radial", 2),
-        Study("tire_slick", "Slicks", "No tread. They need a dry road and a car that can put them down.", 1200.0, "tire_race", 4),
-    ) + chassis.map {
+        Study("tire_radial", "Street radials", "A belted tire. More grip, same rolling size. For the strip.", 30.0),
+        Study("tire_race", "Drag radials", "A soft compound on a light wheel. Launch grip for the strip.", 280.0, "tire_radial", 2),
+        Study("tire_slick", "Drag slicks", "No tread. They need a dry road and a car that can put them down.", 1200.0, "tire_race", 4),
+        Study("ctire_sport", "Sport tires", "A circuit tire. Grip in the corners and under the brakes, and it lasts.", 80.0, minPrestige = 1),
+        Study("ctire_semi", "Semi-slicks", "A near-slick compound for the track. It wears quicker.", 520.0, "ctire_sport", 3),
+        Study("ctire_racing", "Racing slicks", "The softest compound there is. Huge grip for a few laps, then it goes off.", 1800.0, "ctire_semi", 5),
+    ) + Parts.lines.flatMap { line ->
+        line.levels.mapIndexed { i, level ->
+            Study(
+                line.studyId(i + 1),
+                level.name,
+                "${line.title.lowercase(Locale.US).replaceFirstChar { c -> c.uppercase() }}. ${level.detail}",
+                level.studyRp,
+                if (i == 0) null else line.studyId(i),
+                level.minPrestige,
+            )
+        }
+    } + chassis.map {
         val spots = it.places.joinToString(" or ") { spot -> spot.name.lowercase(Locale.US) }
         Study(
             "chassis_${it.id}",
@@ -207,6 +239,8 @@ object Racing {
         val slots: Int,
         val drive: Drive,
         val place: Place,
+        /** What the race components do. Leave neutral for a ghost car. */
+        val kit: Parts.Fx = Parts.NONE,
     )
 
     data class Car(
@@ -230,7 +264,7 @@ object Racing {
     fun driveFor(body: Chassis, place: Place): Drive =
         if (body.id == "r5" && place == Place.MID) Drive.RWD else body.drive
 
-    fun car(state: GameState): Car = assess(specOf(state), lengthOf(state.raceLength))
+    fun car(state: GameState, circuit: Boolean = false): Car = assess(specOf(state, circuit), lengthOf(state.raceLength))
 
     /** Fastest chassis this engine can sit in, on the distance selected. */
     fun quickest(state: GameState): Chassis? =
@@ -263,13 +297,18 @@ object Racing {
         )
     }
 
-    fun specOf(state: GameState): Spec {
+    /** [circuit] puts the circuit tire on. A strip puts the drag tire on. */
+    fun specOf(state: GameState, circuit: Boolean = false): Spec {
         val sheet = Logic.sheet(state)
         val body = chassisById(state.chassis)
         val level = (state.chassisLevel[body.id] ?: 0).coerceIn(0, 3)
         val box = gearboxes.find { it.id == state.transmission } ?: gearboxes.first { it.id == "four" }
         val axle = axles.find { it.id == state.driveline } ?: axles.first()
-        val tire = tires.find { it.id == state.tire } ?: tires.first()
+        val tire = if (circuit) {
+            circuitTires.find { it.id == state.circuitTire } ?: circuitTires.first()
+        } else {
+            tires.find { it.id == state.tire } ?: tires.first()
+        }
         val asked = runCatching { Place.valueOf(state.enginePlace) }.getOrNull()
         val place = if (asked != null && asked in body.places) asked else body.place
         val drive = driveFor(body, place)
@@ -286,6 +325,7 @@ object Racing {
             slots = slots,
             drive = drive,
             place = place,
+            kit = Parts.kit(state),
         )
     }
 
@@ -295,7 +335,10 @@ object Racing {
         val body = spec.chassis
         val shaved = 0.04 * spec.level.coerceIn(0, 3)
         val massFloor = body.kg * 0.92
+        val kit = spec.kit
         var mass = (body.kg * (1.0 - shaved)).coerceAtLeast(massFloor)
+        mass -= body.kg * kit.shave
+        mass += kit.addKg
         mass += 35.0 + spec.displacementCc * 0.042
         mass += spec.gearbox.kg + spec.axle.kg + spec.tire.kg
         val native = driveFor(body, spec.place)
@@ -324,18 +367,18 @@ object Racing {
             Drive.AWD -> 1.08
         }
         val slots = if (stuffed) 0 else spec.slots.coerceAtLeast(0)
-        val drag = body.cd * body.area * (1.0 + 0.018 * slots) * spec.tire.drag
+        val drag = body.cd * body.area * (1.0 + 0.018 * slots) * spec.tire.drag * kit.dragMult
         // A bay that is full runs hot. A heavy car's bay is mostly empty around a small engine.
         val bay = if (body.id == "mule") 2400.0 else body.maxCc
         val fill = (spec.displacementCc / bay.coerceAtLeast(40.0)).coerceIn(0.15, 1.8)
-        val heat = made * fill / (36.0 + 24.0 * slots)
+        val heat = made * fill / (36.0 + 24.0 * (slots + kit.cool))
         val fade = if (stuffed) {
             ((heat - 0.70).coerceAtLeast(0.0) * 0.45).coerceIn(0.42, 0.72)
         } else {
             ((heat - 0.90).coerceAtLeast(0.0) * 0.38).coerceAtMost(0.48)
         }
         val held = (1.0 - fade).coerceIn(0.34, 1.0)
-        val traction = spec.tire.mu * spec.axle.grip * balance * mass * 0.55
+        val traction = spec.tire.mu * spec.axle.grip * balance * mass * 0.55 * kit.launch
         val road = when {
             body.id == "mule" -> 0.94
             body.build == Build.LIGHT -> 1.26
@@ -343,7 +386,7 @@ object Racing {
             else -> 0.90
         }
         val accel = made * held * road / mass.coerceAtLeast(80.0)
-        val launch = (wheelTq.coerceAtMost(traction) / mass) * spec.tire.mu * spec.axle.grip * balance
+        val launch = (wheelTq.coerceAtMost(traction) / mass) * spec.tire.mu * spec.axle.grip * balance * kit.launch
         val vMax = sqrt((made * held * road / drag.coerceAtLeast(0.2)).coerceAtLeast(0.01))
         val (accelExp, launchExp, speedExp) = when (length) {
             Length.EIGHTH -> Triple(0.34, 0.46, 0.20)
@@ -542,14 +585,21 @@ object Racing {
             val spot = runCatching { Place.valueOf(id) }.getOrNull() ?: return state
             if (spot !in chassisById(state.chassis).places) return state
         }
+        if (kind == "ctire" && circuitTires.none { it.id == id }) return state
+        if (kind == "tire" && tires.none { it.id == id }) return state
+        Parts.line(kind)?.let { line -> if ((id.toIntOrNull() ?: -1) !in 0..line.levels.size) return state }
         if (fitted(state, kind, id)) return state
         val bought = purchase(state, kind, id) ?: return state
         return when (kind) {
             "box" -> bought.copy(transmission = id)
             "axle" -> bought.copy(driveline = id)
             "tire" -> bought.copy(tire = id)
+            "ctire" -> bought.copy(circuitTire = id)
             "place" -> bought.copy(enginePlace = id, driveType = driveFor(chassisById(state.chassis), Place.valueOf(id)).name)
-            else -> state
+            else -> {
+                val level = id.toIntOrNull()
+                if (Parts.isLine(kind) && level != null) bought.copy(kit = bought.kit + (kind to level)) else state
+            }
         }
     }
 
@@ -630,8 +680,9 @@ object Racing {
         "box" -> gearboxes.find { it.id == id }?.price ?: 0.0
         "axle" -> axles.find { it.id == id }?.price ?: 0.0
         "tire" -> tires.find { it.id == id }?.price ?: 0.0
+        "ctire" -> circuitTires.find { it.id == id }?.price ?: 0.0
         "final" -> finals.find { it.id == id }?.price ?: 0.0
-        else -> 0.0
+        else -> Parts.line(kind)?.level(id.toIntOrNull() ?: 0)?.price ?: 0.0
     }
 
     private fun partPrice(state: GameState, kind: String, id: String): Double {
@@ -643,18 +694,20 @@ object Racing {
         "box" -> gearboxes.find { it.id == id }?.study
         "axle" -> axles.find { it.id == id }?.study
         "tire" -> tires.find { it.id == id }?.study
+        "ctire" -> circuitTires.find { it.id == id }?.study
         "final" -> finals.find { it.id == id }?.study
-        else -> null
+        else -> Parts.line(kind)?.let { line -> id.toIntOrNull()?.takeIf { it >= 1 }?.let { line.studyId(it) } }
     }
 
     private fun fitted(state: GameState, kind: String, id: String): Boolean = when (kind) {
         "box" -> state.transmission == id
         "axle" -> state.driveline == id
         "tire" -> state.tire == id
+        "ctire" -> state.circuitTire == id
         "final" -> state.finalDrive == id
         "drive" -> state.driveType == id
         "place" -> state.enginePlace == id
-        else -> false
+        else -> Parts.isLine(kind) && Parts.level(state, kind).toString() == id
     }
 
     /** Study first, then money once. A part you already bought is free to put back on. */
