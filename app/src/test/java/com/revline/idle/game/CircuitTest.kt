@@ -103,11 +103,11 @@ class CircuitTest {
 
     @Test fun tiresMoveTheLap() {
         listOf("monaco", "suzuka", "monza").forEach { id ->
-            val t = listOf("slick", "race", "radial", "bias").map { lapAt(state(tire = it), id) }
+            val t = listOf("racing", "semi", "sport", "street").map { c -> lapAt(state().copy(circuitTire = c), id) }
             assertTrue("$id $t", t[0] < t[1] && t[1] < t[2] && t[2] < t[3])
         }
         // Grip is worth most where there are the most corners at the limit.
-        val gain = { id: String -> 1 - lapAt(state(tire = "slick"), id) / lapAt(state(tire = "radial"), id) }
+        val gain = { id: String -> 1 - lapAt(state().copy(circuitTire = "racing"), id) / lapAt(state().copy(circuitTire = "street"), id) }
         assertTrue(gain("suzuka") > gain("monza"))
     }
 

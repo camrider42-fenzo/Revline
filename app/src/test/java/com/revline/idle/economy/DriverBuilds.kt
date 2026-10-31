@@ -22,7 +22,18 @@ object DriverBuilds {
         return all.take(count).associate { it.id to it.maxLevel } + extra
     }
 
-    fun make(p: Int, build: Racing.Build, tire: String, box: String, line: String, share: Double, rev: Boolean = false): GameState {
+    /** The circuit tire that matches a drag tire's tier: the same money spent, on the other kind of rubber. */
+    fun circuitTireOf(dragTire: String): String = when (dragTire) {
+        "race" -> "sport"
+        "slick" -> "racing"
+        else -> "street"
+    }
+
+    /** [tire] is the drag tire. [ctire] is the circuit tire, and follows the tier of [tire] unless given. */
+    fun make(
+        p: Int, build: Racing.Build, tire: String, box: String, line: String, share: Double, rev: Boolean = false,
+        ctire: String = circuitTireOf(tire), kit: Map<String, Int> = emptyMap(),
+    ): GameState {
         val body = Racing.groupChassis(p, build)
         return GameState(
             prestiges = p,
@@ -37,6 +48,8 @@ object DriverBuilds {
             transmission = box,
             driveline = line,
             tire = tire,
+            circuitTire = ctire,
+            kit = kit,
             raceStudies = studies,
         )
     }
