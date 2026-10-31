@@ -13,8 +13,8 @@ android {
         applicationId = "com.revline.idle"
         minSdk = 26
         targetSdk = 35
-        versionCode = 90
-        versionName = "1.75.1"
+        versionCode = 91
+        versionName = "1.75.2"
     }
 
     signingConfigs {

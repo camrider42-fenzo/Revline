@@ -34,21 +34,48 @@ class LongRaceTest {
         assertTrue(byLap.zipWithNext().all { (a, b) -> a.laps >= b.laps })
     }
 
-    @Test fun theWearOfAWholeRaceIsTheOldRacesWearSoTheTargetsHold() {
+    /** Reference car and hands: a street tire, steady pace, a driver of middling care, dry. */
+    private fun softLife(c: Circuits.Circuit, n: Int) = Tires.lapUse(c, S, 0.0, 1.0, 1.0) * n
+
+    @Test fun aSoftTireIsAtTheCliffWithinFiveToTenLapsOnEveryCircuit() {
+        val cliff = Circuits.all.associate { c ->
+            val lap = (1..60).first { Tires.condition(softLife(c, it)) <= 0.60 }
+            assertEquals(c.id, lap, Tires.softCliffLap(c))
+            c.id to lap
+        }
+        for ((id, lap) in cliff) assertTrue("$id soft cliff lap $lap", lap in 5..10)
+        // The kindest circuit is about ten laps and the roughest about five, in order of corners and heat.
+        assertEquals(10, cliff.getValue("monza"))
+        assertTrue(cliff.getValue("singapore") <= 5 && cliff.getValue("monaco") <= 6)
+        for (a in Circuits.all) for (b in Circuits.all) if (Tires.severity(b) > Tires.severity(a) + 0.01) assertTrue("${a.id} ${b.id}", cliff.getValue(b.id) <= cliff.getValue(a.id))
+        println("soft cliff laps: " + cliff)
+    }
+
+    @Test fun aSoftTireIsWellDegradedAfterTenLapsAndAtTheFloorOverTheRace() {
         for (c in Circuits.all) {
-            val oldLaps = c.baseLaps
-            for (comp in listOf(S, M, H)) {
-                val perLap = Tires.lapUse(c, comp, 0.0, 1.0, 1.0)
-                val old = perLap * c.stretch
-                assertEquals("${c.id} $comp", oldLaps * old, c.laps * perLap, 1e-9)
+            assertTrue("${c.id} grip after 10 laps ${Tires.condition(softLife(c, 10))}", Tires.condition(softLife(c, 10)) <= 0.61)
+            // On an average-corner track (14 corners) it is well below 60%.
+            if (c.corners == 14) assertTrue("${c.id} ${Tires.condition(softLife(c, 10))}", Tires.condition(softLife(c, 10)) < 0.50)
+            // A soft run the whole race, on any owned tire at any pace, ends at the floor.
+            for (tire in listOf("street", "sport", "semi", "racing")) for (pace in listOf(Circuits.Pace.STEADY, Circuits.Pace.PUSH)) {
+                val end = Circuits.noStopGrip(car(tire), c, d, pace).getValue(S)
+                assertTrue("$tire ${c.id} $pace soft ${end}", end <= Tires.FLOOR + 0.01)
             }
         }
-        // No-stop softs are badly worn on the corner-heavy tracks and the compounds stay in order everywhere.
-        for (tire in listOf("street", "sport", "semi", "racing")) for (c in Circuits.all) {
-            val g = Circuits.noStopGrip(car(tire), c, d, Circuits.Pace.STEADY)
-            assertTrue("$tire ${c.id} $g", g.getValue(S) <= g.getValue(M) && g.getValue(M) <= g.getValue(H) && g.getValue(S) < g.getValue(H))
-            assertTrue("$tire ${c.id} soft ${g.getValue(S)}", g.getValue(S) < 0.85)
-            if (c.corners >= 18) assertTrue("$tire ${c.id} soft ${g.getValue(S)}", g.getValue(S) < 0.7)
+    }
+
+    @Test fun mediumsLastOneAndAHalfToTwiceSoftsAndHardsTwoAndAHalfToThree() {
+        for (c in Circuits.all) {
+            val s = Tires.lapUse(c, S, 0.0, 1.0, 1.0)
+            val m = s / Tires.lapUse(c, M, 0.0, 1.0, 1.0)
+            val h = s / Tires.lapUse(c, H, 0.0, 1.0, 1.0)
+            assertTrue("${c.id} medium ${m}x", m in 1.5..2.0)
+            assertTrue("${c.id} hard ${h}x", h in 2.5 - 1e-9..3.0)
+        }
+        // A full race is more than a soft's life and a hard's life is a long stint, not the race, on the rough circuits.
+        for (id in listOf("monaco", "singapore", "hungaroring")) {
+            val c = circuit(id)
+            assertTrue(id, Tires.condition(Tires.lapUse(c, H, 0.0, 1.0, 1.0) * c.laps) <= 0.40)
         }
     }
 
@@ -64,18 +91,13 @@ class LongRaceTest {
         }
     }
 
-    @Test fun twoStopsBeatOneOnTheTyreEatersAndLoseToOneOnTheKindTracks() {
+    @Test fun twoStopsBeatOneOnTheTyreEatersAndTheEdgeShrinksOnTheKindTracks() {
         fun best(c: Circuits.Circuit, stops: Int) = Circuits.advise(car("street"), c, d).first { it.orders.pace == Circuits.Pace.STEADY && it.orders.stopCount == stops }
-        for (id in listOf("monaco", "hungaroring")) {
-            val c = circuit(id)
-            assertTrue("$id two ${best(c, 2).raceTime} one ${best(c, 1).raceTime}", best(c, 2).raceTime < best(c, 1).raceTime)
-        }
-        for (id in listOf("monza", "spa")) {
-            val c = circuit(id)
-            assertTrue("$id two ${best(c, 2).raceTime} one ${best(c, 1).raceTime}", best(c, 1).raceTime < best(c, 2).raceTime)
-        }
-        // Either way the choice is worth a fraction of a percent, not a different race.
-        for (c in Circuits.all) assertTrue(c.id, abs(best(c, 1).raceTime / best(c, 2).raceTime - 1.0) < 0.01)
+        fun edge(c: Circuits.Circuit) = best(c, 1).raceTime / best(c, 2).raceTime - 1.0
+        for (id in listOf("monaco", "hungaroring", "singapore")) assertTrue("$id edge ${edge(circuit(id))}", edge(circuit(id)) > 0.0)
+        // The rougher the circuit on rubber, the more two stops are worth; and either way it is a few percent at most.
+        assertTrue(edge(circuit("monaco")) > edge(circuit("monza")))
+        for (c in Circuits.all) assertTrue("${c.id} ${edge(c)}", abs(edge(c)) < 0.06)
     }
 
     @Test fun theAdvisorFindsTheBestOneStopTheExhaustiveSearchFinds() {

@@ -94,6 +94,22 @@ class LongRaceProbe {
             val t2 = System.nanoTime(); val adv = Circuits.advise(car, c, d); val ad = (System.nanoTime() - t2) / 1e6
             sb.append("%-12s laps %2d plan %.2f race %.3f advise %.0f (%d plans)\n".format(c.id, c.laps, pl, rr, ad, adv.size))
         }
+        sb.append("\n== wear: soft cliff lap per circuit, then grip (condition, steady) at lap 10 and at the flag per compound, no stop\n")
+        for (c in Circuits.all) {
+            val line = StringBuilder("%-12s laps %2d softLaps %.2f cliffLap %2d".format(c.id, c.laps, Tires.softLaps(c), Tires.softCliffLap(c)))
+            val g = Circuits.noStopGrip(car("street"), c, d, Circuits.Pace.STEADY)
+            for (cp in Tires.dry) {
+                val use = Tires.lapUse(c, cp, 0.0, 1.0, 1.0)
+                val at10 = Tires.condition(use * 10)
+                line.append("  %s cliff %4.1f laps  g10 %.3f  end %.3f".format(cp.letter, Tires.CLIFF_LIFE / use, at10, g.getValue(cp)))
+            }
+            sb.append(line).append('\n')
+        }
+        sb.append("\n== pre-race plan: best steady plan per circuit (street tire): stops, grip at stops and flag\n")
+        for (c in Circuits.all) for (n in 1..2) {
+            val a = Circuits.advise(car("street"), c, d).first { it.orders.pace == Circuits.Pace.STEADY && it.orders.stopCount == n }
+            sb.append("%-12s %d-stop %s  grip at stop %s  at flag %.3f  race %.1f\n".format(c.id, n, a.orders, a.gripAtStop, a.gripAtFlag, a.raceTime))
+        }
         File("build").mkdirs()
         File("build/longrace-probe.txt").writeText(sb.toString())
     }

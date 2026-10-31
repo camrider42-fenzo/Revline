@@ -773,7 +773,8 @@ object Circuits {
             Rivals.Style.SURVIVOR -> all.filter { it.start == Tires.Compound.HARD && it.finish == Tires.Compound.MEDIUM && it.stops.size == 1 }
             else -> all
         }
-        val pool = if (par.weather == Weather.WET || liked.isEmpty()) all else liked
+        // In the wet every rival is on wets, and stops (wet to wet) only if the tires are done.
+        val pool = if (par.weather == Weather.WET) all.filter { it.start == Tires.Compound.WET && it.finish == Tires.Compound.WET } else if (liked.isEmpty()) all else liked
         val sev = par.weather.severity
         val skill = 0.5 + 0.4 * style.wet
         val table = Stints(

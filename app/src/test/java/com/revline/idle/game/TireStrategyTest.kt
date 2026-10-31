@@ -21,10 +21,10 @@ class TireStrategyTest {
         assertEquals(setOf(8), a.pits)
         assertEquals(setOf(15), b.pits)
         // With wear the grip comes back after the stop.
-        val worn = Circuits.plan(car("racing"), c, d, Circuits.Orders(Compound.SOFT, 12, Compound.MEDIUM))
-        assertTrue(worn.grip[12] > worn.grip[11])
+        val worn = Circuits.plan(car("street"), circuit("monza"), d, Circuits.Orders(Compound.SOFT, 6, Compound.MEDIUM))
+        assertTrue(worn.grip[6] > worn.grip[5])
         assertEquals(1.0 - 0.0, Tires.condition(0.0), 1e-12)
-        assertTrue(worn.grip.take(12).zipWithNext().all { (x, y) -> y < x } && worn.grip.drop(12).zipWithNext().all { (x, y) -> y < x })
+        assertTrue(worn.grip.take(6).zipWithNext().all { (x, y) -> y < x } && worn.grip.drop(6).zipWithNext().all { (x, y) -> y < x })
     }
 
     @Test fun aStopCostsOneLossOfALap() {
@@ -39,8 +39,8 @@ class TireStrategyTest {
     }
 
     @Test fun pushingBuysLapTimeAndPaysInTiresEngineAndMistakes() {
-        val c = circuit("singapore"); val k = car("semi")
-        val o = { pace: Circuits.Pace -> Circuits.Orders(Compound.MEDIUM, 2, Compound.HARD, pace) }
+        val c = circuit("monza"); val k = car("semi")
+        val o = { pace: Circuits.Pace -> Circuits.Orders(Compound.MEDIUM, 10, Compound.HARD, pace) }
         val steady = Circuits.plan(k, c, d, o(Circuits.Pace.STEADY)); val push = Circuits.plan(k, c, d, o(Circuits.Pace.PUSH)); val save = Circuits.plan(k, c, d, o(Circuits.Pace.SAVE))
         assertTrue(push.laps[0].time < steady.laps[0].time && steady.laps[0].time < save.laps[0].time)
         assertTrue(push.gripAtFlag < steady.gripAtFlag && steady.gripAtFlag < save.gripAtFlag)
@@ -60,8 +60,8 @@ class TireStrategyTest {
     }
 
     @Test fun aCarefulDriverIsKinderToTheTiresAndPushesBetter() {
-        val c = circuit("hungaroring"); val k = car("semi")
-        val o = Circuits.Orders(Compound.SOFT, 2, Compound.MEDIUM)
+        val c = circuit("monza"); val k = car("street")
+        val o = Circuits.Orders(Compound.MEDIUM, 10, Compound.HARD)
         val careful = Circuits.plan(k, c, Drivers.you.copy(care = 95, cornering = 80), o)
         val rough = Circuits.plan(k, c, Drivers.you.copy(care = 10, cornering = 30), o)
         assertTrue(careful.gripAtStop!! > rough.gripAtStop!! && careful.gripAtFlag > rough.gripAtFlag)

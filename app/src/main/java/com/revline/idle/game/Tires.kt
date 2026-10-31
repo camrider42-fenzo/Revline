@@ -11,8 +11,8 @@ import kotlin.math.pow
  * grip and the tire's life, and the wet is the rain tire. Every compound is free on every tier, so there is nothing more to buy.
  *
  * Wear is measured in life: 1.0 is a tire at the end of its design life, however many laps that is. Each lap uses up
- * [lapUse] of it, which scales with the circuit's corner count, so a track of nineteen corners is hard on rubber and one of
- * eleven is kind. The grip left is [condition] of the life used, with a wear that quickens and then falls off a cliff.
+ * [lapUse] of it. A soft tire on a reference car reaches the cliff in 5 to 10 laps, whatever the race length: about 10 on
+ * the kindest circuit and about 5 on the roughest ([softLaps], by corner count and heat). Mediums last 1.67 times as long and hards 2.5. The grip left is [condition] of the life used, with a wear that quickens and then falls off a cliff.
  */
 object Tires {
     enum class Compound(val title: String, val letter: String, val dry: Boolean, val grip: Double, val wear: Double, val blurb: String) {
@@ -24,15 +24,22 @@ object Tires {
 
     val dry: List<Compound> = Compound.entries.filter { it.dry }
 
-    /** Corner count that wears a tire at the base rate. */
-    const val REF_CORNERS = 14.0
+    /** Life at which a tire is at the cliff: [condition] is 60% there, 40% of its grip gone. */
+    const val CLIFF_LIFE = 0.759
 
     /**
-     * Life a soft tire uses up on a lap of [REF_CORNERS] corners, in hands of middling care, on a street-tire car, on a race
-     * of the 1.74.0 length ([Circuits.Circuit.baseLaps] laps). A race is longer than that now, so [lapUse] divides by the
-     * circuit's [Circuits.Circuit.stretch]: a tire still uses the same share of its life over a whole race.
+     * Laps a soft tire lasts to the cliff on a circuit, for the reference car and hands: a street tire, a steady pace and a
+     * driver of middling care in the dry. It runs from about 10 laps on a kind lap (Monza, 11 corners) to about 5 on the
+     * most abrasive (Singapore and Monaco, 19 corners and hot), in a straight line over [severity]. A lap's wear does not
+     * depend on how long the race is: a race of 20 laps is two or three soft tires long, and of 30 laps, five or six.
      */
-    const val BASE_USE = 0.19
+    fun softLaps(circuit: Circuits.Circuit): Double = (9.7 - 0.5 * (severity(circuit) - 10.67)).coerceIn(4.5, 10.0)
+
+    /** The circuit's share of the wear: its corner count, a touch more on a hot one. */
+    fun severity(circuit: Circuits.Circuit): Double = circuit.corners * (0.85 + 0.15 * circuit.heat)
+
+    /** The lap on which a soft tire is at the cliff on this circuit, for the reference car and hands (a whole lap, rounded up). */
+    fun softCliffLap(circuit: Circuits.Circuit): Int = kotlin.math.ceil(softLaps(circuit) - 1e-9).toInt()
 
     /** Wear grip floor: a destroyed tire still holds the road, barely. */
     const val FLOOR = 0.35
@@ -53,15 +60,12 @@ object Tires {
     fun wearIn(c: Compound, sev: Double): Double =
         if (c == Compound.WET) c.wear * (1.0 + 4.5 * (1.0 - sev)) else c.wear * (1.0 - 0.3 * sev)
 
-    /** The circuit's share of the base: wear grows with its corner count, a touch more on a hot one. */
-    fun cornerFactor(circuit: Circuits.Circuit): Double = circuit.corners / REF_CORNERS * (0.85 + 0.15 * circuit.heat)
-
     /**
      * Life one lap uses. [carWear] is the owned tire's own wear against the street tire, times the parts that save it
      * ([Circuits.Car.wear], 0 for a car whose tires never wear). [driver] is the push, the care and the hands.
      */
     fun lapUse(circuit: Circuits.Circuit, c: Compound, sev: Double, carWear: Double, driver: Double): Double =
-        BASE_USE * cornerFactor(circuit) * wearIn(c, sev) * carWear * driver / circuit.stretch
+        CLIFF_LIFE / softLaps(circuit) * wearIn(c, sev) * carWear * driver
 
     /** The owned tire's wear against the street tire: its [Racing.Tire.wear] taken to the power 0.3, so a racing slick is about 1.5 times as hard on itself, not four. */
     fun tierWear(tireWear: Double): Double = (tireWear / 0.004).pow(0.3)
@@ -172,7 +176,11 @@ object Tires {
             if (a == b) continue
             for (stop in lo..hi) out.add(Fit(a, stop, b))
         }
-        if (weather == Circuits.Weather.WET) for (a in pool) out.add(Fit(a, 0, a))
+        if (weather == Circuits.Weather.WET) {
+            for (a in pool) out.add(Fit(a, 0, a))
+            // Wets wear out over a long race, and in the wet a stop need not change compound (the change is waived).
+            for (stop in lo..hi) out.add(Fit(Compound.WET, stop, Compound.WET))
+        }
         else if (laps >= 3 * MIN_STINT) {
             for (a in pool) for (m in pool) for (b in pool) {
                 if (a == m && m == b) continue

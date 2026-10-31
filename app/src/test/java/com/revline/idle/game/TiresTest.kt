@@ -39,13 +39,13 @@ class TiresTest {
     @Test fun aNoStopOnSoftsIsBadlyWornEverywhereAndNeverNearNinetyPercent() {
         for (t in listOf("street", "sport", "semi", "racing")) for (c in Circuits.all) {
             val g = Circuits.noStopGrip(car(t), c, d, Circuits.Pace.STEADY)
-            assertTrue("$t ${c.id} softs ${g[S]}", g[S]!! < 0.85)
-            assertTrue("$t ${c.id} softs < mediums < hards: $g", g[S]!! <= g[M]!! && g[M]!! <= g[H]!! && g[S]!! < g[H]!! - 0.05)
+            // A soft run the whole race is at the floor, on every tire and every circuit.
+            assertTrue("$t ${c.id} softs ${g[S]}", g[S]!! <= Tires.FLOOR + 0.01)
+            assertTrue("$t ${c.id} softs <= mediums <= hards: $g", g[S]!! <= g[M]!! && g[M]!! <= g[H]!!)
         }
-        // On a street tire the hard circuits cook a soft to a rag, and even a hard is well down.
+        // On a street tire a soft is done on every circuit, and even a hard is well down.
         val street = car("street")
-        val bad = Circuits.all.count { Circuits.noStopGrip(street, it, d, Circuits.Pace.STEADY)[S]!! < 0.60 }
-        assertTrue("circuits where a soft no-stop is under 60%: $bad", bad >= 5)
+        assertTrue(Circuits.all.all { Circuits.noStopGrip(street, it, d, Circuits.Pace.STEADY)[S]!! < 0.40 })
         assertTrue(Circuits.all.all { Circuits.noStopGrip(street, it, d, Circuits.Pace.STEADY)[H]!! < 0.95 })
     }
 
@@ -66,14 +66,14 @@ class TiresTest {
         // Each circuit ranks by its corners against any circuit with four more or less.
         for (a in Circuits.all) for (b in Circuits.all) if (b.corners >= a.corners + 4) assertTrue("${a.id} ${b.id}", use(a) < use(b))
         // And in the race: more corners, less grip at the flag, per lap (the laps differ, so per-lap use is the fair measure).
-        assertTrue(Tires.cornerFactor(monaco) > 1.5 * Tires.cornerFactor(monza) * 0.9)
-        // A lap of a 19-corner circuit uses about 1.7x the life of a lap of an 11-corner one on the same tire.
-        val ratio = Tires.cornerFactor(monaco) / Tires.cornerFactor(monza)
-        assertTrue("ratio $ratio", ratio in 1.5..2.0)
+        // A lap of a 19-corner hot circuit wears a soft about twice as fast as a lap of an 11-corner one.
+        val ratio = Tires.softLaps(monza) / Tires.softLaps(singapore)
+        assertTrue("ratio $ratio", ratio in 1.8..2.2)
+        assertTrue(Tires.severity(monaco) > 1.5 * Tires.severity(monza) * 0.9)
     }
 
     @Test fun theCompoundTheDriverThePaceAndTheSkyAllChangeTheWear() {
-        val k = car("semi"); val c = circuit("suzuka")
+        val k = car("street"); val c = circuit("monza")
         fun end(comp: Compound, pace: Circuits.Pace = Circuits.Pace.STEADY, drv: Drivers.Driver = d, w: Circuits.Weather = Circuits.Weather.DRY) =
             Circuits.noStopGrip(k, c, drv, pace, w)[comp]!!
         assertTrue(end(S) < end(M) && end(M) < end(H))
@@ -86,8 +86,8 @@ class TiresTest {
     }
 
     @Test fun anOwnedTireTierIsHarderOnItselfTheHigherItGoes() {
-        val c = circuit("silverstone")
-        val ends = listOf("street", "sport", "semi", "racing").map { Circuits.noStopGrip(car(it), c, d, Circuits.Pace.STEADY)[M]!! }
+        val c = circuit("monza")
+        val ends = listOf("street", "sport", "semi", "racing").map { Circuits.noStopGrip(car(it), c, d, Circuits.Pace.STEADY)[H]!! }
         assertTrue("$ends", ends.zipWithNext().all { (a, b) -> b <= a } && ends.first() > ends.last())
         val wear = listOf("street", "sport", "semi", "racing").map { car(it).wear }
         assertTrue(wear.zipWithNext().all { (a, b) -> b > a })
@@ -305,12 +305,14 @@ class TiresTest {
         }
     }
 
-    @Test fun inTheWetEveryRivalIsOnWetsAndNeedNotStop() {
+    @Test fun inTheWetEveryRivalIsOnWetsAndStopsOnlyForNewWets() {
         val wet = Circuits.Weather.WET
         for (c in Circuits.all) {
             val par = Circuits.parPlan(P, c, wet)
             val r = Circuits.race(Circuits.plan(car("street"), c, d, Circuits.Orders(W, 0, W), wet), d, par, 4L)
-            assertTrue(r.log.events.filter { it.text.contains(" pits: ") }.joinToString { it.text }, r.log.events.none { it.text.contains(" pits: ") })
+            // Every rival is on wets, and a stop, if he makes one, is for new wets.
+            val pits = r.log.events.filter { it.text.contains(" pits: ") }
+            assertTrue(pits.joinToString { it.text }, pits.all { it.text.endsWith("Wet to Wet.") })
             assertEquals(W, r.orders.start)
             assertEquals(0, r.orders.stop)
         }

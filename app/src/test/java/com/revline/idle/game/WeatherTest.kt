@@ -73,8 +73,8 @@ class WeatherTest {
     }
 
     @Test fun theWetCoolsSlicksAndACookedWetIsWorn() {
-        val c = circuit("hungaroring"); val d = Drivers.byId("colette")!!
-        val k = car("racing")
+        val c = circuit("monza"); val d = Drivers.byId("colette")!!
+        val k = car("street")
         for (cp in Tires.dry) assertTrue(Tires.wearIn(cp, 1.0) < Tires.wearIn(cp, 0.0))
         assertTrue(Tires.wearIn(Tires.Compound.WET, 0.0) > 2.0 * Tires.wearIn(Tires.Compound.WET, 1.0))
         // The same rubber used all race ends less worn in the rain than in the dry; a wet tire in the dry is cooked.

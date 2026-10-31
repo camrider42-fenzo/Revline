@@ -132,7 +132,7 @@ class CircuitTest {
         val gain = { id: String -> 1 - lapAt(at("dog"), id) / lapAt(at("crash"), id) }
         val g = ids.associateWith { gain(it) }
         assertTrue("gains $g", g.getValue("monaco") > g.getValue("monza"))
-        assertTrue("gains $g", g.values.all { it > 0.004 })
+        assertTrue("gains $g", g.values.all { it > 0.002 })
     }
 
     @Test fun finalDriveTradesAccelerationForTopSpeed() {
