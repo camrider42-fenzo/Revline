@@ -56,7 +56,7 @@ fun RaceScreen(
     onStake: () -> Unit,
     onHire: (String) -> Unit = {},
     onPick: (String) -> Unit = {},
-    onCircuit: (String, String) -> Unit = { _, _ -> },
+    onCircuit: (String, String, Circuits.Orders) -> Unit = { _, _, _ -> },
 ) {
     val state = ui.game
     val car = Racing.car(state)
@@ -539,7 +539,7 @@ private fun aspectLabel(a: Circuits.Aspect) = when (a) {
 }
 
 @Composable
-private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String) -> Unit) {
+private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String, Circuits.Orders) -> Unit) {
     val state = ui.game
     var circuitId by rememberSaveable { mutableStateOf(Circuits.all.first().id) }
     val circuit = Circuits.all.firstOrNull { it.id == circuitId } ?: Circuits.all.first()
@@ -628,12 +628,32 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 2.dp),
     )
+    var strategy by rememberSaveable { mutableStateOf(Circuits.Strategy.STAY_OUT) }
+    var pace by rememberSaveable { mutableStateOf(Circuits.Pace.STEADY) }
+    Text("PIT WALL", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+    ChipRow(Circuits.Strategy.entries.map { it.name to it.title.uppercase(Locale.US) }, strategy.name) { strategy = Circuits.Strategy.valueOf(it) }
+    Text(strategy.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    ChipRow(Circuits.Pace.entries.map { it.name to it.title.uppercase(Locale.US) }, pace.name) { pace = Circuits.Pace.valueOf(it) }
+    Text(pace.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    val advice by produceState<List<Circuits.Advice>?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.circuitTire, state.kit) {
+        value = withContext(Dispatchers.Default) { Circuits.advise(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you) }
+    }
+    advice?.let { list ->
+        val best = list.first()
+        val mine = list.first { it.strategy == strategy && it.pace == pace }
+        Text(
+            "Planned race ${Circuits.clock(mine.raceTime)}, tires at ${(mine.gripAtFlag * 100).toInt()}% grip at the flag. Best plan on paper: ${best.strategy.title}, ${best.pace.title}, ${Circuits.clock(best.raceTime)}.",
+            color = Cyan,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+        )
+    }
     Text("THE FIELD", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
     Rivals.all.forEach { r ->
         Text("${r.name}, ${r.team}: ${r.style.title}, aggression ${(r.style.aggression * 100).toInt()}. ${r.style.blurb}", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
     }
     val can = picked != null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
-    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "") }, Modifier.padding(top = 6.dp))
+    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "", Circuits.Orders(strategy, pace)) }, Modifier.padding(top = 6.dp))
     ui.circuitOutcome?.let { o ->
         val r = o.result
         Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, if (r.retired != null) Red else Lime).padding(8.dp)) {
@@ -643,7 +663,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
             )
-            Text("Driver ${r.driver}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Text("Driver ${r.driver}  ${r.orders.strategy.title}, ${r.orders.pace.title.lowercase(Locale.US)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             if (r.retired != null) Text(r.retired, color = Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             else Text("Total ${Circuits.clock(r.totalTime)}  best lap ${Circuits.clock(r.bestLap)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             Text(

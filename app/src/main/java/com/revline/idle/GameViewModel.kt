@@ -300,7 +300,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Pays the entry and the driver, simulates the race off the main thread, then pays the prize and any engine rebuild. */
-    fun runCircuit(id: String, driverId: String) {
+    fun runCircuit(id: String, driverId: String, orders: Circuits.Orders = Circuits.Orders()) {
         if (ui.circuitBusy || ui.strip != null) return
         val circuit = Circuits.all.firstOrNull { it.id == id } ?: return
         when (val entry = Circuits.open(ui.game, driverId)) {
@@ -312,7 +312,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 val seed = System.nanoTime()
                 viewModelScope.launch {
                     val outcome = withContext(Dispatchers.Default) {
-                        Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed)
+                        Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed, orders)
                     }
                     // The till has moved on since the lights went green: pay onto what is there now.
                     val game = ui.game.let { it.copy(money = (it.money + outcome.prize - outcome.repair).coerceAtLeast(0.0)) }
