@@ -247,12 +247,17 @@ class CircuitTest {
         val stake = Racing.stakeCost(3)
         assertEquals(0.5 * stake, Circuits.entry(s), 1e-6)
         assertEquals(Circuits.FEE_SHARE * Drivers.byId("ace")!!.rate * 3.2 * 0.5 * stake, Circuits.fee(s, Drivers.byId("ace")!!), 1e-6)
-        assertEquals(3.2 * 0.5 * stake, Circuits.prize(s, 1, false), 1e-6)
-        assertEquals(0.0, Circuits.prize(s, 1, true), 0.0)
-        assertEquals(0.0, Circuits.prize(s, Circuits.FIELD, false), 0.0)
-        assertTrue(Circuits.prize(s, 4, false) > Circuits.entry(s))
-        assertTrue(Circuits.prize(s, 5, false) < Circuits.entry(s))
+        // Only the podium is paid, winner most, and a retirement pays nothing wherever he was running.
+        assertEquals(4.0 * 0.5 * stake, Circuits.prize(s, 1, false), 1e-6)
+        assertEquals(2.8 * 0.5 * stake, Circuits.prize(s, 2, false), 1e-6)
+        assertEquals(2.2 * 0.5 * stake, Circuits.prize(s, 3, false), 1e-6)
+        for (pos in 1..3) assertEquals(0.0, Circuits.prize(s, pos, true), 0.0)
+        for (pos in 4..Circuits.FIELD) assertEquals("position $pos", 0.0, Circuits.prize(s, pos, false), 0.0)
+        assertEquals(listOf(Circuits.prize(s, 1, false), Circuits.prize(s, 2, false), Circuits.prize(s, 3, false)), Circuits.podium(s))
+        // Third still beats the entry, so a podium is always a profit before the driver's fee.
+        assertTrue(Circuits.prize(s, 3, false) > Circuits.entry(s))
         assertEquals(0.25 * Circuits.entry(s), Circuits.repair(s), 1e-9)
+        assertEquals(3, Circuits.prizes.size)
         assertTrue(Circuits.prizes.zipWithNext().all { (a, b) -> a > b })
     }
 

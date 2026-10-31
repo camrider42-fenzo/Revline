@@ -560,22 +560,34 @@ object Circuits {
 
     // ---- Money ---------------------------------------------------------------------------------------------------
 
-    /** Prize for each finishing place, as a multiple of the entry fee. Fourth just beats the entry, eighth and a retirement pay nothing. */
-    val prizes = listOf(3.2, 2.2, 1.6, 1.2, 0.8, 0.45, 0.2, 0.0)
+    /**
+     * Prize for each of the top three, as a multiple of the entry fee. Only the podium pays: fourth place and below,
+     * and a retirement, get nothing. Set so a field of builds from a par street car to a full kit takes home about what the
+     * old seven-place table (3.2, 2.2, 1.6, 1.2, 0.8, 0.45, 0.2) paid, with the money moved to the podium.
+     */
+    val prizes = listOf(4.0, 2.8, 2.2)
+
+    /** The pool the driver's fee is taken from, in entries. Kept at the old winner's multiple so fees did not move. */
+    private const val FEE_PURSE = 3.2
 
     fun entry(state: GameState): Double = if (state.devMode) 0.0 else 0.5 * Racing.stakeCost(state.prestiges)
 
+    /** What first place pays. */
     fun winnerPurse(state: GameState): Double = prizes[0] * 0.5 * Racing.stakeCost(state.prestiges)
 
+    /** What [position] (1-based) pays. Only the top three are paid. */
     fun prize(state: GameState, position: Int, retired: Boolean): Double =
         if (state.devMode || retired) 0.0 else 0.5 * Racing.stakeCost(state.prestiges) * prizes.getOrElse(position - 1) { 0.0 }
+
+    /** The three payouts, first to third, in dollars. */
+    fun podium(state: GameState): List<Double> = (1..prizes.size).map { prize(state, it, false) }
 
     /** A circuit seat costs less than a strip seat: the driver takes this share of his usual rate. */
     const val FEE_SHARE = 0.7
 
-    /** A driver is paid a share of the winner's purse, whatever he finishes. */
+    /** A driver is paid a share of the fee purse, whatever he finishes. */
     fun fee(state: GameState, driver: Drivers.Driver): Double =
-        if (state.devMode) 0.0 else FEE_SHARE * driver.rate * winnerPurse(state)
+        if (state.devMode) 0.0 else FEE_SHARE * driver.rate * FEE_PURSE * 0.5 * Racing.stakeCost(state.prestiges)
 
     /** The bill when the engine lets go: the rebuild, a quarter of the entry. */
     fun repair(state: GameState): Double = 0.25 * entry(state)

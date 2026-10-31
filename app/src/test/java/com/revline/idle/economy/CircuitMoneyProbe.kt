@@ -26,7 +26,7 @@ class CircuitMoneyProbe {
             out.appendLine("p=$p scale=${f(scale)} income/s lo=${f(inc[0])} mid=${f(inc[1])} hi=${f(inc[2])}")
             out.appendLine("  drag: stake=${f(stake)} winpays=${f(stake * 2)} club=${f(inc[1] * 50)} national=${f(inc[1] * 160)} intl=${f(inc[1] * 520)}")
             val entry = Circuits.entry(s)
-            out.appendLine("  circuit: entry=${f(entry)} winner=${f(Circuits.winnerPurse(s))} p4=${f(Circuits.prize(s, 4, false))} p8=${f(Circuits.prize(s, 8, false))} repair=${f(Circuits.repair(s))}")
+            out.appendLine("  circuit: entry=${f(entry)} winner=${f(Circuits.winnerPurse(s))} podium=${Circuits.podium(s).joinToString("/") { f(it) }} p4=${f(Circuits.prize(s, 4, false))} repair=${f(Circuits.repair(s))}")
             out.appendLine("  fee: " + Drivers.roster.joinToString(" ") { "${it.id}=${f(Circuits.fee(s, it))}" })
             out.appendLine("  entry/income-sec: lo=${f(entry / inc[0])} mid=${f(entry / inc[1])} hi=${f(entry / inc[2])}")
             out.appendLine("  circuit tires: " + Racing.circuitTires.joinToString(" ") { "${it.id}=${f(it.price * scale * Racing.CIRCUIT_PRICE_FACTOR)}" })

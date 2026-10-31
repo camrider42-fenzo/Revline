@@ -201,8 +201,8 @@ class PartsTest {
         assertEquals(out.total.problems.toString(), 0L, out.total.bad)
         assertTrue(out.total.net.isFinite())
         // Money: a middling build does not get rich on the entry, and a strong one is not ruined.
-        assertTrue("street t0 ${out.byBuild.getValue("street t0").netMean()}", out.byBuild.getValue("street t0").netMean() in -0.6..0.2)
-        assertTrue("balanced t3 ${out.byBuild.getValue("balanced t3").netMean()}", out.byBuild.getValue("balanced t3").netMean() in 0.0..2.5)
+        assertTrue("street t0 ${out.byBuild.getValue("street t0").netMean()}", out.byBuild.getValue("street t0").netMean() in -1.0..0.0)
+        assertTrue("balanced t3 ${out.byBuild.getValue("balanced t3").netMean()}", out.byBuild.getValue("balanced t3").netMean() in 0.0..3.5)
         assertTrue("street t3", out.byBuild.getValue("street t3").netMean() > out.byBuild.getValue("street t0").netMean())
         for ((k, t) in out.byBuild) assertTrue("$k dnf ${t.dnfRate()}", t.dnfRate() in 0.0..0.35)
     }

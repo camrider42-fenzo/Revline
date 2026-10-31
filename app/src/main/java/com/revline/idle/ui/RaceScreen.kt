@@ -612,11 +612,19 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
     val fee = if (picked == null) 0.0 else Circuits.fee(state, picked)
     Text(
         "Entry ${formatDollars(entry)}" + (if (fee > 0.0) "  driver ${formatDollars(fee)}" else "") +
-            "  winner's purse ${formatDollars(Circuits.winnerPurse(state))}  engine rebuild ${formatDollars(Circuits.repair(state))}",
+            "  engine rebuild ${formatDollars(Circuits.repair(state))}",
         color = Cyan,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 4.dp),
+    )
+    Text(
+        "Prizes  " + Circuits.podium(state).withIndex().joinToString("  ") { (i, d) -> "${i + 1}${listOf("st", "nd", "rd")[i]} ${formatDollars(d)}" } +
+            ". Fourth and below pay nothing.",
+        color = Cyan,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 2.dp),
     )
     val can = picked != null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
     LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "") }, Modifier.padding(top = 6.dp))
