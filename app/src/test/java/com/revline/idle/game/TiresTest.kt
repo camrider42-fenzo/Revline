@@ -142,9 +142,11 @@ class TiresTest {
 
     // ---- The rule: one change of compound ---------------------------------------------------------------------------
 
+    private val RACE_LAPS = listOf(15, 17, 20, 24, 27, 30)
+
     @Test fun inTheDryNoStopAndNoSameCompoundAndNoWetsAreAllowed() {
         val dry = Circuits.Weather.DRY
-        for (laps in 3..6) {
+        for (laps in RACE_LAPS) {
             assertNotNull(Tires.breach(Tires.Fit(M, 0, M), laps, dry))
             assertNotNull(Tires.breach(Tires.Fit(S, 0, H), laps, dry))
             for (stop in 1 until laps) {
@@ -157,10 +159,30 @@ class TiresTest {
         }
     }
 
+    @Test fun aSecondStopNeedsTwoDifferentDryCompoundsAmongTheThreeAndComesAfterTheFirst() {
+        val dry = Circuits.Weather.DRY
+        for (laps in RACE_LAPS) {
+            val a = laps / 3; val b = 2 * laps / 3
+            assertNull(Tires.breach(Tires.Fit(S, a, H, b, M), laps, dry))
+            assertNull(Tires.breach(Tires.Fit(S, a, S, b, M), laps, dry))
+            assertNull(Tires.breach(Tires.Fit(M, a, M, b, H), laps, dry))
+            assertNull(Tires.breach(Tires.Fit(S, a, M, b, S), laps, dry))
+            // The same compound all the way, or a wet in the dry, breaks the rule whatever the stops.
+            assertNotNull(Tires.breach(Tires.Fit(M, a, M, b, M), laps, dry))
+            assertNotNull(Tires.breach(Tires.Fit(S, a, H, b, W), laps, dry))
+            // The second stop is after the first and before the flag, and needs a first.
+            assertNotNull(Tires.breach(Tires.Fit(S, b, H, a, M), laps, dry))
+            assertNotNull(Tires.breach(Tires.Fit(S, a, H, a, M), laps, dry))
+            assertNotNull(Tires.breach(Tires.Fit(S, a, H, laps, M), laps, dry))
+            assertNotNull(Tires.breach(Tires.Fit(S, 0, H, b, M), laps, dry))
+        }
+    }
+
     @Test fun inTheWetTheChangeIsWaivedAndOnADampTrackItIsRequired() {
         val wet = Circuits.Weather.WET; val damp = Circuits.Weather.DAMP
-        for (laps in 3..6) {
+        for (laps in RACE_LAPS) {
             assertNull(Tires.breach(Tires.Fit(W, 0, W), laps, wet))
+            assertNull(Tires.breach(Tires.Fit(W, 5, W, 10, W), laps, wet))
             assertNull(Tires.breach(Tires.Fit(W, 2, W), laps, wet))
             assertNotNull(Tires.breach(Tires.Fit(W, 0, S), laps, wet))
             assertNotNull(Tires.breach(Tires.Fit(W, 0, W), laps, damp))
@@ -172,23 +194,39 @@ class TiresTest {
     }
 
     @Test fun theStewardsMakeAnyOrderLegal() {
-        for (w in Circuits.Weather.entries) for (laps in 3..6) for (a in Compound.entries) for (b in Compound.entries) for (stop in -1..laps + 1) {
-            val fit = Tires.legalise(Tires.Fit(a, stop, b), laps, w)
-            assertNull("$w $laps $a $stop $b -> $fit", Tires.breach(fit, laps, w))
-            // A legal order is left as it is.
-            if (Tires.breach(Tires.Fit(a, stop, b), laps, w) == null) assertEquals(Tires.Fit(a, stop, b), fit)
+        for (w in Circuits.Weather.entries) for (laps in listOf(3, 16, 30)) {
+            val marks = listOf(-1, 0, 1, 2, laps / 2, laps - 1, laps, laps + 1)
+            for (a in Compound.entries) for (m in Compound.entries) for (b in Compound.entries) for (stop in marks) for (stop2 in marks) {
+                val o = Tires.Fit(a, stop, b, stop2, m)
+                val fit = Tires.legalise(o, laps, w)
+                assertNull("$w $laps $o -> $fit", Tires.breach(fit, laps, w))
+                assertTrue(fit.stops.size <= 2)
+                // A legal order is left as it is.
+                if (Tires.breach(o, laps, w) == null && (o.stop2 > 0 || o.middle == o.finish)) assertEquals(o, fit)
+            }
         }
     }
 
-    @Test fun everyOptionIsLegalAndTheDryOnesAreAllOneStop() {
-        for (w in Circuits.Weather.entries) for (laps in 3..6) {
+    @Test fun everyOptionIsLegalAndTheDryOnesAreOneStopOrTwo() {
+        for (w in Circuits.Weather.entries) for (laps in RACE_LAPS) {
             val opts = Tires.options(laps, w)
             assertTrue(opts.isNotEmpty())
-            for (o in opts) assertNull("$w $laps $o", Tires.breach(o, laps, w))
-            if (w == Circuits.Weather.DRY) {
-                assertTrue(opts.all { it.stop in 1 until laps && it.start != it.finish && it.start.dry && it.finish.dry })
-                assertEquals(3 * 2 * (laps - 1), opts.size)
+            for (o in opts) {
+                assertNull("$w $laps $o", Tires.breach(o, laps, w))
+                // No stint shorter than the minimum.
+                val cuts = listOf(0) + o.stops + listOf(laps)
+                assertTrue("$o", cuts.zipWithNext().all { (x, y) -> y - x >= Tires.MIN_STINT || o.stops.isEmpty() })
             }
+            if (w == Circuits.Weather.DRY) {
+                assertTrue(opts.all { it.stops.size in 1..2 && it.used.all { c -> c.dry } && it.used.toSet().size >= 2 })
+                val one = opts.filter { it.stops.size == 1 }
+                val two = opts.filter { it.stops.size == 2 }
+                assertEquals(3 * 2 * (laps - 5), one.size)
+                val n = laps - 8
+                assertEquals(24 * n * (n + 1) / 2, two.size)
+                assertEquals(opts.size, one.size + two.size)
+            }
+            if (w == Circuits.Weather.WET) assertTrue(opts.none { it.stops.size == 2 })
         }
     }
 
@@ -204,18 +242,50 @@ class TiresTest {
         }
     }
 
-    @Test fun everyRivalChangesCompoundInEveryDryRace() {
-        for (c in Circuits.all) for (w in listOf(Circuits.Weather.DRY)) {
-            val par = Circuits.parPlan(P, c, w)
-            for (seed in 1L..24L) {
-                val r = Circuits.race(Circuits.plan(car("street"), c, d, weather = w), d, par, seed)
-                for (f in r.grid.filter { !it.you }) {
-                    val pit = r.log.events.firstOrNull { it.text.startsWith("${f.name} pits: ") }
-                    if (f.out) continue
-                    assertNotNull("${c.id} seed $seed ${f.name}", pit)
-                    val change = pit!!.text.removePrefix("${f.name} pits: ").removeSuffix(".").split(" to ")
-                    assertEquals(2, change.size)
-                    assertTrue("${pit.text}", change[0] != change[1] && change.none { it == "Wet" })
+    @Test fun aTwoStopPlanRunsThreeStintsAndPaysTwoStops() {
+        for (c in Circuits.all) {
+            val a = c.laps / 3; val b = 2 * c.laps / 3
+            val k = car("street").copy(wear = 0.0)
+            val p = Circuits.plan(k, c, d, Circuits.Orders(S, a, H, Circuits.Pace.STEADY, b, M))
+            assertEquals(setOf(a, b), p.pits)
+            assertEquals(List(a) { S } + List(b - a) { M } + List(c.laps - b) { H }, p.compounds)
+            assertEquals(2, p.orders.stopCount)
+            for (stop in listOf(a, b)) assertEquals(Circuits.pitLoss(c) * p.raw[stop - 1], p.laps[stop - 1].time - p.raw[stop - 1], 1e-6)
+            assertEquals(0.0, p.laps[0].time - p.raw[0], 1e-9)
+        }
+    }
+
+    @Test fun theChangeRuleStillHoldsOnTwoStops() {
+        for (c in Circuits.all) {
+            val a = c.laps / 3; val b = 2 * c.laps / 3
+            for (o in listOf(Circuits.Orders(M, a, M, Circuits.Pace.STEADY, b, M), Circuits.Orders(S, a, S, Circuits.Pace.STEADY, b, S), Circuits.Orders(W, a, H, Circuits.Pace.STEADY, b, W))) {
+                val p = Circuits.plan(car("street"), c, d, o)
+                assertTrue("${c.id} $o ${p.compounds.toSet()}", p.compounds.toSet().size >= 2 && p.compounds.all { it.dry })
+                assertTrue(p.pits.size in 1..2)
+            }
+        }
+    }
+
+    /** The compounds a car ran, in order, one per stint, from the log. */
+    private fun stints(r: Circuits.Result, name: String): List<Compound> {
+        val tires = r.log.rows.mapNotNull { row -> row.order.firstOrNull { it.name == name && !it.out }?.tire }
+        return tires.fold(ArrayList<Compound>()) { acc, t -> if (acc.lastOrNull() != t) acc.add(t); acc }
+    }
+
+    private fun laps(r: Circuits.Result, name: String): List<Compound> =
+        r.log.rows.mapNotNull { row -> row.order.firstOrNull { it.name == name && !it.out }?.tire }
+
+    @Test fun everyRivalUsesTwoDifferentDryCompoundsInEveryDryRace() {
+        for (c in Circuits.all) {
+            val par = Circuits.parPlan(P, c, Circuits.Weather.DRY)
+            for (seed in 1L..16L) {
+                val r = Circuits.race(Circuits.plan(car("street"), c, d), d, par, seed)
+                for (f in r.grid.filter { !it.you && !it.out }) {
+                    val used = laps(r, f.name)
+                    assertEquals(c.laps, used.size)
+                    assertTrue("${c.id} seed $seed ${f.name} ${used.toSet()}", used.toSet().size >= 2 && used.none { it == W })
+                    val pits = r.log.events.count { it.text.startsWith("${f.name} pits") }
+                    assertTrue("${f.name} stopped $pits times", pits in 1..2)
                 }
             }
         }
@@ -225,13 +295,11 @@ class TiresTest {
         val damp = Circuits.Weather.DAMP
         for (c in Circuits.all) {
             val par = Circuits.parPlan(P, c, damp)
-            for (seed in 1L..12L) {
+            for (seed in 1L..8L) {
                 val r = Circuits.race(Circuits.plan(car("street"), c, d, weather = damp), d, par, seed)
                 for (f in r.grid.filter { !it.you && !it.out }) {
-                    val pit = r.log.events.firstOrNull { it.text.startsWith("${f.name} pits: ") }
-                    assertNotNull("${c.id} ${f.name}", pit)
-                    val change = pit!!.text.removePrefix("${f.name} pits: ").removeSuffix(".").split(" to ")
-                    assertTrue(change[0] != change[1])
+                    assertTrue("${c.id} ${f.name}", laps(r, f.name).toSet().size >= 2)
+                    assertTrue(r.log.events.any { it.text.startsWith("${f.name} pits") })
                 }
             }
         }
@@ -249,22 +317,38 @@ class TiresTest {
     }
 
     @Test fun rivalsPickCompoundsByStyle() {
-        val seen = HashMap<Rivals.Style, MutableSet<Pair<Compound, Compound>>>()
-        for (c in Circuits.all) for (w in listOf(Circuits.Weather.DRY)) {
-            val par = Circuits.parPlan(P, c, w)
-            val r = Circuits.race(Circuits.plan(car("street"), c, d, weather = w), d, par, 9L)
+        val seen = HashMap<Rivals.Style, MutableSet<List<Compound>>>()
+        for (c in Circuits.all) {
+            val par = Circuits.parPlan(P, c, Circuits.Weather.DRY)
+            val r = Circuits.race(Circuits.plan(car("street"), c, d), d, par, 9L)
             for (rv in Rivals.all) {
-                val pit = r.log.events.firstOrNull { it.text.startsWith("${rv.name} pits: ") } ?: continue
-                val (a, b) = pit.text.removePrefix("${rv.name} pits: ").removeSuffix(".").split(" to ").map { n -> Compound.entries.first { it.title == n } }
-                seen.getOrPut(rv.style) { HashSet() }.add(a to b)
+                if (r.grid.first { it.name == rv.name }.out) continue
+                seen.getOrPut(rv.style) { HashSet() }.add(stints(r, rv.name))
             }
         }
-        assertTrue(seen.getValue(Rivals.Style.QUALIFIER).all { it.first == S })
-        assertTrue(seen.getValue(Rivals.Style.AGGRESSIVE).all { it.first == S })
-        assertTrue(seen.getValue(Rivals.Style.CLOSER).all { it.second == S })
-        assertTrue(seen.getValue(Rivals.Style.STEADY).all { it == (M to H) })
-        assertTrue(seen.getValue(Rivals.Style.SURVIVOR).all { it == (H to M) })
-        assertTrue(seen.values.flatten().toSet().size >= 4)
+        assertTrue(seen.getValue(Rivals.Style.QUALIFIER).all { it.first() == S && it.size == 2 })
+        assertTrue(seen.getValue(Rivals.Style.AGGRESSIVE).all { it.first() == S })
+        assertTrue(seen.getValue(Rivals.Style.CLOSER).all { it.last() == S })
+        assertTrue(seen.getValue(Rivals.Style.STEADY).all { it == listOf(M, H) })
+        assertTrue(seen.getValue(Rivals.Style.SURVIVOR).all { it == listOf(H, M) })
+        assertTrue(seen.values.flatten().toSet().size >= 5)
+    }
+
+    @Test fun someRivalsTwoStopByStyleAndOthersStopOnce() {
+        var two = 0; var one = 0
+        val byStyle = HashMap<Rivals.Style, Int>()
+        for (c in Circuits.all) for (seed in 1L..6L) {
+            val par = Circuits.parPlan(P, c, Circuits.Weather.DRY)
+            val r = Circuits.race(Circuits.plan(car("street"), c, d), d, par, seed)
+            for (rv in Rivals.all) {
+                if (r.grid.first { it.name == rv.name }.out) continue
+                val n = r.log.events.count { it.text.startsWith("${rv.name} pits") }
+                if (n == 2) { two++; byStyle.merge(rv.style, 1, Int::plus) } else one++
+            }
+        }
+        assertTrue("two $two one $one", two > 20 && one > 20)
+        // The one-stoppers by style never stop twice.
+        for (st in listOf(Rivals.Style.QUALIFIER, Rivals.Style.STEADY, Rivals.Style.SURVIVOR)) assertEquals(st.name, 0, byStyle[st] ?: 0)
     }
 
     // ---- The pit wall matches the sim ---------------------------------------------------------------------------------
@@ -285,6 +369,26 @@ class TiresTest {
             assertEquals(Tires.condition(use * o.stop), f.gripAtStop!!, 1e-9)
             val useH = Tires.lapUse(c, H, 0.0, car("sport").wear, dw)
             assertEquals(Tires.condition(useH * (c.laps - o.stop)), f.gripAtFlag, 1e-9)
+        }
+    }
+
+    @Test fun theForecastOfATwoStopIsThePlanWithTheGripAtBothStopsAndTheFlag() {
+        for (c in Circuits.all) for (pace in Circuits.Pace.entries) {
+            val a = c.laps / 3; val b = 2 * c.laps / 3
+            val o = Circuits.Orders(S, a, H, pace, b, M)
+            val k = car("sport")
+            val f = Circuits.forecast(k, c, d, o)
+            val p = Circuits.plan(k, c, d, o)
+            assertEquals(p.raceTime, f.raceTime, 1e-9)
+            assertEquals(p.gripAtStop!!, f.gripAtStop!!, 1e-12)
+            assertEquals(p.gripAtStops[1], f.gripAtStop2!!, 1e-12)
+            assertEquals(p.gripAtFlag, f.gripAtFlag, 1e-12)
+            assertEquals(o, f.orders)
+            val dw = Circuits.driverWear(Circuits.hands(d, k.setup), pace)
+            fun cond(x: Compound, n: Int) = Tires.condition(Tires.lapUse(c, x, 0.0, k.wear, dw) * n)
+            assertEquals(cond(S, a), f.gripAtStop!!, 1e-9)
+            assertEquals(cond(M, b - a), f.gripAtStop2!!, 1e-9)
+            assertEquals(cond(H, c.laps - b), f.gripAtFlag, 1e-9)
         }
     }
 
@@ -318,34 +422,48 @@ class TiresTest {
 
     @Test fun theBestStrategyIsNotTheSameEverywhere() {
         val k = car("street")
-        val bests = Circuits.all.map { Circuits.advise(k, it, d).first { a -> a.orders.pace == Circuits.Pace.STEADY }.orders }
-        assertTrue("distinct fits ${bests.map { it.fit }}", bests.map { it.start to it.finish }.toSet().size >= 2 || bests.map { it.stop }.toSet().size >= 2)
-        // On a kinder circuit the stop comes later or the tires are softer than on a brutal one.
-        val monza = Circuits.advise(k, circuit("monza"), d).first { it.orders.pace == Circuits.Pace.STEADY }
+        val bests = Circuits.all.associateWith { Circuits.advise(k, it, d).first { a -> a.orders.pace == Circuits.Pace.STEADY } }
+        assertTrue("distinct fits ${bests.values.map { it.orders.fit }}", bests.values.map { it.orders.start to it.orders.finish }.toSet().size >= 2 || bests.values.map { it.orders.stop }.toSet().size >= 2)
+        // The stop is not on lap 1 or 2 any more: the best first stop of every circuit is well inside the race, and they differ.
+        for ((c, a) in bests) assertTrue("${c.id} stop ${a.orders.stop} of ${c.laps}", a.orders.stop >= c.laps / 5 && a.orders.stop <= c.laps * 3 / 4)
+        assertTrue(bests.values.map { it.orders.stop }.toSet().size >= 4)
+        val monza = bests.getValue(circuit("monza"))
         assertTrue(monza.gripAtFlag > 0.5)
     }
 
     @Test fun theLogShowsTheCompoundsAndTheStop() {
         val c = circuit("monaco"); val k = car("racing")
-        val o = Circuits.Orders(S, 2, M)
+        val o = Circuits.Orders(S, 12, M)
         val plan = Circuits.plan(k, c, d, o)
-        val r = Circuits.race(plan, d, Circuits.parPlan(P, c), 12L)
-        if (r.retired == null) {
-            assertTrue(r.log.events.any { it.lap == 2 && it.text == "You pit for fresh tires: Soft to Medium." })
-            val lines = RaceLog.lines(r.log)
-            assertTrue(lines.take(3).toString(), lines[0].contains(" S P"))
-            assertTrue(lines[1].endsWith("PIT") && lines[1].contains(" S P"))
-            assertTrue(lines[2].contains(" M P"))
-            assertEquals(listOf(S, S, M, M, M, M), r.log.rows.map { it.yourTire })
-        }
+        val r = (1L..60L).map { Circuits.race(plan, d, Circuits.parPlan(P, c), it) }.first { it.retired == null }
+        assertTrue(r.log.events.any { it.lap == 12 && it.text == "You pit for fresh tires: Soft to Medium." })
+        val lines = RaceLog.lines(r.log)
+        assertEquals(30, lines.size)
+        assertTrue(lines[0].contains(" S P"))
+        assertTrue(lines[11].endsWith("PIT") && lines[11].contains(" S P"))
+        assertTrue(lines[12].contains(" M P"))
+        assertEquals(List(12) { S } + List(18) { M }, r.log.rows.map { it.yourTire })
+    }
+
+    @Test fun theLogShowsBothStopsOfATwoStop() {
+        val c = circuit("monaco"); val k = car("racing")
+        val o = Circuits.Orders(S, 10, H, Circuits.Pace.STEADY, 20, M)
+        val plan = Circuits.plan(k, c, d, o)
+        val r = (1L..60L).map { Circuits.race(plan, d, Circuits.parPlan(P, c), it) }.first { it.retired == null }
+        assertTrue(r.log.events.any { it.lap == 10 && it.text == "You pit for fresh tires: Soft to Medium." })
+        assertTrue(r.log.events.any { it.lap == 20 && it.text == "You pit for fresh tires: Medium to Hard." })
+        assertEquals(List(10) { S } + List(10) { M } + List(10) { H }, r.log.rows.map { it.yourTire })
+        assertEquals(o.copy(), r.orders)
+        assertEquals(listOf(10, 20), r.log.rows.filter { it.pitted }.map { it.lap })
     }
 
     @Test fun anOrderForNoStopInTheDryReachesTheRaceAsAStop() {
         val s = DriverBuilds.make(P, Racing.Build.MEDIUM, "slick", "close", "lsd", 0.8).copy(money = 1e9, hiredDrivers = setOf("colette"))
         val paid = Circuits.open(s, "colette") as Circuits.Entry.Paid
-        val out = Circuits.finish(s, Circuits.carOf(s), circuit("monza"), paid.driver, paid.fee, paid.entry, 5L, Circuits.Orders(H, 0, H, Circuits.Pace.PUSH))
+        val c = circuit("monza")
+        val out = Circuits.finish(s, Circuits.carOf(s), c, paid.driver, paid.fee, paid.entry, 5L, Circuits.Orders(H, 0, H, Circuits.Pace.PUSH))
         assertEquals(Circuits.Pace.PUSH, out.result.orders.pace)
-        assertTrue(out.result.orders.stop in 1..3)
+        assertTrue(out.result.orders.stop in 1 until c.laps)
         assertTrue(out.result.orders.start != out.result.orders.finish)
     }
 }

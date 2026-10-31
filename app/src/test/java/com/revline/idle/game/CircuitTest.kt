@@ -37,7 +37,7 @@ class CircuitTest {
         Circuits.all.forEach {
             assertEquals(it.id, real.getValue(it.id), it.lapKm, 1e-9)
             assertEquals(it.id, it.lapKm * 1000.0, it.lapMetres, 1.0)
-            assertTrue(it.laps in 3..6)
+            assertTrue("${it.id} ${it.laps}", it.laps in 15..30)
             assertTrue(it.corners in 8..25)
         }
     }

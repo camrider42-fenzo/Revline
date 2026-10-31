@@ -108,4 +108,44 @@ class RaceLogTest {
         lines.forEach { assertFalse(it.contains("NaN")) }
         assertEquals(0, RaceLog.lines(RaceLog.Log.EMPTY).size)
     }
+
+    @Test fun theShortLogKeepsTheFirstAndLastLapEveryFifthAndEveryLapYouDidSomething() {
+        for (seed in 1L..20L) for (id in listOf("monaco", "spa")) {
+            val r = race(id, seed)
+            val keys = RaceLog.keyLaps(r.log)
+            assertTrue(1 in keys && r.log.laps in keys)
+            for (row in r.log.rows) {
+                if (row.lap % 5 == 0 || row.pitted || row.yourOut || row.events.any { RaceLog.mine(it) }) assertTrue("${r.circuit.id} lap ${row.lap}", row.lap in keys)
+            }
+            // It is much shorter than the full log on a long race with few events, and never longer.
+            assertTrue(keys.size <= r.log.laps)
+        }
+        assertEquals(emptySet<Int>(), RaceLog.keyLaps(RaceLog.Log.EMPTY))
+    }
+
+    @Test fun theShortLogMarksTheRunsItLeavesOutAndTheFullLogHasEveryLap() {
+        for (seed in 1L..20L) {
+            val r = race("monaco", seed)
+            val full = RaceLog.items(r.log, all = true)
+            assertEquals(r.log.laps, full.size)
+            assertTrue(full.all { it is RaceLog.Item.Lap })
+            val short = RaceLog.items(r.log, all = false)
+            // Laps shown plus laps skipped is every lap once, in order.
+            var next = 1
+            for (item in short) when (item) {
+                is RaceLog.Item.Lap -> { assertEquals(next, item.row.lap); next++ }
+                is RaceLog.Item.Skipped -> { assertEquals(next, item.from); assertTrue(item.to >= item.from); next = item.to + 1 }
+            }
+            assertEquals(r.log.laps + 1, next)
+            // No two skipped runs touch and none is next to a kept lap's gap.
+            assertTrue(short.zipWithNext().none { (a, b) -> a is RaceLog.Item.Skipped && b is RaceLog.Item.Skipped })
+        }
+    }
+
+    @Test fun aThirtyLapLogIsReadableLines() {
+        val r = race("monaco", 4L)
+        assertEquals(30, RaceLog.lines(r.log).size)
+        assertTrue(RaceLog.items(r.log, all = false).size < 30 + 1)
+        assertTrue(RaceLog.lines(r.log)[29].startsWith("L30"))
+    }
 }

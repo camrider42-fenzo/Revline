@@ -140,6 +140,43 @@ object RaceLog {
         }
     }
 
+    /** Whether an event is about the player's own race (or the fastest lap), the ones the short log keeps. */
+    fun mine(e: Event): Boolean = e.text.startsWith("You") || e.text.startsWith("Fastest") || e.text.startsWith("Conditions")
+
+    /**
+     * The laps the short form of the log keeps in a long race: the first and last lap, every [every]th lap, and every lap the
+     * player did something on (a stop, a mistake, a place gained or lost, the fastest lap, going out).
+     */
+    fun keyLaps(log: Log, every: Int = 5): Set<Int> {
+        val keep = HashSet<Int>()
+        for (r in log.rows) {
+            if (r.lap == 1 || r.lap == log.laps || r.lap % every == 0 || r.pitted || r.yourOut || r.fastest || r.events.any { mine(it) }) keep.add(r.lap)
+        }
+        return keep
+    }
+
+    /** One entry of a shown log: a lap, or a run of laps left out ([from] to [to]). */
+    sealed interface Item {
+        data class Lap(val row: Row, val line: String) : Item
+        data class Skipped(val from: Int, val to: Int) : Item
+    }
+
+    /** The log as the results screen shows it: every lap with [all], else the [keyLaps] with the runs between them marked. */
+    fun items(log: Log, all: Boolean, every: Int = 5): List<Item> {
+        val lines = lines(log)
+        val keys = if (all) null else keyLaps(log, every)
+        val out = ArrayList<Item>()
+        var skipFrom = 0
+        for ((i, row) in log.rows.withIndex()) {
+            if (keys == null || row.lap in keys) {
+                if (skipFrom != 0) { out.add(Item.Skipped(skipFrom, row.lap - 1)); skipFrom = 0 }
+                out.add(Item.Lap(row, lines[i]))
+            } else if (skipFrom == 0) skipFrom = row.lap
+        }
+        if (skipFrom != 0) out.add(Item.Skipped(skipFrom, log.laps))
+        return out
+    }
+
     /** The running order after a lap, surnames only: "Clark, Surtees, YOU, ...". Cars that are out are left off. */
     fun orderLine(row: Row): String =
         row.order.filter { !it.out }.joinToString(", ") { if (it.you) "YOU" else it.name.substringAfterLast(' ') }

@@ -27,7 +27,11 @@ object Tires {
     /** Corner count that wears a tire at the base rate. */
     const val REF_CORNERS = 14.0
 
-    /** Life a soft tire uses up on a lap of [REF_CORNERS] corners, in hands of middling care, on a street-tire car. */
+    /**
+     * Life a soft tire uses up on a lap of [REF_CORNERS] corners, in hands of middling care, on a street-tire car, on a race
+     * of the 1.74.0 length ([Circuits.Circuit.baseLaps] laps). A race is longer than that now, so [lapUse] divides by the
+     * circuit's [Circuits.Circuit.stretch]: a tire still uses the same share of its life over a whole race.
+     */
     const val BASE_USE = 0.19
 
     /** Wear grip floor: a destroyed tire still holds the road, barely. */
@@ -57,7 +61,7 @@ object Tires {
      * ([Circuits.Car.wear], 0 for a car whose tires never wear). [driver] is the push, the care and the hands.
      */
     fun lapUse(circuit: Circuits.Circuit, c: Compound, sev: Double, carWear: Double, driver: Double): Double =
-        BASE_USE * cornerFactor(circuit) * wearIn(c, sev) * carWear * driver
+        BASE_USE * cornerFactor(circuit) * wearIn(c, sev) * carWear * driver / circuit.stretch
 
     /** The owned tire's wear against the street tire: its [Racing.Tire.wear] taken to the power 0.3, so a racing slick is about 1.5 times as hard on itself, not four. */
     fun tierWear(tireWear: Double): Double = (tireWear / 0.004).pow(0.3)
@@ -86,82 +90,129 @@ object Tires {
             c.grip * (1.0 - Circuits.wetLoss(weather, slickRating(c, tierWet), skill))
         }
 
-    /** A tire plan: [start] compound, in at the end of lap [stop] for [finish]. [stop] 0 is no stop (only in the wet). */
-    data class Fit(val start: Compound, val stop: Int, val finish: Compound)
+    /**
+     * A tire plan: [start] compound, in at the end of lap [stop] for the next. [stop] 0 is no stop (only in the wet).
+     * With a [stop2] after it, the car runs [middle] until the end of lap [stop2] and then [finish]; with none, [finish]
+     * is the next compound and [middle] is ignored.
+     */
+    data class Fit(val start: Compound, val stop: Int, val finish: Compound, val stop2: Int = 0, val middle: Compound = finish) {
+        /** The laps the car comes in at the end of, as the plan reads (not checked against a race). */
+        val stops: List<Int> get() = if (stop <= 0) emptyList() else if (stop2 > stop) listOf(stop, stop2) else listOf(stop)
+        /** Compounds used, in order. */
+        val used: List<Compound> get() = if (stop <= 0) listOf(start) else if (stop2 > stop) listOf(start, middle, finish) else listOf(start, finish)
+    }
+
+    /** The shortest stint the advisor and the rivals plan: a tire is not worth changing for fewer laps than this. */
+    const val MIN_STINT = 3
 
     /**
-     * The rule: at least one change of compound a race. In the dry it is two different dry compounds. On a damp track any two
-     * different compounds, the wet counting. In the wet it is waived, as in F1: the wets stay on and a stop is the team's call.
+     * The rule: at least one change of compound a race, and at most two stops. In the dry it is two different dry compounds.
+     * On a damp track any two different compounds, the wet counting. In the wet it is waived, as in F1: the wets stay on and a
+     * stop is the team's call.
      */
     fun rule(weather: Circuits.Weather): String = when (weather) {
-        Circuits.Weather.DRY -> "Rule: stop once and change compound, two different dry compounds."
-        Circuits.Weather.DAMP -> "Rule: stop once and change compound. The wet counts as one."
-        Circuits.Weather.WET -> "Wet race: the compound change is waived. A stop is optional."
+        Circuits.Weather.DRY -> "Rule: stop once or twice and use two different dry compounds."
+        Circuits.Weather.DAMP -> "Rule: stop once or twice and change compound. The wet counts as one."
+        Circuits.Weather.WET -> "Wet race: the compound change is waived. Stops are optional."
     }
 
     /** Null if the [fit] obeys the rule on a race of [laps], else why not. */
     fun breach(fit: Fit, laps: Int, weather: Circuits.Weather): String? {
         if (fit.stop != 0 && fit.stop !in 1 until laps) return "Stop on lap 1 to ${laps - 1}."
+        if (fit.stop2 != 0 && (fit.stop == 0 || fit.stop2 !in fit.stop + 1 until laps)) return "The second stop comes after the first, by lap ${laps - 1}."
         if (weather == Circuits.Weather.WET) return if (fit.stop == 0 && fit.finish != fit.start) "Without a stop the finish tire is the start tire." else null
         if (fit.stop == 0) return "A stop is required."
-        if (fit.start == fit.finish) return "Change compound at the stop."
-        if (weather == Circuits.Weather.DRY && (!fit.start.dry || !fit.finish.dry)) return "Two different dry compounds are needed."
+        val used = fit.used
+        if (weather == Circuits.Weather.DRY && used.any { !it.dry }) return "Two different dry compounds are needed."
+        if (used.toSet().size < 2) return "Change compound at a stop."
         return null
     }
 
     /** What the stewards do to an order that breaks the rule: the smallest fix, so every race is a legal one. */
     fun legalise(fit: Fit, laps: Int, weather: Circuits.Weather): Fit {
         var start = fit.start
+        var middle = fit.middle
         var finish = fit.finish
         var stop = fit.stop
+        var stop2 = fit.stop2
         if (weather == Circuits.Weather.WET) {
             stop = if (stop <= 0) 0 else stop.coerceIn(1, laps - 1)
-            if (stop == 0) finish = start
-            return Fit(start, stop, finish)
+            if (stop == 0) return Fit(start, 0, start)
+            stop2 = if (stop2 > stop && stop2 < laps) stop2 else 0
+            return Fit(start, stop, finish, stop2, if (stop2 > 0) middle else finish)
         }
         stop = (if (stop <= 0) (laps + 1) / 2 else stop).coerceIn(1, laps - 1)
+        stop2 = if (stop2 > stop && stop2 < laps) stop2 else 0
+        if (stop2 == 0) middle = finish
         if (weather == Circuits.Weather.DRY) {
             if (!start.dry) start = Compound.MEDIUM
+            if (!middle.dry) middle = Compound.MEDIUM
             if (!finish.dry) finish = Compound.HARD
+            if (stop2 == 0) middle = finish
         }
-        if (finish == start) finish = if (start == Compound.HARD) Compound.MEDIUM else Compound.HARD
-        return Fit(start, stop, finish)
+        val used = if (stop2 > 0) listOf(start, middle, finish) else listOf(start, finish)
+        if (used.toSet().size < 2) finish = if (start == Compound.HARD) Compound.MEDIUM else Compound.HARD
+        if (stop2 == 0) middle = finish
+        return Fit(start, stop, finish, stop2, middle)
     }
 
-    /** Every legal one-stop plan, plus the no-stop plans where the rule allows them. */
-    fun options(laps: Int, weather: Circuits.Weather): List<Fit> {
+
+    private val optionCache = java.util.concurrent.ConcurrentHashMap<String, List<Fit>>()
+
+    /**
+     * Every legal plan the advisor and the rivals consider: one stop and two stops (two stints of at least [MIN_STINT] laps),
+     * plus the no-stop plans where the rule allows them. A wet race has no two-stop plans: nobody has to stop there.
+     */
+    fun options(laps: Int, weather: Circuits.Weather): List<Fit> = optionCache.getOrPut("$laps:${weather.name}") {
         val pool = if (weather == Circuits.Weather.DRY) dry else Compound.entries
         val out = ArrayList<Fit>()
+        val lo = if (laps >= 2 * MIN_STINT) MIN_STINT else 1
+        val hi = if (laps >= 2 * MIN_STINT) laps - MIN_STINT else laps - 1
         for (a in pool) for (b in pool) {
             if (a == b) continue
-            for (stop in 1 until laps) out.add(Fit(a, stop, b))
+            for (stop in lo..hi) out.add(Fit(a, stop, b))
         }
         if (weather == Circuits.Weather.WET) for (a in pool) out.add(Fit(a, 0, a))
-        return out
+        else if (laps >= 3 * MIN_STINT) {
+            for (a in pool) for (m in pool) for (b in pool) {
+                if (a == m && m == b) continue
+                for (s1 in MIN_STINT..laps - 2 * MIN_STINT) for (s2 in s1 + MIN_STINT..laps - MIN_STINT) out.add(Fit(a, s1, b, s2, m))
+            }
+        }
+        out
     }
 
     /** Where each lap's tire stands: the compound on each lap, the grip left in the middle of it and at the end of it. */
     class Trace(val compounds: List<Compound>, val mid: List<Double>, val end: List<Double>, val pits: Set<Int>)
 
+    /** The laps the [fit] really stops at on a race of [laps], in order. */
+    fun stopsOf(fit: Fit, laps: Int): List<Int> =
+        if (fit.stop !in 1 until laps) emptyList() else if (fit.stop2 in fit.stop + 1 until laps) listOf(fit.stop, fit.stop2) else listOf(fit.stop)
+
     fun trace(fit: Fit, laps: Int, use: (Compound) -> Double): Trace {
+        val stops = stopsOf(fit, laps)
         val compounds = ArrayList<Compound>()
         val mid = ArrayList<Double>()
         val end = ArrayList<Double>()
         var life = 0.0
+        var stint = 0
         for (k in 1..laps) {
-            val c = if (fit.stop in 1 until laps && k > fit.stop) fit.finish else fit.start
+            val c = when (stint) { 0 -> fit.start; 1 -> if (stops.size == 2) fit.middle else fit.finish; else -> fit.finish }
             val u = use(c)
             compounds.add(c)
             mid.add(condition(life + u / 2.0))
             life += u
             end.add(condition(life))
-            if (k == fit.stop) life = 0.0
+            if (k in stops) { life = 0.0; stint++ }
         }
-        return Trace(compounds, mid, end, if (fit.stop in 1 until laps) setOf(fit.stop) else emptySet())
+        return Trace(compounds, mid, end, stops.toSet())
     }
 
-    /** Grip left at the stop, in percent of a new tire of that compound, or null for no stop. */
+    /** Grip left at the first stop, in percent of a new tire of that compound, or null for no stop. */
     fun atStop(t: Trace): Double? = t.pits.firstOrNull()?.let { t.end[it - 1] }
+
+    /** Grip left at each stop, in order. */
+    fun atStops(t: Trace): List<Double> = t.pits.sorted().map { t.end[it - 1] }
 
     fun atFlag(t: Trace): Double = t.end.last()
 

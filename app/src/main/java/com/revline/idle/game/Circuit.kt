@@ -36,6 +36,9 @@ object Circuits {
     private fun s(metres: Double) = Seg(false, metres, 0.0, "")
     private fun c(radius: Double, arc: Double, name: String) = Seg(true, arc, radius, name)
 
+    /** A race is this share of the real F1 race distance. 0.38 puts the eight circuits at 17 to 30 laps. */
+    const val RACE_SHARE = 0.38
+
     private const val DS = 10.0
     private const val G = 9.81
     private const val SPEED_CAP = 120.0
@@ -57,9 +60,20 @@ object Circuits {
         val punish: Double,
         val blurb: String,
         raw: List<Seg>,
+        /** The real race's lap count (the F1 distance of at least 305 km, 260 km at Monaco). */
+        val f1Laps: Int = (305.0 / lapKm).let { kotlin.math.ceil(it).toInt() },
     ) {
         val segs: List<Seg>
-        val laps: Int = (22.0 / lapKm).roundToInt().coerceIn(3, 6)
+        /** Laps of a race: [RACE_SHARE] of the real F1 distance, so the circuits keep real F1 proportions, 15 to 30 laps. */
+        val laps: Int = (RACE_SHARE * f1Laps).roundToInt()
+        /** The laps a race ran before 1.75.0 (3 to 6). */
+        val baseLaps: Int = (22.0 / lapKm).roundToInt().coerceIn(3, 6)
+        /**
+         * How many times longer a race is than it was in 1.74.0. Everything that was counted per lap then is divided by it,
+         * and everything that was a loss in a lap is multiplied by it, so a race still holds the same wear, engine risk,
+         * mistakes and prize odds as before: only the lap count (and what a stop is worth) changed.
+         */
+        val stretch: Double = laps.toDouble() / baseLaps
         val nodes: Int
         val ds: Double
         /** Corner radius at each 10 m node, 0 on a straight. */
@@ -69,8 +83,8 @@ object Circuits {
         init {
             val cornerM = raw.filter { it.corner }.sumOf { it.metres }
             val straightM = raw.filter { !it.corner }.sumOf { it.metres }
-            val stretch = (lapKm * 1000.0 - cornerM) / straightM
-            segs = raw.map { if (it.corner) it else Seg(false, it.metres * stretch, 0.0, it.name) }
+            val straightScale = (lapKm * 1000.0 - cornerM) / straightM
+            segs = raw.map { if (it.corner) it else Seg(false, it.metres * straightScale, 0.0, it.name) }
             val lap = lapKm * 1000.0
             nodes = (lap / DS).roundToInt()
             ds = lap / nodes
@@ -105,7 +119,7 @@ object Circuits {
             ),
         ),
         Circuit(
-            "monaco", "Monaco", "Monaco", 3.337, 19, 50, heat = 1.2, punish = 1.8,
+            "monaco", "Monaco", "Monaco", 3.337, 19, 50, heat = 1.2, punish = 1.8, f1Laps = 78,
             blurb = "Slow, tight and walled in. Light weight, traction, brakes and a calm head. Mistakes cost the race.",
             raw = listOf(
                 s(300.0), c(35.0, 60.0, "Sainte Devote"), s(280.0), c(50.0, 70.0, "Massenet"), s(120.0), c(45.0, 80.0, "Casino"),
@@ -166,7 +180,7 @@ object Circuits {
             ),
         ),
         Circuit(
-            "singapore", "Marina Bay", "Singapore", 4.940, 19, 55, heat = 1.6, punish = 1.6,
+            "singapore", "Marina Bay", "Singapore", 4.940, 19, 55, heat = 1.6, punish = 1.6, f1Laps = 62,
             blurb = "A street circuit in a steam bath. Braking and traction, tight walls, and an engine that cooks. Care counts.",
             raw = listOf(
                 s(540.0), c(32.0, 60.0, "Turn 1"), s(150.0), c(40.0, 70.0, "Turn 2"), s(100.0), c(45.0, 70.0, "Turn 3"),
@@ -421,7 +435,7 @@ object Circuits {
         val failure: List<Double>,
         val hands: Hands,
         val mistakes: Double = 1.0,
-        /** The laps the car comes in at the end of. */
+        /** The laps the car comes in at the end of (one or two, or none in the wet). */
         val pits: Set<Int> = emptySet(),
         /** Grip the tires have left in the middle of each lap, 1.0 new: the wear only, of the compound that is on. */
         val grip: List<Double> = emptyList(),
@@ -453,8 +467,10 @@ object Circuits {
         val pace: Pace get() = orders.pace
         /** Grip left at the end of the lap the car stops on, or null with no stop. */
         val gripAtStop: Double? get() = pits.firstOrNull()?.let { endGrip[it - 1] }
+        /** Grip left at the end of each stop lap, in order. */
+        val gripAtStops: List<Double> get() = pits.sorted().map { endGrip[it - 1] }
         val gripAtFlag: Double get() = endGrip.last()
-        fun advice(): Advice = Advice(orders, raceTime, gripAtStop, gripAtFlag)
+        fun advice(): Advice = Advice(orders, raceTime, gripAtStop, gripAtFlag, gripAtStops.getOrNull(1))
         /** Ratings of the field's picks, cached for the race. */
         internal val rivalFits = ConcurrentHashMap<Rivals.Style, Tires.Fit>()
     }
@@ -466,8 +482,17 @@ object Circuits {
         SAVE("Save", "Slower every lap. Kind to the tires, the engine and the driver's nerves.", 1.006, 0.55, 0.8, 0.8),
     }
 
-    /** What a pit stop costs, as a share of a lap: in, tires, out. Cars that stop come back on new rubber. */
+    /**
+     * What a pit stop costs, as a share of a lap of a 1.74.0-length race: in, tires, out. Cars that stop come back on new
+     * rubber. [pitLoss] scales it by the race's length, so a stop costs about the same share of the race as it used to.
+     */
     const val PIT_LOSS = 0.025
+
+    /** A stop's loss as a share of a lap on this circuit: seconds of the real pit lane, about 21 s in F1, over a lap. */
+    fun pitLoss(circuit: Circuit): Double = PIT_LOSS * circuit.stretch * PIT_TUNE
+
+    /** Tuning of the stop's cost against the tires it saves; with [PIT_LOSS] it sets where one stop turns into two. */
+    private const val PIT_TUNE = 0.5
 
     /** How a push or a save lands on this driver: a careful one saves more and a careless one pays more for pushing. */
     private fun felt(mult: Double, care: Double): Double = 1.0 + (mult - 1.0) * (if (mult > 1.0) 1.5 - care else 0.5 + care)
@@ -480,14 +505,15 @@ object Circuits {
         val pace = orders.pace
         val hands = hands(driver, car.setup)
         val weak = ((99.0 - car.reliability) / 94.0).coerceIn(0.0, 1.0)
-        val rate = HAZARD * (0.3 + 3.0 * weak * weak) * (1.9 - 1.5 * hands.care) * car.hazard * felt(pace.hazard, hands.care)
+        val rate = HAZARD * (0.3 + 3.0 * weak * weak) * (1.9 - 1.5 * hands.care) * car.hazard * felt(pace.hazard, hands.care) / circuit.stretch
         val laps = ArrayList<Lap>()
         val raws = ArrayList<Double>()
         val failure = ArrayList<Double>()
         val mults = ArrayList<Double>()
         var fresh = 0.0
-        val fit = Tires.legalise(Tires.Fit(orders.start, orders.stop, orders.finish), circuit.laps, weather)
-        val stop = fit.stop
+        val fit = Tires.legalise(orders.fit, circuit.laps, weather)
+        val stops = Tires.stopsOf(fit, circuit.laps)
+        val pitLoss = pitLoss(circuit)
         val sev = weather.severity
         val skill = wetSkill(hands)
         val dw = driverWear(hands, pace)
@@ -499,7 +525,7 @@ object Circuits {
         val freshMult = Tires.grip(fit.start, weather, car.wetTire, skill)
         fun shod(m: Double) = if (m == 1.0) car else car.copy(setup = car.setup.copy(gripN = car.setup.gripN * m))
         for (k in 1..circuit.laps) {
-            val heat = 1.0 - exp(-0.55 * circuit.heat * coolness * (k - 0.5) * (share / 0.6))
+            val heat = 1.0 - exp(-0.55 * circuit.heat * coolness * (k - 0.5) / circuit.stretch * (share / 0.6))
             val power = (1.0 - car.fade * heat) * (1.0 - min(0.12, 1.5 * wear))
             val m = Tires.grip(trace.compounds[k - 1], weather, car.wetTire, skill) * Tires.felt(trace.mid[k - 1])
             var lap = lap(shod(m), circuit, hands, power)
@@ -508,7 +534,7 @@ object Circuits {
             val hazard = 1.0 - exp(-rate * lap.strain * (1.0 + 0.6 * heat))
             wear += hazard
             val raw = lap.time * pace.lap
-            lap = lap.copy(time = raw + if (k == stop) PIT_LOSS * lap.time else 0.0)
+            lap = lap.copy(time = raw + if (k in stops) pitLoss * lap.time else 0.0)
             laps.add(lap)
             raws.add(raw)
             mults.add(m)
@@ -522,7 +548,7 @@ object Circuits {
         }
         return Plan(
             circuit, laps, failure, hands, car.mistakes * felt(pace.mistakes, hands.care) * wetMistakes(weather, skill),
-            trace.pits, trace.mid, Orders(fit.start, fit.stop, fit.finish, pace), weather, fresh,
+            trace.pits, trace.mid, Orders(fit.start, fit.stop, fit.finish, pace, fit.stop2, fit.middle), weather, fresh,
             trace.end, trace.compounds, raws, mults, freshMult, elasticity, car.wear, car.wetTire,
         )
     }
@@ -530,19 +556,33 @@ object Circuits {
     /**
      * What the player tells the pit wall before the lights go green: the compound to start on, the lap to come in at the
      * end of (0 for no stop, which only a wet race allows), the compound to finish on and the pace. An order that breaks
-     * the compound rule is put right by [Tires.legalise] when the plan is made.
+     * the compound rule is put right by [Tires.legalise] when the plan is made. A [stop2] after the first stop makes it a
+     * two-stop race on [middle] between the stops.
      */
     data class Orders(
         val start: Tires.Compound = Tires.Compound.MEDIUM,
         val stop: Int = 0,
         val finish: Tires.Compound = Tires.Compound.HARD,
         val pace: Pace = Pace.STEADY,
+        val stop2: Int = 0,
+        val middle: Tires.Compound = finish,
     ) {
-        val fit: Tires.Fit get() = Tires.Fit(start, stop, finish)
+        val fit: Tires.Fit get() = Tires.Fit(start, stop, finish, stop2, middle)
+        val stopCount: Int get() = fit.stops.size
+    }
+
+    /** The orders in words: the compounds in order and the stop laps. "Soft to Medium, stop lap 12" or "Soft to Medium to Hard, stops laps 8 and 17". */
+    fun planText(o: Orders): String {
+        val f = o.fit
+        return when (f.stops.size) {
+            0 -> "${o.start.title}, no stop"
+            1 -> "${f.start.title} to ${f.finish.title}, stop lap ${f.stop}"
+            else -> "${f.start.title} to ${f.middle.title} to ${f.finish.title}, stops laps ${f.stop} and ${f.stop2}"
+        }
     }
 
     /** What a plan comes to on paper: the planned race, the grip left at the stop (null with no stop) and at the flag. */
-    data class Advice(val orders: Orders, val raceTime: Double, val gripAtStop: Double?, val gripAtFlag: Double)
+    data class Advice(val orders: Orders, val raceTime: Double, val gripAtStop: Double?, val gripAtFlag: Double, val gripAtStop2: Double? = null)
 
     /** The paper numbers for one set of orders. They are the plan the race is run from, so the race is what they say. */
     fun forecast(car: Car, circuit: Circuit, driver: Drivers.Driver, orders: Orders, weather: Weather = Weather.DRY): Advice =
@@ -556,11 +596,87 @@ object Circuits {
         }
     }
 
-    /** Planned time of each legal way to run the race with this car and driver, quickest first. Nothing goes wrong in a plan; the dice do that. */
-    fun advise(car: Car, circuit: Circuit, driver: Drivers.Driver, weather: Weather = Weather.DRY): List<Advice> =
-        Tires.options(circuit.laps, weather).flatMap { f ->
-            Pace.entries.map { pc -> forecast(car, circuit, driver, Orders(f.start, f.stop, f.finish, pc), weather) }
-        }.sortedBy { it.raceTime }
+    /**
+     * A race's paper time for any tire plan in a few additions. A plan is stints of a compound; the time of a stint depends only
+     * on the compound, the lap it starts on and its length, so the stint times of every compound are tabled once (about
+     * 4 x laps^2 / 2 sums) and a plan is then two or three lookups. Time on a lap goes as grip to the minus [e] against the
+     * reference race the laps [raw] and grip [refMult] come from, as in the race itself. The numbers rank plans; the
+     * advisor then runs the best few through the exact [plan].
+     */
+    private class Stints(
+        val laps: Int,
+        val raw: List<Double>,
+        refMult: List<Double>,
+        e: Double,
+        val pit: Double,
+        grip: (Tires.Compound) -> Double,
+        use: (Tires.Compound) -> Double,
+    ) {
+        private val stride = laps + 1
+        private val table = Array(Tires.Compound.entries.size) { DoubleArray(laps * stride) }
+
+        init {
+            val a = DoubleArray(laps) { raw[it] * refMult[it].pow(e) }
+            for (c in Tires.Compound.entries) {
+                val u = use(c)
+                val g = grip(c)
+                val factor = DoubleArray(laps) { j -> (g * Tires.felt(Tires.condition(u * (j + 0.5)))).pow(-e) }
+                val t = table[c.ordinal]
+                for (k0 in 0 until laps) {
+                    var sum = 0.0
+                    for (len in 1..laps - k0) {
+                        sum += a[k0 + len - 1] * factor[len - 1]
+                        t[k0 * stride + len] = sum
+                    }
+                }
+            }
+        }
+
+        fun time(f: Tires.Fit): Double {
+            val stops = Tires.stopsOf(f, laps)
+            val used = if (stops.size == 2) f.used else listOf(f.start, f.finish)
+            var from = 0
+            var sum = 0.0
+            for (i in 0..stops.size) {
+                val to = if (i < stops.size) stops[i] else laps
+                sum += table[used[i].ordinal][from * stride + (to - from)]
+                if (i < stops.size) sum += pit * raw[to - 1]
+                from = to
+            }
+            return sum
+        }
+    }
+
+    /**
+     * Planned time of each legal way to run the race with this car and driver, quickest first. Nothing goes wrong in a plan;
+     * the dice do that. All the one-stop and two-stop plans are ranked on paper by [Stints] for each pace, then the best few
+     * of each kind (no stop, one stop, two stops) are run through the exact [plan], so what is listed is what the race will do.
+     */
+    fun advise(car: Car, circuit: Circuit, driver: Drivers.Driver, weather: Weather = Weather.DRY): List<Advice> {
+        val hands = hands(driver, car.setup)
+        val skill = wetSkill(hands)
+        val sev = weather.severity
+        val options = Tires.options(circuit.laps, weather)
+        val out = ArrayList<Advice>()
+        for (pace in Pace.entries) {
+            val ref = plan(car, circuit, driver, Orders(pace = pace), weather, measure = true)
+            val dw = driverWear(hands, pace)
+            val table = Stints(
+                circuit.laps, ref.raw, ref.gripMult, ref.elasticity, pitLoss(circuit),
+                { Tires.grip(it, weather, car.wetTire, skill) },
+                { Tires.lapUse(circuit, it, sev, car.wear, dw) },
+            )
+            for (stops in 0..2) {
+                options.asSequence().filter { it.stops.size == stops }
+                    .map { it to table.time(it) }.sortedBy { it.second }.take(ADVICE_PER_KIND).toList()
+                    .forEach { (f, _) -> out.add(forecast(car, circuit, driver, Orders(f.start, f.stop, f.finish, pace, f.stop2, f.middle), weather)) }
+            }
+        }
+        return out.sortedBy { it.raceTime }
+    }
+
+    /** How many plans of each kind and pace the advisor checks exactly. */
+    private const val ADVICE_PER_KIND = 3
 
     data class Finisher(val name: String, val time: Double, val out: Boolean, val you: Boolean = false, val team: String = "")
 
@@ -600,8 +716,11 @@ object Circuits {
     /** Seconds each place back from the middle of the grid costs on the first lap, before the circuit's [Circuit.punish]. */
     const val GRID_SLOT = 0.20
 
-    /** The first-lap time a grid slot costs (negative at the front): traffic and no room to pass, worse where mistakes are paid for. */
-    fun gridOffset(slot: Int, circuit: Circuit): Double = GRID_SLOT * circuit.punish * (slot - (FIELD + 1) / 2.0)
+    /**
+     * The first-lap time a grid slot costs (negative at the front): traffic and no room to pass, worse where mistakes are paid for.
+     * Scaled by the race's [Circuit.stretch] so a place on the grid is worth the same share of the race as in 1.74.0.
+     */
+    fun gridOffset(slot: Int, circuit: Circuit): Double = GRID_SLOT * circuit.punish * circuit.stretch * (slot - (FIELD + 1) / 2.0)
 
     const val FIELD = 8
 
@@ -636,31 +755,33 @@ object Circuits {
         return RivalTires(fit, tr, mult, Tires.grip(fit.start, par.weather, par.wetTire, skill))
     }
 
-    /** Race time of a rival on this plan, from the par car's laps. The comparison between his plans, not his pace. */
-    private fun rivalTime(par: Plan, rt: RivalTires): Double {
-        val e = par.elasticity
-        var sum = 0.0
-        for (k in par.raw.indices) sum += par.raw[k] * (rt.mult[k] / par.gripMult[k]).pow(-e) * (1.0 + if (rt.fit.stop == k + 1) PIT_LOSS else 0.0)
-        return sum
-    }
-
     /**
      * The tire plan a rival picks. Every one obeys the compound rule ([Tires.options] is the legal ones). A style narrows the
-     * field of plans he likes, and he picks the quickest of those on paper; a strategist and a rain specialist pick the quickest of all.
+     * field of plans he likes, and he picks the quickest of those on paper; a strategist and a rain specialist pick the quickest
+     * of all, one stop or two. The qualifier, the metronome and the banker stop once; the hard charger takes any number of stops
+     * with the first early (in the first 45% of the race), and the closer finishes on softs with the last stop in the second half.
      */
     private fun rivalFit(style: Rivals.Style, par: Plan): Tires.Fit = par.rivalFits.getOrPut(style) {
         val laps = par.circuit.laps
         val all = Tires.options(laps, par.weather)
+        val soft = Tires.Compound.SOFT
         val liked = when (style) {
-            Rivals.Style.QUALIFIER -> all.filter { it.start == Tires.Compound.SOFT }
-            Rivals.Style.AGGRESSIVE -> all.filter { it.start == Tires.Compound.SOFT && it.stop * 2 <= laps }
-            Rivals.Style.CLOSER -> all.filter { it.finish == Tires.Compound.SOFT && it.stop * 2 >= laps }
-            Rivals.Style.STEADY -> all.filter { it.start == Tires.Compound.MEDIUM && it.finish == Tires.Compound.HARD }
-            Rivals.Style.SURVIVOR -> all.filter { it.start == Tires.Compound.HARD && it.finish == Tires.Compound.MEDIUM }
+            Rivals.Style.QUALIFIER -> all.filter { it.start == soft && it.stops.size == 1 }
+            Rivals.Style.AGGRESSIVE -> all.filter { it.start == soft && it.stop * 20 <= laps * 9 }
+            Rivals.Style.CLOSER -> all.filter { it.finish == soft && (it.stops.lastOrNull() ?: 0) * 2 >= laps }
+            Rivals.Style.STEADY -> all.filter { it.start == Tires.Compound.MEDIUM && it.finish == Tires.Compound.HARD && it.stops.size == 1 }
+            Rivals.Style.SURVIVOR -> all.filter { it.start == Tires.Compound.HARD && it.finish == Tires.Compound.MEDIUM && it.stops.size == 1 }
             else -> all
         }
         val pool = if (par.weather == Weather.WET || liked.isEmpty()) all else liked
-        pool.minByOrNull { rivalTime(par, rivalTires(style, par, it)) }!!
+        val sev = par.weather.severity
+        val skill = 0.5 + 0.4 * style.wet
+        val table = Stints(
+            laps, par.raw, par.gripMult, par.elasticity, pitLoss(par.circuit),
+            { Tires.grip(it, par.weather, par.wetTire, skill) },
+            { Tires.lapUse(par.circuit, it, sev, par.carWear, style.tires) },
+        )
+        pool.minByOrNull { table.time(it) }!!
     }
 
     /**
@@ -710,7 +831,10 @@ object Circuits {
         var retired: String? = null
         var engine = false
         val h = plan.hands
-        val lambda = circuit.corners * 0.02 * (0.2 + 1.6 * h.mistakes) * plan.mistakes
+        // Per lap, so a race of the stretch's length makes the same mistakes as a 1.74.0 race, each costing a stretch's worth of a lap.
+        val stretch = circuit.stretch
+        val lambda = circuit.corners * 0.02 * (0.2 + 1.6 * h.mistakes) * plan.mistakes / stretch
+        val lapNoise = sqrt(stretch)
         for ((index, base) in plan.laps.withIndex()) {
             val lapNo = index + 1
             if (dice.next() < plan.failure[index]) {
@@ -722,7 +846,7 @@ object Circuits {
                 notes.add(RaceLog.Event(lapNo, "Your engine lets go."))
                 break
             }
-            var lap = base.time * (1.0 + (0.002 + 0.004 * h.mistakes) * dice.gauss())
+            var lap = base.time * (1.0 + (0.002 + 0.004 * h.mistakes) * lapNoise * dice.gauss())
             if (lapNo == 1) lap += START + gridOffset(mySlot, circuit)
             var crashed = false
             repeat(dice.poisson(lambda)) {
@@ -730,13 +854,13 @@ object Circuits {
                 val roll = dice.next()
                 when {
                     roll < 0.68 -> {
-                        val loss = base.time * (0.004 + 0.012 * dice.next())
+                        val loss = base.time * (0.004 + 0.012 * dice.next()) * stretch
                         lap += loss
                         incidents.add("Lap $lapNo: ran wide at $spot, lost ${fmt(loss)}s.")
                         notes.add(RaceLog.Event(lapNo, "You run wide at $spot, ${fmt(loss)}s lost."))
                     }
                     dice.next() >= 0.06 * circuit.punish * (1.0 + 0.5 * sev) -> {
-                        val loss = base.time * (0.03 + 0.04 * dice.next()) * sqrt(circuit.punish)
+                        val loss = base.time * (0.03 + 0.04 * dice.next()) * sqrt(circuit.punish) * stretch
                         lap += loss
                         incidents.add("Lap $lapNo: spun at $spot, lost ${fmt(loss)}s.")
                         notes.add(RaceLog.Event(lapNo, "You spin at $spot, ${fmt(loss)}s lost."))
@@ -773,7 +897,7 @@ object Circuits {
             val lapTimes = ArrayList<Double>()
             var outOn = 0
             val dnfLap = if (dice.next() < 0.04 * style.dnf * (1.0 + 0.5 * sev)) 1 + (dice.next() * laps).toInt().coerceAtMost(laps - 1) else 0
-            val stopAt = rt.fit.stop
+            val pitLoss = pitLoss(circuit)
             for (lapNo in 1..laps) {
                 // His lap is the par car's lap on this lap's tires: the same shape, scaled by his pace and by his grip against hers.
                 val pace = paces[i] * par.raw[lapNo - 1] * (rt.mult[lapNo - 1] / par.gripMult[lapNo - 1]).pow(-e)
@@ -785,9 +909,9 @@ object Circuits {
                     outOn = lapNo
                     break
                 }
-                var lt = pace * (1.0 + 0.003 * style.scatter * dice.gauss()) * (1.0 + if (lapNo == stopAt) PIT_LOSS else 0.0)
-                if (dice.next() < style.aggression * 0.04 * (1.0 + sev * 0.9 * (1.0 - 0.5 * style.wet))) {
-                    val loss = pace * (0.006 + 0.012 * dice.next())
+                var lt = pace * (1.0 + 0.003 * style.scatter * lapNoise * dice.gauss()) * (1.0 + if (lapNo in rt.trace.pits) pitLoss else 0.0)
+                if (dice.next() < style.aggression * 0.04 * (1.0 + sev * 0.9 * (1.0 - 0.5 * style.wet)) / stretch) {
+                    val loss = pace * (0.006 + 0.012 * dice.next()) * stretch
                     lt += loss
                     rivalNotes.add(RaceLog.Event(lapNo, "${name.substringAfterLast(' ')} (${rival.team}) runs wide at ${slice(circuit, dice)}, ${fmt(loss)}s lost."))
                 }
