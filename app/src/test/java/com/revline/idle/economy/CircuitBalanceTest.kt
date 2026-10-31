@@ -90,7 +90,7 @@ class CircuitBalanceTest {
         // The driver is worth his fee on a par car for the top half, never absurdly so for the bottom.
         val netOf = { id: String -> net.getValue(id).average() }
         assertTrue(netOf("colette") > netOf("dusty"))
-        assertTrue(netOf("ace") > -0.9 && netOf("dusty") > -1.1)
+        assertTrue(netOf("ace") > -0.6 && netOf("dusty") > -0.8)
     }
 
     @Test fun theParCarRunsAboutFourthToFifthAndRetiresNowAndThen() {

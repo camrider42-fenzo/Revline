@@ -66,6 +66,7 @@ object UpgradeMap {
         "lap", "gap", "limiter", "dyno_fuel", "rev_kit",
         -> Effect.POWER
         "jets", "afr_map", "catback", "cold_air", "boot", "tip", "needle",
+        "rings", "lean_spark", "egr", "cyl_off",
         -> Effect.ECONOMY
         "supercharger", "turbo", "twin", "intercooler", "boost_controller",
         "fuel_pump", "injectors", "hpfp", "tbi_unit", "meth", "nitrous", "overboost",

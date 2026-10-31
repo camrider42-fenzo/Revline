@@ -38,12 +38,12 @@ class CircuitMoneyTest {
         for (p in 0..7) {
             val s = GameState(prestiges = p)
             assertEquals(0.5 * Racing.stakeCost(p), Circuits.entry(s), 1e-6)
-            assertEquals(2.0 * Racing.stakeCost(p), Circuits.winnerPurse(s), 1e-6)
-            listOf(2.0, 1.4, 1.1).zip(Circuits.podium(s)).forEach { (m, d) -> assertEquals(m * Racing.stakeCost(p), d, 1e-6) }
+            assertEquals(1.75 * Racing.stakeCost(p), Circuits.winnerPurse(s), 1e-6)
+            listOf(1.75, 1.2, 0.9, 0.7, 0.5).zip(Circuits.podium(s)).forEach { (m, d) -> assertEquals(m * Racing.stakeCost(p), d, 1e-6) }
         }
-        // At the first rebuild: $100 in; $400, $280 and $220 for the podium.
+        // At the first rebuild: $100 in; $350, $240, $180, $140 and $100 for the top five.
         assertEquals(100.0, Circuits.entry(GameState()), 0.0)
-        assertEquals(listOf(400.0, 280.0, 220.0), Circuits.podium(GameState()).map { Math.round(it).toDouble() })
+        assertEquals(listOf(350.0, 240.0, 180.0, 140.0, 100.0), Circuits.podium(GameState()).map { Math.round(it).toDouble() })
     }
 
     @Test fun circuitPartsAndTiresArePricedBelowTheirListAndKeepTheirOrder() {

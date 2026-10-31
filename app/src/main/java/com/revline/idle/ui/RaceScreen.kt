@@ -619,8 +619,8 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
         modifier = Modifier.padding(top = 4.dp),
     )
     Text(
-        "Prizes  " + Circuits.podium(state).withIndex().joinToString("  ") { (i, d) -> "${i + 1}${listOf("st", "nd", "rd")[i]} ${formatDollars(d)}" } +
-            ". Fourth and below pay nothing.",
+        "Prizes  " + Circuits.podium(state).withIndex().joinToString("  ") { (i, d) -> "${i + 1}${listOf("st", "nd", "rd", "th", "th")[i]} ${formatDollars(d)}" } +
+            ". Sixth and below pay nothing.",
         color = Cyan,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,

@@ -56,7 +56,7 @@ class ResearchPaceTest {
         }
         println(lines.joinToString("\n"))
         val total = ResearchTree.all.size
-        val ordinary = ResearchTree.all.count { it.minPrestige == 0 }
+        val ordinary = ResearchTree.all.count { it.minPrestige < Block.V8.ordinal }
         val report = lines.joinToString("\n")
         assertTrue("moped should study the basics\n$report", owned[0] in 8..20 && owned[0] < ordinary)
         assertTrue("thumper should still be studying\n$report", owned[1] < ordinary)
@@ -67,7 +67,7 @@ class ResearchPaceTest {
     }
 
     private fun play(start: GameState): Run {
-        val basket = BlockPaceTest.sixty
+        val basket = BlockPaceTest.basketFor(BlockPaceTest.sixty, start.prestiges)
         var state = tune(start)
         var sheet = Logic.sheet(state)
         var seconds = 0.0

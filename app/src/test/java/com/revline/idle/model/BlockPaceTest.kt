@@ -113,7 +113,8 @@ class BlockPaceTest {
                 .filter { Logic.researchStatus(state, it.id) == ResearchStatus.OPEN }
                 .filter { study ->
                     basket.any { (id, level) ->
-                        (state.upgrades[id] ?: 0) < level && Logic.lockReason(state, id)?.contains(ResearchTree.byId(study.id).name) == true
+                        (state.upgrades[id] ?: 0) < level && (Logic.lockReason(state, id)?.contains(ResearchTree.byId(study.id).name) == true ||
+                            (Logic.lockReason(state, id) != null && Upgrades.byId(id).requires?.let { study.id in studyClosure(it) } == true))
                     }
                 }
                 .minByOrNull { it.cost }
@@ -271,7 +272,7 @@ class BlockPaceTest {
                 fuel = FuelKind.PREMIUM_93,
                 savedAtEpochMs = 1L,
             )
-            val run = buyBasket(start, sixty)
+            val run = buyBasket(start, basketFor(sixty, index))
             lines += "${block.title}  ${"%.2f".format(run.hours)} h  ${run.note}"
             assertTrue(lines.joinToString("\n"), run.cleared)
             assertTrue("${block.title} ${run.hours} h", run.hours in 1.3..7.0)
@@ -313,11 +314,26 @@ class BlockPaceTest {
             "headers" to 2, "long_tube" to 1, "ceramic" to 1,
             "cam" to 1, "coils" to 2, "tbi_unit" to 1, "manifold" to 1,
             "intercooler" to 1,
+            "rings" to 2, "lean_spark" to 2, "egr" to 1,
         )
+        /** [id] and every study it needs, all the way down. */
+        private fun studyClosure(id: String): Set<String> =
+            setOf(id) + ResearchTree.byId(id).requires.flatMap { studyClosure(it) }
+
+        /** The earliest rebuild a study (and the studies it needs) is open on. */
+        private fun studyOpensAt(id: String): Int {
+            val node = ResearchTree.byId(id)
+            return maxOf(node.minPrestige, node.requires.maxOfOrNull { studyOpensAt(it) } ?: 0)
+        }
+
+        /** [basket] without the parts whose study is not open yet on rebuild [index]. */
+        fun basketFor(basket: Map<String, Int>, index: Int): Map<String, Int> =
+            basket.filterKeys { id -> (Upgrades.byId(id).requires?.let { studyOpensAt(it) } ?: 0) <= index }
+
         val forty = sixty.filterKeys {
             it !in setOf(
                 "headers", "long_tube", "ceramic", "cam", "coils", "tbi_unit",
-                "manifold", "intercooler", "springs", "cold_air", "compression",
+                "manifold", "intercooler", "springs", "cold_air", "compression", "egr",
             )
         }
     }

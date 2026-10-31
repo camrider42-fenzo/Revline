@@ -566,7 +566,7 @@ object EngineSim {
         val gulp = if (plate) 1.0 + 1.8 * open.pow(5.0) * (0.65 + richFraction) else 1.0
         val gallonsPerHour = mFuel * 3600.0 / params.fuel.kgPerGallon * gulp
         val rawMpg = (60.0 / gallonsPerHour.coerceAtLeast(1e-5)).coerceIn(0.4, 400.0)
-        val mpg = boundMpg(rawMpg * params.profitEconomy.coerceIn(1.0, 3.0), params.mpgCap)
+        val mpg = boundMpg(rawMpg * params.profitEconomy.coerceIn(1.0, 4.0), params.mpgCap)
         return OperatingPoint(
             rpm = rpm,
             horsepower = hp,

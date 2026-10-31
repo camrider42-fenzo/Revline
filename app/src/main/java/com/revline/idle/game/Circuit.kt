@@ -534,7 +534,8 @@ object Circuits {
     fun parCar(prestiges: Int): Car = parStates.getOrPut(prestiges.coerceIn(0, Block.entries.lastIndex)) {
         val p = prestiges.coerceIn(0, Block.entries.lastIndex)
         val body = Racing.groupChassis(p, Racing.Build.MEDIUM)
-        val all = Upgrades.all
+        // The mpg-only parts do nothing on a circuit; leaving them out keeps the par car where it was before they existed.
+        val all = Upgrades.all.filter { it.id !in Logic.NEW_ECONOMY_IDS }
         val state = GameState(
             prestiges = p,
             knowledge = p,
@@ -561,11 +562,11 @@ object Circuits {
     // ---- Money ---------------------------------------------------------------------------------------------------
 
     /**
-     * Prize for each of the top three, as a multiple of the entry fee. Only the podium pays: fourth place and below,
-     * and a retirement, get nothing. Set so a field of builds from a par street car to a full kit takes home about what the
-     * old seven-place table (3.2, 2.2, 1.6, 1.2, 0.8, 0.45, 0.2) paid, with the money moved to the podium.
+     * Prize for each of the top five finishers, as a multiple of the entry fee. Sixth place and below, and a retirement,
+     * get nothing. Set so the mean of a par street car, a balanced build and a power build takes home what the 1.71.2
+     * top-three table (4.0, 2.8, 2.2) paid, with the par car paid for its usual fourth and fifth.
      */
-    val prizes = listOf(4.0, 2.8, 2.2)
+    val prizes = listOf(3.5, 2.4, 1.8, 1.4, 1.0)
 
     /** The pool the driver's fee is taken from, in entries. Kept at the old winner's multiple so fees did not move. */
     private const val FEE_PURSE = 3.2
@@ -575,11 +576,11 @@ object Circuits {
     /** What first place pays. */
     fun winnerPurse(state: GameState): Double = prizes[0] * 0.5 * Racing.stakeCost(state.prestiges)
 
-    /** What [position] (1-based) pays. Only the top three are paid. */
+    /** What [position] (1-based) pays. Only the top five are paid. */
     fun prize(state: GameState, position: Int, retired: Boolean): Double =
         if (state.devMode || retired) 0.0 else 0.5 * Racing.stakeCost(state.prestiges) * prizes.getOrElse(position - 1) { 0.0 }
 
-    /** The three payouts, first to third, in dollars. */
+    /** The paying places, first to last, in dollars. */
     fun podium(state: GameState): List<Double> = (1..prizes.size).map { prize(state, it, false) }
 
     /** A circuit seat costs less than a strip seat: the driver takes this share of his usual rate. */

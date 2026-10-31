@@ -17,7 +17,8 @@ object DriverBuilds {
     private val studies = Racing.studies.map { it.id }.toSet()
 
     private fun upgrades(share: Double, extra: Map<String, Int> = emptyMap()): Map<String, Int> {
-        val all = Upgrades.all
+        // The mpg-only economy parts do nothing on a circuit, and leaving them out keeps the share-based picks where they were.
+        val all = Upgrades.all.filter { it.id !in com.revline.idle.game.Logic.NEW_ECONOMY_IDS }
         val count = (all.size * share).toInt()
         return all.take(count).associate { it.id to it.maxLevel } + extra
     }

@@ -115,8 +115,17 @@ object Logic {
     /** Highest pedal the rebuild mpg gate will look at. Past it, power parts and a shot of nitrous pay more, but they drink. */
     const val GATE_CAP = 0.5
 
+    /** The parts that lift the profit-pedal mpg. */
+    val ECONOMY_IDS = listOf("boot", "tip", "needle", "cold_air", "catback", "jets", "afr_map")
+
+    /** The four 1.72.0 economy parts. */
+    val NEW_ECONOMY_IDS = listOf("rings", "lean_spark", "egr", "cyl_off")
+
     /** All seven economy parts at their top level lift the mpg read under load by this much, 1.6 meaning +160%. */
     const val PROFIT_ECONOMY_GAIN = 1.6
+
+    /** The four newer economy parts, all at their top level, add this much more on top of [PROFIT_ECONOMY_GAIN]. */
+    const val NEW_ECONOMY_GAIN = 0.8
 
     fun profitStop(state: GameState, cap: Double = 1.0): ProfitStop {
         val params = paramsFrom(state)
@@ -263,6 +272,10 @@ object Logic {
         val thermostat = lvl("thermostat")
         val cap = lvl("cap")
         val afr = lvl("afr_map")
+        val rings = lvl("rings")
+        val leanSpark = lvl("lean_spark")
+        val egr = lvl("egr")
+        val cylOff = lvl("cyl_off")
         val torque = lvl("torque_model") > 0
         val synthetic = lvl("synthetic") > 0
         val inconel = lvl("inconel") > 0
@@ -362,7 +375,8 @@ object Logic {
                 0.032 * cai +
                 0.030 * catback +
                 0.030 * jets +
-                0.035 * afr
+                0.035 * afr +
+                0.02 * rings + 0.02 * leanSpark + 0.02 * egr + 0.03 * cylOff
             )
         fun part(level: Int, max: Int) = (level.toDouble() / max).coerceIn(0.0, 1.0).pow(0.7)
         // The first level of each part is the one you feel most, so the curve is a little concave.
@@ -374,6 +388,11 @@ object Logic {
                 0.14 * part(catback, 4) +
                 0.14 * part(jets, 4) +
                 0.18 * part(afr, 6)
+            ) + NEW_ECONOMY_GAIN * (
+            0.16 * part(rings, 3) +
+                0.24 * part(leanSpark, 3) +
+                0.28 * part(egr, 3) +
+                0.32 * part(cylOff, 2)
             )
         val pipe = exhaustNote(
             backpressure = bp,
