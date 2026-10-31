@@ -199,10 +199,12 @@ class RaceDriveTest {
         val broke = Racing.openStake(GameState(money = 10.0), 1L)
         assertNull(broke)
         val (paid, field) = Racing.openStake(GameState(money = 5_000.0), 7L)!!
-        assertEquals(4_000.0, paid.money, 0.01)
-        assertEquals(2_000.0, field.purse, 0.01)
-        assertEquals(6_000.0, Racing.award(paid, field, won = true, ladder = false).money, 0.01)
-        assertEquals(4_000.0, Racing.award(paid, field, won = false, ladder = false).money, 0.01)
+        val stake = Racing.stakeCost(0)
+        assertEquals(200.0, stake, 0.0)
+        assertEquals(5_000.0 - stake, paid.money, 0.01)
+        assertEquals(2.0 * stake, field.purse, 0.01)
+        assertEquals(5_000.0 + stake, Racing.award(paid, field, won = true, ladder = false).money, 0.01)
+        assertEquals(5_000.0 - stake, Racing.award(paid, field, won = false, ladder = false).money, 0.01)
         val dev = GameState(money = 0.0, prestiges = 2, devMode = true)
         val (free, practice) = Racing.openStake(dev, 3L)!!
         assertEquals(0.0, free.money, 0.01)

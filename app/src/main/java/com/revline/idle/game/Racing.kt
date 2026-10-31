@@ -5,7 +5,10 @@ import com.revline.idle.economy.formatDollars
 import com.revline.idle.model.Block
 import com.revline.idle.model.EngineSim
 import java.util.Locale
+import kotlin.math.floor
+import kotlin.math.log10
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -397,7 +400,23 @@ object Racing {
         return Car(spec, mass, wheelHp, pace, fade, fits = !stuffed)
     }
 
-    fun stakeCost(prestiges: Int): Double = 1_000.0 * 10.0.pow(prestiges.coerceIn(0, 7).toDouble())
+    /** The stake on the first long-block. Later blocks follow the shop's own price scale, so a stake stays the same few minutes of pay. */
+    const val STAKE_BASE = 200.0
+
+    /**
+     * What a stake race costs to enter, and what a circuit entry is derived from (half of it, see Circuits.entry).
+     * It rises with [Block.upgradePriceScale] like every part price, rounded to two figures so it reads clean.
+     * Both drag stakes and circuit entries, prizes, fees and rebuilds follow this one number.
+     */
+    fun stakeCost(prestiges: Int): Double {
+        val p = prestiges.coerceIn(0, 7)
+        val raw = STAKE_BASE * Block.forPrestige(p).upgradePriceScale(p) / Block.forPrestige(0).upgradePriceScale(0)
+        val step = 10.0.pow(floor(log10(raw)) - 1.0)
+        return (raw / step).roundToInt() * step
+    }
+
+    /** Circuit parts and circuit tires cost this share of their list price in [Parts] and [circuitTires]. Drag parts are untouched. */
+    const val CIRCUIT_PRICE_FACTOR = 0.2
 
     fun quick(state: GameState, tier: Tier): Pair<GameState, String> {
         val you = car(state)
@@ -680,9 +699,9 @@ object Racing {
         "box" -> gearboxes.find { it.id == id }?.price ?: 0.0
         "axle" -> axles.find { it.id == id }?.price ?: 0.0
         "tire" -> tires.find { it.id == id }?.price ?: 0.0
-        "ctire" -> circuitTires.find { it.id == id }?.price ?: 0.0
+        "ctire" -> (circuitTires.find { it.id == id }?.price ?: 0.0) * CIRCUIT_PRICE_FACTOR
         "final" -> finals.find { it.id == id }?.price ?: 0.0
-        else -> Parts.line(kind)?.level(id.toIntOrNull() ?: 0)?.price ?: 0.0
+        else -> (Parts.line(kind)?.level(id.toIntOrNull() ?: 0)?.price ?: 0.0) * CIRCUIT_PRICE_FACTOR
     }
 
     private fun partPrice(state: GameState, kind: String, id: String): Double {
