@@ -66,11 +66,13 @@ data class GameState(
     val soakC: Double = 0.0,
     val savedAtEpochMs: Long = 0L,
     val dynoReadyAtEpochMs: Long = 0L,
+    /** Circuit races entered. The weather of the next race is a function of this and the circuit. */
+    val circuitRaces: Int = 0,
     val version: Int = SAVE_VERSION,
 )
 
-/** 1: one tire for drag and circuit. 2: separate drag and circuit tires, race components. */
-const val SAVE_VERSION = 2
+/** 1: one tire for drag and circuit. 2: separate drag and circuit tires, race components. 3: circuit race counter (weather). */
+const val SAVE_VERSION = 3
 
 object SaveCodec {
     private val json = Json {
@@ -94,6 +96,8 @@ object SaveCodec {
      */
     fun migrate(state: GameState): GameState {
         if (state.version >= SAVE_VERSION) return state
+        // 2 to 3 added only fields whose defaults are the right start: nothing to convert.
+        if (state.version >= 2) return state.copy(version = SAVE_VERSION)
         val studiedSport = "tire_race" in state.raceStudies || "tire_slick" in state.raceStudies
         val studiedSemi = "tire_slick" in state.raceStudies
         val ownsSport = "tire:race" in state.raceOwned || "tire:slick" in state.raceOwned || state.tire == "race" || state.tire == "slick"

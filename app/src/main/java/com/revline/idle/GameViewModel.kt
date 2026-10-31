@@ -303,6 +303,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun runCircuit(id: String, driverId: String, orders: Circuits.Orders = Circuits.Orders()) {
         if (ui.circuitBusy || ui.strip != null) return
         val circuit = Circuits.all.firstOrNull { it.id == id } ?: return
+        val weather = Circuits.weatherFor(ui.game.circuitRaces, id)
         when (val entry = Circuits.open(ui.game, driverId)) {
             is Circuits.Entry.Refused -> publish(ui.copy(raceNote = entry.note))
             is Circuits.Entry.Paid -> {
@@ -312,7 +313,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 val seed = System.nanoTime()
                 viewModelScope.launch {
                     val outcome = withContext(Dispatchers.Default) {
-                        Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed, orders)
+                        Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed, orders, weather)
                     }
                     // The till has moved on since the lights went green: pay onto what is there now.
                     val game = ui.game.let { it.copy(money = (it.money + outcome.prize - outcome.repair).coerceAtLeast(0.0)) }

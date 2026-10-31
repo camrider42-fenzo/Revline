@@ -207,5 +207,5 @@ class PartsTest {
         for ((k, t) in out.byBuild) assertTrue("$k dnf ${t.dnfRate()}", t.dnfRate() in 0.0..0.35)
     }
 
-    private companion object { const val SAVE_VERSION_FOR_TEST = 2 }
+    private companion object { const val SAVE_VERSION_FOR_TEST = com.revline.idle.data.SAVE_VERSION }
 }

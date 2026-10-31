@@ -628,6 +628,14 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 2.dp),
     )
+    val weather = Circuits.weatherFor(state.circuitRaces, circuit.id)
+    Text(
+        "FORECAST  ${weather.title.uppercase(Locale.US)}. ${weather.blurb}",
+        color = if (weather == Circuits.Weather.DRY) Lime else Amber,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 8.dp),
+    )
     var strategy by rememberSaveable { mutableStateOf(Circuits.Strategy.STAY_OUT) }
     var pace by rememberSaveable { mutableStateOf(Circuits.Pace.STEADY) }
     Text("PIT WALL", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
@@ -636,7 +644,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
     ChipRow(Circuits.Pace.entries.map { it.name to it.title.uppercase(Locale.US) }, pace.name) { pace = Circuits.Pace.valueOf(it) }
     Text(pace.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
     val advice by produceState<List<Circuits.Advice>?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.circuitTire, state.kit) {
-        value = withContext(Dispatchers.Default) { Circuits.advise(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you) }
+        value = withContext(Dispatchers.Default) { Circuits.advise(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, weather) }
     }
     advice?.let { list ->
         val best = list.first()
@@ -663,7 +671,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
             )
-            Text("Driver ${r.driver}  ${r.orders.strategy.title}, ${r.orders.pace.title.lowercase(Locale.US)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Text("Driver ${r.driver}  ${r.orders.strategy.title}, ${r.orders.pace.title.lowercase(Locale.US)}, ${r.weather.title.lowercase(Locale.US)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             if (r.retired != null) Text(r.retired, color = Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             else Text("Total ${Circuits.clock(r.totalTime)}  best lap ${Circuits.clock(r.bestLap)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             Text(
