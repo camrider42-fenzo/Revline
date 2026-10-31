@@ -33,6 +33,7 @@ import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.RaceLog
 import com.revline.idle.game.Rivals
 import com.revline.idle.game.Season
+import com.revline.idle.game.Tires
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -674,32 +675,73 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
         fontSize = 11.sp,
         modifier = Modifier.padding(top = 8.dp),
     )
-    var strategy by rememberSaveable { mutableStateOf(Circuits.Strategy.STAY_OUT) }
+    val laps = circuit.laps
+    val wet = weather == Circuits.Weather.WET
+    val pool = if (weather == Circuits.Weather.DRY) Tires.dry else Tires.Compound.entries
+    var start by rememberSaveable(circuit.id, weather) { mutableStateOf(if (wet) Tires.Compound.WET else Tires.Compound.MEDIUM) }
+    var finish by rememberSaveable(circuit.id, weather) { mutableStateOf(if (wet) Tires.Compound.WET else Tires.Compound.HARD) }
+    var stop by rememberSaveable(circuit.id, weather) { mutableStateOf(if (wet) 0 else (laps + 1) / 2) }
     var pace by rememberSaveable { mutableStateOf(Circuits.Pace.STEADY) }
     Text("PIT WALL", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-    ChipRow(Circuits.Strategy.entries.map { it.name to it.title.uppercase(Locale.US) }, strategy.name) { strategy = Circuits.Strategy.valueOf(it) }
-    Text(strategy.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    Text(
+        "${circuit.corners} corners a lap: ${Tires.wearWord(circuit)}. " + Tires.rule(weather),
+        color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp,
+    )
+    Text("START ON", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+    ChipRow(pool.map { it.name to it.title.uppercase(Locale.US) }, start.name) { start = Tires.Compound.valueOf(it); if (stop == 0 && wet) finish = start }
+    Text(start.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    Text("STOP AT THE END OF LAP", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+    ChipRow((if (wet) listOf("0" to "NO STOP") else emptyList()) + (1 until laps).map { it.toString() to it.toString() }, stop.toString()) {
+        stop = it.toInt()
+        if (stop == 0) finish = start
+    }
+    Text("FINISH ON", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+    ChipRow(pool.map { it.name to it.title.uppercase(Locale.US) }, finish.name) { finish = Tires.Compound.valueOf(it) }
+    Text("PACE", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
     ChipRow(Circuits.Pace.entries.map { it.name to it.title.uppercase(Locale.US) }, pace.name) { pace = Circuits.Pace.valueOf(it) }
     Text(pace.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    val orders = Circuits.Orders(start, stop, finish, pace)
+    val breach = Tires.breach(orders.fit, laps, weather)
+    if (breach != null) Text("ILLEGAL: $breach", color = Red, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+    val mine by produceState<Circuits.Advice?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.circuitTire, state.kit, start, stop, finish, pace) {
+        value = withContext(Dispatchers.Default) {
+            if (breach != null) null else Circuits.forecast(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, orders, weather)
+        }
+    }
+    mine?.let { m ->
+        val stopText = m.gripAtStop?.let { "At the stop (end of lap $stop) the ${start.title.lowercase(Locale.US)}s have ${(it * 100).toInt()}% grip. " } ?: "No stop. "
+        Text(
+            "${stopText}At the flag the ${finish.title.lowercase(Locale.US)}s have ${(m.gripAtFlag * 100).toInt()}% grip. Planned race ${Circuits.clock(m.raceTime)}.",
+            color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+    val wearTable by produceState<Map<Tires.Compound, Double>?>(null, car.massKg, picked?.id, circuit.id, state.circuitTire, state.kit, pace) {
+        value = withContext(Dispatchers.Default) { Circuits.noStopGrip(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, pace, weather) }
+    }
+    wearTable?.let { t ->
+        Text(
+            "Grip at the flag with no stop: " + pool.joinToString("  ") { "${it.letter} ${((t[it] ?: 1.0) * 100).toInt()}%" } + "  (a stop is required)",
+            color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp,
+        )
+    }
     val advice by produceState<List<Circuits.Advice>?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.circuitTire, state.kit) {
         value = withContext(Dispatchers.Default) { Circuits.advise(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, weather) }
     }
     advice?.let { list ->
-        val best = list.first()
-        val mine = list.first { it.strategy == strategy && it.pace == pace }
+        val best = list.first().orders
         Text(
-            "Planned race ${Circuits.clock(mine.raceTime)}, tires at ${(mine.gripAtFlag * 100).toInt()}% grip at the flag. Best plan on paper: ${best.strategy.title}, ${best.pace.title}, ${Circuits.clock(best.raceTime)}.",
-            color = Cyan,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 10.sp,
+            "Best plan on paper: ${best.start.title} to ${best.finish.title}" + (if (best.stop > 0) ", stop lap ${best.stop}" else ", no stop") +
+                ", ${best.pace.title.lowercase(Locale.US)}, ${Circuits.clock(list.first().raceTime)}.",
+            color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp,
         )
+        LineButton("Use best plan", true, { start = best.start; stop = best.stop; finish = best.finish; pace = best.pace }, Modifier.padding(top = 2.dp))
     }
     Text("THE FIELD", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
     Rivals.all.forEach { r ->
         Text("${r.name}, ${r.team}: ${r.style.title}, aggression ${(r.style.aggression * 100).toInt()}. ${r.style.blurb}", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
     }
-    val can = picked != null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
-    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "", Circuits.Orders(strategy, pace)) }, Modifier.padding(top = 6.dp))
+    val can = picked != null && breach == null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
+    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "", orders) }, Modifier.padding(top = 6.dp))
     ui.circuitOutcome?.let { o ->
         val r = o.result
         Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, if (r.retired != null) Red else Lime).padding(8.dp)) {
@@ -709,7 +751,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
             )
-            Text("Driver ${r.driver}  ${r.orders.strategy.title}, ${r.orders.pace.title.lowercase(Locale.US)}, ${r.weather.title.lowercase(Locale.US)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Text("Driver ${r.driver}  ${r.orders.start.title} to ${r.orders.finish.title}" + (if (r.orders.stop > 0) ", stop lap ${r.orders.stop}" else ", no stop") + ", ${r.orders.pace.title.lowercase(Locale.US)}, ${r.weather.title.lowercase(Locale.US)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             if (r.retired != null) Text(r.retired, color = Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             else Text("Total ${Circuits.clock(r.totalTime)}  best lap ${Circuits.clock(r.bestLap)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             Text(

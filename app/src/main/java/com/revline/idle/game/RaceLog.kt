@@ -17,6 +17,8 @@ object RaceLog {
         val outOnLap: Int = 0,
         /** Laps the car came in at the end of. */
         val pits: Set<Int> = emptySet(),
+        /** The compound on each lap. Empty on a run built by hand. */
+        val tires: List<Tires.Compound> = emptyList(),
     ) {
         val out: Boolean get() = outOnLap > 0
         /** Whole laps the car completed. */
@@ -26,7 +28,7 @@ object RaceLog {
     }
 
     /** One line of the order after a lap. [gap] is to the leader, 0 for the leader, null for a car that is out. */
-    data class Slot(val position: Int, val name: String, val team: String, val you: Boolean, val gap: Double?, val out: Boolean, val pitted: Boolean)
+    data class Slot(val position: Int, val name: String, val team: String, val you: Boolean, val gap: Double?, val out: Boolean, val pitted: Boolean, val tire: Tires.Compound? = null)
 
     data class Event(val lap: Int, val text: String)
 
@@ -44,6 +46,8 @@ object RaceLog {
         val gapLeader: Double?,
         val fastest: Boolean,
         val pitted: Boolean,
+        /** The compound the player ran this lap, null on a log built by hand. */
+        val yourTire: Tires.Compound?,
         val events: List<Event>,
     )
 
@@ -80,7 +84,7 @@ object RaceLog {
             val lead = running.firstOrNull()?.cumulative(lap) ?: 0.0
             val slots = ArrayList<Slot>()
             running.forEachIndexed { i, run ->
-                slots.add(Slot(i + 1, run.name, run.team, run.you, run.cumulative(lap) - lead, false, lap in run.pits))
+                slots.add(Slot(i + 1, run.name, run.team, run.you, run.cumulative(lap) - lead, false, lap in run.pits, run.tires.getOrNull(lap - 1)))
             }
             retired.forEachIndexed { i, run -> slots.add(Slot(running.size + i + 1, run.name, run.team, run.you, null, true, false)) }
             val me = slots.first { it.you }
@@ -93,7 +97,12 @@ object RaceLog {
                 if (run.out && run.outOnLap == lap) {
                     rowEvents.add(Event(lap, if (run.you) "You are out." else "${run.name} (${run.team}) is out."))
                 }
-                if (lap in run.pits) rowEvents.add(Event(lap, if (run.you) "You pit for fresh tires." else "${run.name} pits."))
+                if (lap in run.pits) {
+                    val to = run.tires.getOrNull(lap)
+                    val from = run.tires.getOrNull(lap - 1)
+                    val change = if (to != null && from != null) ": ${from.title} to ${to.title}" else ""
+                    rowEvents.add(Event(lap, if (run.you) "You pit for fresh tires$change." else "${run.name} pits$change."))
+                }
             }
             if (lap == fastestLapNo && fastest > 0.0) rowEvents.add(Event(lap, "Fastest lap of the race: ${fastestBy}, ${Circuits.clock(fastest)}."))
             if (!out && lastPlace != 0 && me.position != lastPlace) {
@@ -107,7 +116,7 @@ object RaceLog {
                     lap, slots, me.position, you.times.getOrElse(lap - 1) { 0.0 }, out,
                     if (out) null else if (ahead == null) 0.0 else me.gap!! - ahead.gap!!,
                     if (out || behind == null) null else behind.gap!! - me.gap!!,
-                    me.gap, lap == fastestLapNo && fastestBy == you.name, lap in you.pits,
+                    me.gap, lap == fastestLapNo && fastestBy == you.name, lap in you.pits, you.tires.getOrNull(lap - 1),
                     rowEvents.sortedBy { it.text },
                 ),
             )
@@ -127,7 +136,7 @@ object RaceLog {
                 r.yourPosition == 1 -> "leading" + (r.gapBehind?.let { ", +${sec(it)} clear" } ?: "")
                 else -> "+${sec(r.gapAhead)} to P${r.yourPosition - 1}, +${sec(r.gapLeader ?: 0.0)} to leader"
             }
-            "$lap P${r.yourPosition}  ${Circuits.clock(r.yourTime)}  $gap" + if (r.pitted) "  PIT" else ""
+            "$lap ${r.yourTire?.letter ?: " "} P${r.yourPosition}  ${Circuits.clock(r.yourTime)}  $gap" + if (r.pitted) "  PIT" else ""
         }
     }
 

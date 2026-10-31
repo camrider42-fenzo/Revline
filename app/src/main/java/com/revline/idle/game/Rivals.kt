@@ -12,8 +12,8 @@ object Rivals {
         val blurb: String,
         /** Qualifying lap against his race pace: negative is a better one-lap car. */
         val quali: Double,
-        /** Race pace change per lap, as a share of the lap, centred on the middle of the race. Positive fades. */
-        val fade: Double,
+        /** How hard he is on his tires against the field's usual: above 1 they go off, below 1 they last. */
+        val tires: Double,
         /** Lap-to-lap scatter against the field's usual. */
         val scatter: Double,
         /** Against the field's usual chance of a retirement. */
@@ -24,16 +24,14 @@ object Rivals {
         val aggression: Double,
         /** Skill in the wet, -1..1. Applied only in weather. */
         val wet: Double,
-        /** Whether he takes a pit stop on a race with wear. */
-        val stops: Boolean,
     ) {
-        QUALIFIER("One-lap specialist", "Quick on a fresh set. Takes pole, fades as the tires go.", -0.0060, 0.0016, 1.0, 1.0, 0.0, 0.25, 0.0, false),
-        CLOSER("Race pace", "Starts mid-grid and comes on. The tires last for him.", 0.0050, -0.0016, 1.0, 1.0, 0.0, 0.25, 0.0, false),
-        STEADY("Metronome", "Same lap every lap, and he finishes. Never wins on a hard day.", 0.0, 0.0, 0.4, 0.4, 0.0, 0.1, 0.0, false),
-        AGGRESSIVE("Hard charger", "Quicker on average. Ragged, runs wide, and puts it in the wall.", 0.0010, 0.0, 2.0, 3.0, -0.0030, 0.9, -0.2, false),
-        STRATEGIST("Strategist", "Pits for fresh tires and runs hard after it.", 0.0, 0.0, 1.0, 1.0, 0.0, 0.3, 0.1, true),
-        WET_MASTER("Rain specialist", "Ordinary in the dry. In the wet he is a different driver.", 0.0, 0.0, 1.0, 1.0, 0.0, 0.4, 0.9, false),
-        SURVIVOR("Banker", "Nursed through every race. Slow qualifier, rarely out.", 0.0040, 0.0, 0.7, 0.3, 0.0010, 0.1, 0.1, false),
+        QUALIFIER("One-lap specialist", "Quick on a fresh set. Takes pole on softs, and they go off.", -0.0060, 1.20, 1.0, 1.0, 0.0, 0.25, 0.0),
+        CLOSER("Race pace", "Starts mid-grid, runs long and comes on late on softs.", 0.0050, 0.85, 1.0, 1.0, 0.0, 0.25, 0.0),
+        STEADY("Metronome", "Mediums then hards, same lap every lap, and he finishes. Never wins on a hard day.", 0.0, 0.90, 0.4, 0.4, 0.0, 0.1, 0.0),
+        AGGRESSIVE("Hard charger", "Quicker on average. Soft tires, an early stop, ragged, runs wide, and puts it in the wall.", 0.0010, 1.10, 2.0, 3.0, -0.0030, 0.9, -0.2),
+        STRATEGIST("Strategist", "Works out the quickest compounds and pit lap for the circuit and the sky.", 0.0, 1.0, 1.0, 1.0, 0.0, 0.3, 0.1),
+        WET_MASTER("Rain specialist", "Ordinary in the dry. In the wet he is a different driver.", 0.0, 1.0, 1.0, 1.0, 0.0, 0.4, 0.9),
+        SURVIVOR("Banker", "Hards, then mediums: nursed through every race. Slow qualifier, rarely out.", 0.0040, 0.80, 0.7, 0.3, 0.0010, 0.1, 0.1),
     }
 
     data class Rival(

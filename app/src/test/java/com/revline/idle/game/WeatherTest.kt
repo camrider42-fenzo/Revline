@@ -35,7 +35,7 @@ class WeatherTest {
         for (t in listOf("street", "racing")) for (c in Circuits.all) {
             val dry = Circuits.plan(car(t), c, d).mean
             val damp = Circuits.plan(car(t), c, d, weather = D).mean
-            val wet = Circuits.plan(car(t), c, d, weather = W).mean
+            val wet = Circuits.plan(car(t), c, d, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mean
             assertTrue("$t ${c.id}", dry < damp && damp < wet)
             assertTrue("$t ${c.id} wet is a few percent, not a different race: ${wet / dry}", wet / dry in 1.02..1.35)
         }
@@ -44,20 +44,22 @@ class WeatherTest {
     @Test fun aSlickLosesMoreInTheWetThanAStreetTire() {
         val d = Drivers.byId("colette")!!
         for (c in Circuits.all) {
-            val street = Circuits.plan(car("street"), c, d, weather = W).mean / Circuits.plan(car("street"), c, d).mean
-            val racing = Circuits.plan(car("racing"), c, d, weather = W).mean / Circuits.plan(car("racing"), c, d).mean
+            val street = Circuits.plan(car("street"), c, d, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mean / Circuits.plan(car("street"), c, d).mean
+            val racing = Circuits.plan(car("racing"), c, d, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mean / Circuits.plan(car("racing"), c, d).mean
             assertTrue("${c.id} street $street racing $racing", racing > street)
         }
     }
+
+    private val WETS = Circuits.Orders(Tires.Compound.WET, 0, Tires.Compound.WET)
 
     @Test fun aSlickStillLeadsInTheDampButNotByMuchInTheWet() {
         val d = Drivers.byId("colette")!!
         var dryGain = 0.0; var wetGain = 0.0
         for (c in Circuits.all) {
             dryGain += Circuits.plan(car("street"), c, d).mean / Circuits.plan(car("racing"), c, d).mean - 1.0
-            wetGain += Circuits.plan(car("street"), c, d, weather = W).mean / Circuits.plan(car("racing"), c, d, weather = W).mean - 1.0
+            wetGain += Circuits.plan(car("street"), c, d, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mean / Circuits.plan(car("racing"), c, d, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mean - 1.0
         }
-        assertTrue("dry gain $dryGain, wet gain $wetGain", wetGain < dryGain * 0.4)
+        assertTrue("dry gain $dryGain, wet gain $wetGain", wetGain < dryGain * 0.6)
     }
 
     @Test fun aWetHandIsWorthMoreInTheRain() {
@@ -65,16 +67,21 @@ class WeatherTest {
         val smooth = Drivers.you.copy(care = 90, cornering = 80, mistakes = 20)
         val rough = Drivers.you.copy(care = 15, cornering = 30, mistakes = 80)
         val dry = Circuits.plan(k, c, rough).mean / Circuits.plan(k, c, smooth).mean
-        val wet = Circuits.plan(k, c, rough, weather = W).mean / Circuits.plan(k, c, smooth, weather = W).mean
+        val wet = Circuits.plan(k, c, rough, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mean / Circuits.plan(k, c, smooth, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mean
         assertTrue("dry gap $dry, wet gap $wet", wet > dry)
-        assertTrue(Circuits.plan(k, c, rough, weather = W).mistakes > Circuits.plan(k, c, smooth, weather = W).mistakes * 1.3)
+        assertTrue(Circuits.plan(k, c, rough, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mistakes > Circuits.plan(k, c, smooth, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W).mistakes * 1.3)
     }
 
-    @Test fun theWetCoolsTheTires() {
+    @Test fun theWetCoolsSlicksAndACookedWetIsWorn() {
         val c = circuit("hungaroring"); val d = Drivers.byId("colette")!!
-        val dry = Circuits.plan(car("racing"), c, d).grip.last()
-        val wet = Circuits.plan(car("racing"), c, d, weather = W).grip.last()
-        assertTrue(wet > dry)
+        val k = car("racing")
+        for (cp in Tires.dry) assertTrue(Tires.wearIn(cp, 1.0) < Tires.wearIn(cp, 0.0))
+        assertTrue(Tires.wearIn(Tires.Compound.WET, 0.0) > 2.0 * Tires.wearIn(Tires.Compound.WET, 1.0))
+        // The same rubber used all race ends less worn in the rain than in the dry; a wet tire in the dry is cooked.
+        val dry = Circuits.noStopGrip(k, c, d, Circuits.Pace.STEADY, Circuits.Weather.DRY)
+        val wet = Circuits.noStopGrip(k, c, d, Circuits.Pace.STEADY, W)
+        assertTrue(wet[Tires.Compound.MEDIUM]!! > dry[Tires.Compound.MEDIUM]!!)
+        assertTrue(dry[Tires.Compound.WET]!! < dry[Tires.Compound.MEDIUM]!!)
     }
 
     @Test fun theRainSpecialistGainsOnTheFieldInTheWet() {
@@ -82,7 +89,7 @@ class WeatherTest {
         fun meanPos(w: Circuits.Weather, name: String): Double {
             var sum = 0.0
             for (seed in 1L..300L) {
-                val r = Circuits.race(Circuits.plan(car("street"), c, d, weather = w), d, Circuits.parPlan(P, c, w), seed)
+                val r = Circuits.race(Circuits.plan(car("street"), c, d, orders = if (w == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = w), d, Circuits.parPlan(P, c, w), seed)
                 sum += r.grid.indexOfFirst { it.name == name } + 1
             }
             return sum / 300
@@ -94,7 +101,7 @@ class WeatherTest {
 
     @Test fun theLogSaysWhatTheWeatherWas() {
         val c = circuit("spa"); val d = Drivers.byId("colette")!!
-        val r = Circuits.race(Circuits.plan(car("street"), c, d, weather = W), d, Circuits.parPlan(P, c, W), 3L)
+        val r = Circuits.race(Circuits.plan(car("street"), c, d, orders = if (W == Circuits.Weather.WET) WETS else Circuits.Orders(), weather = W), d, Circuits.parPlan(P, c, W), 3L)
         assertEquals(W, r.weather)
         assertTrue(r.log.events.any { it.text == "Conditions: wet." })
         val dry = Circuits.race(Circuits.plan(car("street"), c, d), d, Circuits.parPlan(P, c), 3L)

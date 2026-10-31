@@ -42,11 +42,10 @@ class RivalsTest {
         assertTrue("charger ${out("Jochen Rindt")} metronome ${out("John Surtees")}", out("Jochen Rindt") > out("John Surtees") + 5)
     }
 
-    @Test fun aQualifierFadesAndACloserComesOn() {
-        assertTrue(Rivals.Style.QUALIFIER.quali < 0.0 && Rivals.Style.QUALIFIER.fade > 0.0)
-        assertTrue(Rivals.Style.CLOSER.quali > 0.0 && Rivals.Style.CLOSER.fade < 0.0)
-        // Over a race the fade is centred, so no style is quicker on average than his offset says, bar the hard charger.
-        for (st in Rivals.Style.entries) for (laps in 3..6) assertEquals(0.0, (1..laps).sumOf { st.fade * (it - (laps + 1) / 2.0) }, 1e-12)
+    @Test fun aQualifierEatsTiresAndACloserSavesThem() {
+        assertTrue(Rivals.Style.QUALIFIER.quali < 0.0 && Rivals.Style.QUALIFIER.tires > 1.0)
+        assertTrue(Rivals.Style.CLOSER.quali > 0.0 && Rivals.Style.CLOSER.tires < 1.0)
+        assertTrue(Rivals.Style.SURVIVOR.tires < 1.0)
         assertTrue(Rivals.Style.entries.filter { it.pace != 0.0 }.all { Math.abs(it.pace) <= 0.0030 + 1e-12 })
         assertTrue(Rivals.Style.AGGRESSIVE.pace < 0.0 && Rivals.Style.AGGRESSIVE.dnf > 2.0)
     }
