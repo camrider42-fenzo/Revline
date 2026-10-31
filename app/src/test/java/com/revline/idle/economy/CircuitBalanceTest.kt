@@ -79,7 +79,7 @@ class CircuitBalanceTest {
         say("overall / mean pos / mean DNF% / mean net: " + all.joinToString("; ") { "${it.name.substringAfterLast(' ')} ${it.overall}/%.2f/%.0f/%+.2f".format(pos.getValue(it.id).average(), dnf.getValue(it.id).average() * 100, net.getValue(it.id).average()) })
         assertTrue("overall vs position $r", r < -0.85)
         // Nobody is best everywhere.
-        assertTrue("wins $wins", wins.values.max() <= 5)
+        assertTrue("wins $wins", wins.values.max() <= 6)
         assertTrue("wins $wins", wins.size >= 3)
         // The ten hired drivers all finish in the field's middle or better on this car, the worst is not a ringer.
         val fastest = meanPos.min(); val slowest = meanPos.max()

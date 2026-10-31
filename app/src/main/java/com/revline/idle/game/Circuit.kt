@@ -395,7 +395,7 @@ object Circuits {
         return Plan(circuit, laps, failure, hands, car.mistakes)
     }
 
-    data class Finisher(val name: String, val time: Double, val out: Boolean, val you: Boolean = false)
+    data class Finisher(val name: String, val time: Double, val out: Boolean, val you: Boolean = false, val team: String = "")
 
     data class Result(
         val circuit: Circuit,
@@ -417,7 +417,7 @@ object Circuits {
     )
 
     /** One car's qualifying lap. [slot] is its place on the grid, 1 on pole. */
-    data class QualiRow(val name: String, val time: Double, val slot: Int, val you: Boolean)
+    data class QualiRow(val name: String, val team: String, val time: Double, val slot: Int, val you: Boolean)
 
     data class Qualifying(val rows: List<QualiRow>) {
         companion object { val EMPTY = Qualifying(emptyList()) }
@@ -432,17 +432,6 @@ object Circuits {
 
     /** The first-lap time a grid slot costs (negative at the front): traffic and no room to pass, worse where mistakes are paid for. */
     fun gridOffset(slot: Int, circuit: Circuit): Double = GRID_SLOT * circuit.punish * (slot - (FIELD + 1) / 2.0)
-
-    /** The seven rivals: how far off the par car each runs (fraction of lap time). Negative is quicker. */
-    private val rivals = listOf(
-        "Jim Clark" to -0.130,
-        "John Surtees" to -0.075,
-        "Jochen Rindt" to -0.015,
-        "Emerson Fittipaldi" to 0.005,
-        "Mario Andretti" to 0.025,
-        "Nelson Piquet" to 0.045,
-        "Nigel Mansell" to 0.075,
-    )
 
     const val FIELD = 8
 
@@ -476,19 +465,22 @@ object Circuits {
         val myName = driver.name.ifEmpty { "You" }
         val mean = par.mean
         val freshness = par.laps.first().time / mean
-        val paces = rivals.map { (name, offset) ->
-            val aptitude = ((((name.hashCode() * 31 + circuit.id.hashCode()) and 0xFFFF) / 65535.0) - 0.5) * 0.012
-            mean * (1.0 + offset + aptitude + 0.004 * qualiDice.gauss())
+        val paces = Rivals.all.map { r ->
+            val aptitude = ((((r.name.hashCode() * 31 + circuit.id.hashCode()) and 0xFFFF) / 65535.0) - 0.5) * 0.012
+            mean * (1.0 + r.offset + aptitude + r.style.pace + 0.004 * qualiDice.gauss())
         }
         val qualiNoise = 0.003 + 0.004 * plan.hands.mistakes
         var myQuali = plan.laps.first().time * (1.0 + qualiNoise * qualiDice.gauss())
         // A scruffy lap: the stat that makes mistakes on Sunday makes them on Saturday too.
         if (qualiDice.next() < 0.04 + 0.16 * plan.hands.mistakes * plan.mistakes) myQuali *= 1.0 + 0.004 + 0.012 * qualiDice.next()
-        val qualiTimes = rivals.indices.map { paces[it] * freshness * (1.0 + 0.003 * qualiDice.gauss()) } + myQuali
-        val qualiNames = rivals.map { it.first } + myName
+        val qualiTimes = Rivals.all.indices.map {
+            paces[it] * freshness * (1.0 + Rivals.all[it].style.quali + 0.003 * Rivals.all[it].style.scatter.coerceAtLeast(0.6) * qualiDice.gauss())
+        } + myQuali
+        val qualiNames = Rivals.all.map { it.name } + myName
+        val qualiTeams = Rivals.all.map { it.team } + Rivals.YOUR_TEAM
         val qualiOrder = qualiTimes.indices.sortedBy { qualiTimes[it] }
         val slots = IntArray(qualiTimes.size).also { arr -> qualiOrder.forEachIndexed { slot, i -> arr[i] = slot + 1 } }
-        val qualifying = Qualifying(qualiOrder.map { QualiRow(qualiNames[it], qualiTimes[it], slots[it], it == qualiTimes.lastIndex) })
+        val qualifying = Qualifying(qualiOrder.map { QualiRow(qualiNames[it], qualiTeams[it], qualiTimes[it], slots[it], it == qualiTimes.lastIndex) })
         val mySlot = slots.last()
         val incidents = ArrayList<String>()
         val times = ArrayList<Double>()
@@ -557,8 +549,11 @@ object Circuits {
         val finished = retired == null
         val best = (if (times.size > 1) times.drop(1) else times).minOrNull() ?: 0.0
         val grid = ArrayList<Finisher>()
+        val rivalNotes = ArrayList<RaceLog.Event>()
         val runs = ArrayList<RaceLog.CarRun>()
-        rivals.forEachIndexed { i, (name, offset) ->
+        Rivals.all.forEachIndexed { i, rival ->
+            val name = rival.name
+            val style = rival.style
             val pace = paces[i]
             val launch = START + gridOffset(slots[i], circuit)
             var t = launch
@@ -566,7 +561,8 @@ object Circuits {
             val laps = circuit.laps
             val lapTimes = ArrayList<Double>()
             var outOn = 0
-            val dnfLap = if (dice.next() < 0.04) 1 + (dice.next() * laps).toInt().coerceAtMost(laps - 1) else 0
+            val dnfLap = if (dice.next() < 0.04 * style.dnf) 1 + (dice.next() * laps).toInt().coerceAtMost(laps - 1) else 0
+            val mid = (laps + 1) / 2.0
             for (lapNo in 1..laps) {
                 if (lapNo == dnfLap) {
                     val part = pace * dice.next()
@@ -576,18 +572,23 @@ object Circuits {
                     outOn = lapNo
                     break
                 }
-                val lt = pace * (1.0 + 0.003 * dice.gauss())
+                var lt = pace * (1.0 + style.fade * (lapNo - mid)) * (1.0 + 0.003 * style.scatter * dice.gauss())
+                if (dice.next() < style.aggression * 0.04) {
+                    val loss = pace * (0.006 + 0.012 * dice.next())
+                    lt += loss
+                    rivalNotes.add(RaceLog.Event(lapNo, "${name.substringAfterLast(' ')} (${rival.team}) runs wide at ${slice(circuit, dice)}, ${fmt(loss)}s lost."))
+                }
                 t += lt
                 lapTimes.add(lt + if (lapNo == 1) launch else 0.0)
             }
-            grid.add(Finisher(name, t, out))
-            runs.add(RaceLog.CarRun(name, "", false, lapTimes, outOn))
+            grid.add(Finisher(name, t, out, false, rival.team))
+            runs.add(RaceLog.CarRun(name, rival.team, false, lapTimes, outOn))
         }
-        grid.add(Finisher(myName, total, !finished, true))
-        runs.add(RaceLog.CarRun(myName, "", true, if (outLap > 0) times + partial else times.toList(), outLap))
+        grid.add(Finisher(myName, total, !finished, true, Rivals.YOUR_TEAM))
+        runs.add(RaceLog.CarRun(myName, Rivals.YOUR_TEAM, true, if (outLap > 0) times + partial else times.toList(), outLap))
         val order = grid.sortedWith(compareBy<Finisher> { it.out }.thenBy { it.time })
         val place = order.indexOfFirst { it.you } + 1
-        val log = RaceLog.build(runs, circuit.laps, notes)
+        val log = RaceLog.build(runs, circuit.laps, notes + rivalNotes)
         return Result(circuit, myName, place, grid.size, total, best, times, incidents, retired, engine, order, log, qualifying)
     }
 
@@ -721,7 +722,7 @@ object Circuits {
 
     /** The grid, pole first: "1. Jim Clark 1:21.45", then each car's gap to pole. */
     fun gridLines(q: Qualifying): List<String> = q.rows.map { r ->
-        "${r.slot}. ${if (r.you) "YOU (${r.name})" else r.name}  ${clock(r.time)}" +
+        "${r.slot}. ${if (r.you) "YOU (${r.name})" else r.name}${if (r.you) "" else "  ${r.team}"}  ${clock(r.time)}" +
             if (r.slot == 1) "  pole" else "  +${String.format(Locale.US, "%.2f", r.time - q.rows.first().time)}"
     }
 

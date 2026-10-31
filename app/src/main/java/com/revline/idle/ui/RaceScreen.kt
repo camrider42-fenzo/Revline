@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.RaceLog
+import com.revline.idle.game.Rivals
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -627,6 +628,10 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 2.dp),
     )
+    Text("THE FIELD", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+    Rivals.all.forEach { r ->
+        Text("${r.name}, ${r.team}: ${r.style.title}, aggression ${(r.style.aggression * 100).toInt()}. ${r.style.blurb}", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    }
     val can = picked != null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
     LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "") }, Modifier.padding(top = 6.dp))
     ui.circuitOutcome?.let { o ->
@@ -682,7 +687,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
             }
             r.grid.forEachIndexed { i, f ->
                 Text(
-                    "${i + 1}. ${f.name}  " + if (f.out) "DNF" else Circuits.clock(f.time),
+                    "${i + 1}. ${f.name}${if (f.you) "" else "  ${f.team}"}  " + if (f.out) "DNF" else Circuits.clock(f.time),
                     color = if (f.you) Lime else White,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp,
