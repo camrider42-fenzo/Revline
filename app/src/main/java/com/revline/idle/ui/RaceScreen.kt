@@ -470,6 +470,14 @@ private fun StatBar(label: String, value: Int, spec: Boolean, lowerIsBetter: Boo
     }
 }
 
+private fun aspectLabel(a: Circuits.Aspect) = when (a) {
+    Circuits.Aspect.ACCELERATION -> "accel"
+    Circuits.Aspect.TOP_SPEED -> "top speed"
+    Circuits.Aspect.WEIGHT -> "weight"
+    Circuits.Aspect.CORNERING -> "cornering"
+    Circuits.Aspect.BRAKING -> "braking"
+}
+
 @Composable
 private fun CircuitSection(ui: UiModel, car: Racing.Car, onPick: (String) -> Unit, onRun: (String) -> Unit) {
     val state = ui.game
@@ -503,7 +511,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onPick: (String) -> Uni
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 4.dp),
     )
-    Circuits.Aspect.entries.forEach { a -> StatBar(a.title.lowercase(Locale.US), (emphasis.getValue(a) * 50).toInt().coerceIn(0, 100), a in favors) }
+    Circuits.Aspect.entries.forEach { a -> StatBar(aspectLabel(a), (emphasis.getValue(a) * 50).toInt().coerceIn(0, 100), a in favors) }
     val fit by produceState<Double?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.prestiges) {
         value = withContext(Dispatchers.Default) { Circuits.fitPercent(Circuits.carOf(state, ui.sheet), circuit, state.prestiges, picked) }
     }
