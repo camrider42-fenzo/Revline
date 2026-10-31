@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.AutoRace
+import com.revline.idle.game.DragRivals
 import com.revline.idle.game.Drivers
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Racing
@@ -58,7 +59,6 @@ import kotlinx.coroutines.isActive
 fun RaceMeet(
     setup: RaceDrive.Setup,
     field: Racing.Field,
-    yourPace: Double,
     onFinished: (Boolean, Double, Double, Boolean) -> Unit,
     crank: EngineCrank,
     params: EngineParams,
@@ -74,9 +74,12 @@ fun RaceMeet(
     // A hired driver works the same three controls through the same sim. The player watches.
     val auto = remember(setup, driver, seed) { driver?.let { AutoRace(setup, Drivers.skills(it, setup), seed) } }
     val hands = remember(auto) { Hands(auto?.run ?: RaceDrive.fresh(setup)) }
-    val rivalTime = remember(setup, yourPace, field.pace) {
-        RaceDrive.rivalSeconds(setup, yourPace, field.pace)
+    // The other car runs the same sim on its own build and hands. Its lane follows its real run, launch and all.
+    val rivalPass = remember(setup, field, seed) {
+        val stamp = if (seed != 0L) seed * 31L + 7L else System.nanoTime()
+        DragRivals.run(field.rival, setup.distanceM, stamp)
     }
+    val rivalTime = rivalPass.time
     var throttle by remember { mutableFloatStateOf(0f) }
     // Staged with the clutch on the floor. The pedal stays there until a foot touches it.
     var clutchShown by remember { mutableFloatStateOf(1f) }
@@ -103,7 +106,7 @@ fun RaceMeet(
                     auto.advance(dt)
                     throttle = auto.throttle.toFloat()
                     clutchShown = auto.clutch.toFloat()
-                    frame = snap(auto.run, auto.lights, rivalTime, finish, done = false, won = false, countdown = auto.countdown)
+                    frame = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown)
                     if (hear) {
                         val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
                         crank.publish(params, voiceRpm.toFloat(), auto.throttle.toFloat(), true, auto.run.limiter)
@@ -119,7 +122,7 @@ fun RaceMeet(
                 if (countdown > 0f || lights > 0f) {
                     if (countdown > 0f) countdown -= dt.toFloat() else lights -= dt.toFloat()
                     RaceDrive.stage(setup, hands.run, hands.throttle, dt, hands.clutch)
-                    frame = snap(hands.run, lights, rivalTime, finish, done = false, won = false, countdown = countdown)
+                    frame = snap(hands.run, lights, rivalPass, finish, done = false, won = false, countdown = countdown)
                     if (hear) {
                         val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                         crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
@@ -129,7 +132,7 @@ fun RaceMeet(
                 val shift = hands.shift && hands.clutch > RaceDrive.SHIFT_PEDAL
                 hands.shift = false
                 RaceDrive.step(setup, hands.run, hands.throttle, shift, dt, hands.clutch)
-                frame = snap(hands.run, 0f, rivalTime, finish, done = false, won = false)
+                frame = snap(hands.run, 0f, rivalPass, finish, done = false, won = false)
                 if (hear) {
                     val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                     crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
@@ -137,12 +140,12 @@ fun RaceMeet(
             }
         }
         if (!settled && isActive && hands.run.jumped) {
-            frame = snap(hands.run, 0f, rivalTime, finish, done = true, won = false).copy(jumped = true)
+            frame = snap(hands.run, 0f, rivalPass, finish, done = true, won = false).copy(jumped = true)
             delay(1500)
             settle(false, jumped = true)
         } else if (!settled && isActive) {
             val won = hands.run.distance >= finish && hands.run.time <= rivalTime
-            frame = snap(hands.run, 0f, rivalTime, finish, done = true, won = won)
+            frame = snap(hands.run, 0f, rivalPass, finish, done = true, won = won)
             delay(900)
             settle(won)
         }
@@ -408,7 +411,7 @@ private data class Frame(
 private fun snap(
     run: RaceDrive.Run,
     lights: Float,
-    rivalTime: Double,
+    rivalPass: DragRivals.Pass,
     finish: Double,
     done: Boolean,
     won: Boolean,
@@ -426,7 +429,7 @@ private fun snap(
     slip = run.slip.toFloat(),
     limiter = run.limiter,
     clock = run.clock,
-    rival = (finish * (run.time / rivalTime)).toFloat().coerceAtMost(finish.toFloat()),
+    rival = rivalPass.distanceAt(run.time, finish).toFloat().coerceAtMost(finish.toFloat()),
     done = done,
     won = won,
 )

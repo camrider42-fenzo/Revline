@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.73.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.73.1). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 

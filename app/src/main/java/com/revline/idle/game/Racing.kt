@@ -466,6 +466,8 @@ object Racing {
         val purse: Double,
         val stake: Double,
         val rivalId: String = "mule",
+        /** The opposing car and driver. Its time comes from [DragRivals] on the strip, never from a stored number. */
+        val rival: DragRivals.Entrant,
     )
 
     fun fieldForQuick(state: GameState, tier: Tier): Field {
@@ -480,14 +482,14 @@ object Racing {
             Tier.NATIONAL -> 20.0
             Tier.INTERNATIONAL -> 80.0
         }) * lengthOf(state.raceLength).scale
-        return Field(tier.name.lowercase(Locale.US), ghost.label, ghost.pace, purse, 0.0, ghost.id)
+        return Field(tier.name.lowercase(Locale.US), ghost.label, ghost.pace, purse, 0.0, ghost.id, ghost.entrant)
     }
 
     fun fieldForLadder(state: GameState): Field {
         val rungs = ladderRungs(lengthOf(state.raceLength))
         val index = state.raceLadder.coerceIn(0, rungs.lastIndex)
         val rung = rungs[index]
-        return Field("ladder ${index + 1}", rung.title, rung.pace, 30.0 * 2.6.pow(index.toDouble()) * lengthOf(state.raceLength).scale, 0.0, rung.chassisId)
+        return Field("ladder ${index + 1}", rung.title, rung.pace, 30.0 * 2.6.pow(index.toDouble()) * lengthOf(state.raceLength).scale, 0.0, rung.chassisId, rung.entrant)
     }
 
     /** Takes the stake up front. Null when the till is short. */
@@ -498,7 +500,7 @@ object Racing {
         val paid = if (state.devMode) 0.0 else cost
         val next = state.copy(money = state.money - paid)
         val purse = if (state.devMode) 0.0 else cost * 2.0
-        return next to Field("stake", rival.label, rival.pace, purse, cost, rival.id)
+        return next to Field("stake", rival.label, rival.pace, purse, cost, rival.id, rival.entrant)
     }
 
     fun award(state: GameState, field: Field, won: Boolean, ladder: Boolean): GameState {
@@ -743,14 +745,24 @@ object Racing {
         return state.copy(money = state.money - paid, raceOwned = ownedNow)
     }
 
-    private data class Ghost(val title: String, val pace: Double, val label: String, val id: String)
+    /** How well each class of opponent drives, as a share of a flawless pilot's reaction, launch, clutch and shifting. */
+    const val SKILL_CLUB = 0.45
+    const val SKILL_NATIONAL = 0.68
+    const val SKILL_INTERNATIONAL = 0.84
+    const val LADDER_SKILL = 0.45
+    const val LADDER_SKILL_STEP = 0.03
+    const val LADDER_NATIONAL_BONUS = 0.15
+    const val STAKE_BUILT_SKILL = 0.74
+    const val STAKE_STREET_SKILL = 0.42
+
+    private data class Ghost(val title: String, val pace: Double, val label: String, val id: String, val entrant: DragRivals.Entrant)
 
     private fun classGhost(state: GameState, tier: Tier): Ghost {
         val block = Block.forPrestige(state.prestiges)
         val frac = when (tier) {
             Tier.CLUB -> 0.42
-            Tier.NATIONAL -> 0.85
-            Tier.INTERNATIONAL -> 0.58
+            Tier.NATIONAL -> 0.95
+            Tier.INTERNATIONAL -> 0.63
         }
         val group = state.prestiges.coerceIn(0, Block.entries.lastIndex)
         val body = when (tier) {
@@ -775,31 +787,33 @@ object Racing {
         }
         val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
         val hp = block.hpGoal * frac
-        val built = assess(
-            Spec(hp, hp * 5252.0 / 3600.0, cc, body, if (tier == Tier.INTERNATIONAL) 2 else 0, box, axle, tire, body.slots, driveFor(body, body.place), body.place),
-            lengthOf(state.raceLength),
-        )
-        return Ghost(body.name, built.pace, body.name, body.id)
+        val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, if (tier == Tier.INTERNATIONAL) 2 else 0, box, axle, tire, body.slots, driveFor(body, body.place), body.place)
+        val built = assess(spec, lengthOf(state.raceLength))
+        val skill = when (tier) {
+            Tier.CLUB -> SKILL_CLUB
+            Tier.NATIONAL -> SKILL_NATIONAL
+            Tier.INTERNATIONAL -> SKILL_INTERNATIONAL
+        }
+        return Ghost(body.name, built.pace, body.name, body.id, DragRivals.entrant(body.name, spec, block, skill))
     }
 
-    data class Rung(val title: String, val pace: Double, val chassisId: String = "mule")
+    data class Rung(val title: String, val pace: Double, val chassisId: String, val entrant: DragRivals.Entrant)
 
     fun ladderRungs(length: Length = Length.QUARTER): List<Rung> = Block.entries.flatMapIndexed { index, block ->
-        listOf(0.70 to "club", 1.12 to "national").map { (frac, name) ->
+        listOf(0.74 to "club", 1.18 to "national").map { (frac, name) ->
             val body = groupChassis(index, if (frac < 1.0) Build.MEDIUM else Build.LIGHT)
             val cc = com.revline.idle.model.EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
             val hp = block.hpGoal * frac
             val tire = if (frac < 1.0) tires.first { it.id == "radial" } else tires.first { it.id == "race" }
             val box = if (frac < 1.0) gearboxes.first { it.id == "four" } else gearboxes.first { it.id == "close" }
-            val pace = assess(
-                Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axles.first { it.id == "lsd" }, tire, body.slots, driveFor(body, body.place), body.place),
-                length,
-            ).pace
-            Rung("${block.title} $name", pace, body.id)
+            val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axles.first { it.id == "lsd" }, tire, body.slots, driveFor(body, body.place), body.place)
+            val pace = assess(spec, length).pace
+            val skill = LADDER_SKILL + LADDER_SKILL_STEP * index + if (frac < 1.0) 0.0 else LADDER_NATIONAL_BONUS
+            Rung("${block.title} $name", pace, body.id, DragRivals.entrant("${block.title} $name", spec, block, skill))
         }
     }
 
-    private data class Rival(val label: String, val pace: Double, val id: String)
+    private data class Rival(val label: String, val pace: Double, val id: String, val entrant: DragRivals.Entrant)
 
     private fun rival(state: GameState, seed: Long): Rival {
         val rng = Random(seed)
@@ -808,16 +822,15 @@ object Racing {
         val tire = if (built) tires.first { it.id == "slick" } else tires.first { it.id == "radial" }
         val box = if (built) gearboxes.first { it.id == "dog" } else gearboxes.first { it.id == "four" }
         val axle = if (built) axles.first { it.id == "irs" } else axles.first { it.id == "lsd" }
-        val frac = if (built) 1.05 + rng.nextDouble() * 0.55 else 0.35 + rng.nextDouble() * 0.25
+        val frac = if (built) 1.12 + rng.nextDouble() * 0.55 else 0.42 + rng.nextDouble() * 0.25
         val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
         val hp = block.sheetHp(false) * frac
         val pool = chassis.filter { it.minPrestige <= state.prestiges && fits(it, cc) }
         val body = (listOf(mule) + pool).random(rng)
-        val pace = assess(
-            Spec(hp, hp * 5252.0 / 3600.0, cc, body, rng.nextInt(0, 3), box, axle, tire, body.slots, driveFor(body, body.place), body.place),
-            lengthOf(state.raceLength),
-        ).pace
+        val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, rng.nextInt(0, 3), box, axle, tire, body.slots, driveFor(body, body.place), body.place)
+        val pace = assess(spec, lengthOf(state.raceLength)).pace
         val label = "${body.name}, ${box.name.lowercase(Locale.US)}, ${tire.name.lowercase(Locale.US)}, ${hp.toInt()} hp"
-        return Rival(label, pace, body.id)
+        val skill = if (built) STAKE_BUILT_SKILL + rng.nextDouble() * 0.12 else STAKE_STREET_SKILL + rng.nextDouble() * 0.15
+        return Rival(label, pace, body.id, DragRivals.entrant(label, spec, block, skill))
     }
 }

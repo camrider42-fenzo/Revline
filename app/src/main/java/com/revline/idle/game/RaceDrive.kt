@@ -75,8 +75,37 @@ object RaceDrive {
     fun setup(state: GameState): Setup = setup(state, Logic.sheet(state))
 
     /** [circuit] fits the circuit tire and leaves out the launch grip a stiffer car earns on the strip. */
-    fun setup(state: GameState, sheet: Sheet, circuit: Boolean = false): Setup {
-        val body = Racing.car(state, circuit)
+    fun setup(state: GameState, sheet: Sheet, circuit: Boolean = false): Setup =
+        setupFor(
+            body = Racing.car(state, circuit),
+            peakHp = sheet.stats.peakHorsepower,
+            peakTqLbFt = sheet.stats.peakTorqueLbFt,
+            redline = sheet.params.redlineRpm,
+            idle = sheet.params.idleRpm,
+            finalDrive = Racing.finalRatio(state.finalDrive),
+            distanceM = Racing.lengthOf(state.raceLength).meters,
+            displacementCc = Block.forPrestige(state.prestiges).let {
+                EngineSim.displacementCc(it.boreMm, it.strokeMm, it.cylinders)
+            },
+            circuit = circuit,
+        )
+
+    /**
+     * The one place a car becomes a strip [Setup]: weight, drivetrain losses, the tire's grip on this axle and balance,
+     * drag, the box's ratios and shift time. The player's car and every drag rival (see [DragRivals]) go through it,
+     * so nobody gets a launch or a time the build itself does not earn.
+     */
+    fun setupFor(
+        body: Racing.Car,
+        peakHp: Double,
+        peakTqLbFt: Double,
+        redline: Double,
+        idle: Double,
+        finalDrive: Double,
+        distanceM: Double,
+        displacementCc: Double,
+        circuit: Boolean = false,
+    ): Setup {
         val box = body.spec.gearbox
         val axle = body.spec.axle
         var eff = box.efficiency * axle.efficiency
@@ -97,21 +126,19 @@ object RaceDrive {
         val grip = body.spec.tire.mu * axle.grip * balance * body.massKg * 9.81 * (if (circuit) 1.0 else kit.launch)
         val drag = body.spec.chassis.cd * body.spec.chassis.area * (1.0 + 0.018 * body.spec.slots) * body.spec.tire.drag * kit.dragMult
         return Setup(
-            peakHp = sheet.stats.peakHorsepower.coerceAtLeast(8.0),
-            peakTqLbFt = sheet.stats.peakTorqueLbFt.coerceAtLeast(8.0),
-            redline = sheet.params.redlineRpm.coerceAtLeast(3000.0),
-            idle = sheet.params.idleRpm.coerceIn(600.0, 1800.0),
+            peakHp = peakHp.coerceAtLeast(8.0),
+            peakTqLbFt = peakTqLbFt.coerceAtLeast(8.0),
+            redline = redline.coerceAtLeast(3000.0),
+            idle = idle.coerceIn(600.0, 1800.0),
             massKg = body.massKg,
             ratios = box.ratios,
-            finalDrive = Racing.finalRatio(state.finalDrive),
+            finalDrive = finalDrive,
             efficiency = eff,
             gripN = grip,
             drag = drag,
             shiftSeconds = box.shift,
-            distanceM = Racing.lengthOf(state.raceLength).meters,
-            displacementCc = Block.forPrestige(state.prestiges).let {
-                EngineSim.displacementCc(it.boreMm, it.strokeMm, it.cylinders)
-            },
+            distanceM = distanceM,
+            displacementCc = displacementCc,
         )
     }
 
@@ -290,19 +317,6 @@ object RaceDrive {
         return run
     }
 
-    /**
-     * The other car's elapsed time. An equal pace is your own clean run, so a
-     * perfect drive ties and a spun launch loses. A faster car gives you time
-     * in hand. A faster ghost is ahead of any clean run you can make.
-     */
-    fun rivalSeconds(setup: Setup, yourPace: Double, theirPace: Double): Double {
-        val clean = driveWell(setup)
-        val cap = (90.0 * setup.distanceM / FINISH_M).coerceIn(40.0, 160.0)
-        val perfect = if (clean.distance >= setup.distanceM - 1.0) clean.time else cap
-        val ratio = (yourPace / theirPace.coerceAtLeast(1.0)).coerceIn(0.45, 2.2)
-        return (perfect * ratio).coerceIn(6.0, cap)
-    }
-
     fun launchThrottle(setup: Setup): Double {
         var best = 0.25
         var bestForce = 0.0
@@ -341,7 +355,7 @@ object RaceDrive {
     private fun roadRpm(speed: Double, overall: Double): Double =
         speed / WHEEL_R * overall * 9.5493
 
-    private fun dragForce(setup: Setup, speed: Double): Double =
+    internal fun dragForce(setup: Setup, speed: Double): Double =
         0.5 * 1.22 * setup.drag * speed * speed
 
     /** lb-ft curve that peaks mid-range and will not make more horsepower than the engine has. */

@@ -129,26 +129,18 @@ class RaceDriveTest {
     }
 
     @Test
-    fun anEqualCarIsATieIfYouDriveItAndASpinLoses() {
+    fun aCleanDriveBeatsASpunLaunchOnTheSameCar() {
         val car = sample()
-        val rival = RaceDrive.rivalSeconds(car, 400.0, 400.0)
         val clean = RaceDrive.driveWell(car)
-        assertTrue(
-            "clean ${clean.time} rival $rival dist ${clean.distance}",
-            clean.distance >= RaceDrive.FINISH_M - 1.0 && clean.time <= rival + 0.02,
-        )
+        assertTrue("clean ${clean.time} dist ${clean.distance}", clean.distance >= RaceDrive.FINISH_M - 1.0)
         val spun = runFor(car, 40.0) { setup, run ->
             val up = run.rpm > setup.redline * 0.91 && run.gear < setup.ratios.size
             1.0 to up
         }
         assertTrue(
-            "spun ${spun.time} rival $rival dist ${spun.distance}",
-            spun.time > rival + 0.05 || spun.distance < RaceDrive.FINISH_M,
+            "spun ${spun.time} clean ${clean.time} dist ${spun.distance}",
+            spun.time > clean.time + 0.05 || spun.distance < RaceDrive.FINISH_M,
         )
-        val room = RaceDrive.rivalSeconds(car, 600.0, 400.0)
-        val tight = RaceDrive.rivalSeconds(car, 400.0, 600.0)
-        assertTrue("room $room clean ${clean.time}", room > clean.time)
-        assertTrue("tight $tight clean ${clean.time}", tight < clean.time)
     }
 
     @Test

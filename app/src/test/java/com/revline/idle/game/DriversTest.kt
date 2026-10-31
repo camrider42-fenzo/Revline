@@ -15,7 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DriversTest {
-    private val field = Racing.Field("Club", "A tired hatch", pace = 100.0, purse = 1000.0, stake = 0.0, rivalId = "mule")
+    private val field = Racing.Field("Club", "A tired hatch", pace = 100.0, purse = 1000.0, stake = 0.0, rivalId = "mule", rival = Racing.fieldForQuick(GameState(), Racing.Tier.CLUB).rival)
     private fun state(money: Double = 5_000.0, prestiges: Int = 4) =
         GameState(money = money, prestiges = prestiges, hiredDrivers = setOf("dusty", "gus", "ace"), driverId = "gus")
 

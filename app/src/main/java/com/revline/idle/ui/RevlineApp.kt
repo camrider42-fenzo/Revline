@@ -126,7 +126,6 @@ fun RevlineApp(vm: GameViewModel) {
                     RaceMeet(
                         strip.setup,
                         strip.field,
-                        strip.yourPace,
                         vm::finishMeet,
                         crank,
                         ui.sheet.params,

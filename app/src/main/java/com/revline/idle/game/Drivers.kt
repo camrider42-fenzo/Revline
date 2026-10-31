@@ -95,7 +95,7 @@ object Drivers {
         Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 76, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives.", cornering = 70, braking = 62, acceleration = 66, mistakes = 66, care = 36),
         Driver("tanaka", "James Hunt", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Charming and quick off the line.", cornering = 62, braking = 54, acceleration = 72, mistakes = 64, care = 40),
         Driver("gus", "Jackie Stewart", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Calm, careful and clever. Wins by being tidy.", cornering = 66, braking = 64, acceleration = 58, mistakes = 32, care = 68),
-        Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.15, "The Professor. Lives on the bite point.", cornering = 70, braking = 74, acceleration = 62, mistakes = 20, care = 88),
+        Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.17, "The Professor. Lives on the bite point.", cornering = 70, braking = 74, acceleration = 62, mistakes = 20, care = 88),
         Driver("viktor", "Ayrton Senna", 3, 64, 60, 62, 90, Specialty.REVS, 0.13, "Counts the curve in his head. Shifts exactly there.", cornering = 92, braking = 78, acceleration = 86, mistakes = 36, care = 48),
         Driver("ace", "Juan Manuel Fangio", 3, 78, 76, 80, 76, Specialty.ALL_ROUNDER, 0.22, "The old master. Sharp everywhere, and he bills for it.", cornering = 76, braking = 76, acceleration = 74, mistakes = 26, care = 72),
     )

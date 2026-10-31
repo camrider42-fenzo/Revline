@@ -1,6 +1,7 @@
 package com.revline.idle.economy
 
 import com.revline.idle.game.AutoRace
+import com.revline.idle.game.DragRivals
 import com.revline.idle.game.Drivers
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Racing
@@ -26,11 +27,10 @@ object DriverBalanceSim {
     fun fieldsFor(build: DriverBuilds.Build, stakeSeeds: Int = 5): List<Field> {
         val state = build.state
         val setup = build.setup
-        val pace = Racing.car(state).pace
         val out = ArrayList<Field>()
         val realCount = Racing.Tier.values().size + 1 + stakeSeeds
         fun add(label: String, f: Racing.Field, stake: Boolean = false) =
-            out.add(Field(label, RaceDrive.rivalSeconds(setup, pace, f.pace), stake, REAL_SHARE / realCount))
+            out.add(Field(label, rivalTime(f, setup), stake, REAL_SHARE / realCount))
         for (tier in Racing.Tier.values()) add(tier.name.lowercase(Locale.US), Racing.fieldForQuick(state, tier))
         val rungs = Racing.ladderRungs(Racing.lengthOf(state.raceLength)).size
         add("ladder", Racing.fieldForLadder(state.copy(raceLadder = (state.prestiges * (rungs / 8) + rungs / 16).coerceAtMost(rungs - 1))))
@@ -40,6 +40,10 @@ object DriverBalanceSim {
         for (q in TIGHT) out.add(Field("tight", flawless * q, false, (1.0 - REAL_SHARE) / TIGHT.size))
         return out
     }
+
+    /** The rival's elapsed time on this strip: its own build and hands through the sim, averaged over a few fixed seeds. */
+    fun rivalTime(f: Racing.Field, setup: RaceDrive.Setup): Double =
+        (1..3).map { DragRivals.seconds(f.rival, setup.distanceM, 5_000L + it * 211L) }.average()
 
     /** Half the weight rides on the game's own fields. The other half is on races a flawless pilot only just wins. */
     const val REAL_SHARE = 0.5
