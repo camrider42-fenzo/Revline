@@ -68,10 +68,23 @@ data class GameState(
     val dynoReadyAtEpochMs: Long = 0L,
     /** Circuit races entered. The weather of the next race is a function of this and the circuit. */
     val circuitRaces: Int = 0,
+    /** The championship season in progress, from 1. */
+    val seasonNo: Int = 1,
+    /** Rounds of this season already raced: the round up is circuit number seasonRound in the list. */
+    val seasonRound: Int = 0,
+    /** Championship points by driver name, the player as "You". */
+    val seasonPoints: Map<String, Int> = emptyMap(),
+    val seasonWins: Map<String, Int> = emptyMap(),
+    /** Finished seasons, latest last. */
+    val seasonHistory: List<SeasonRecord> = emptyList(),
     val version: Int = SAVE_VERSION,
 )
 
-/** 1: one tire for drag and circuit. 2: separate drag and circuit tires, race components. 3: circuit race counter (weather). */
+/** A finished season: where the player ended up and who took the title. */
+@Serializable
+data class SeasonRecord(val season: Int, val position: Int, val points: Int, val champion: String)
+
+/** 1: one tire for drag and circuit. 2: separate drag and circuit tires, race components. 3: circuit race counter (weather) and the championship season. */
 const val SAVE_VERSION = 3
 
 object SaveCodec {

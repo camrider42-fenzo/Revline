@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.RaceLog
 import com.revline.idle.game.Rivals
+import com.revline.idle.game.Season
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -541,7 +542,7 @@ private fun aspectLabel(a: Circuits.Aspect) = when (a) {
 @Composable
 private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String, Circuits.Orders) -> Unit) {
     val state = ui.game
-    var circuitId by rememberSaveable { mutableStateOf(Circuits.all.first().id) }
+    var circuitId by rememberSaveable { mutableStateOf(Season.next(state).id) }
     val circuit = Circuits.all.firstOrNull { it.id == circuitId } ?: Circuits.all.first()
     // Circuit races are for hired drivers only. This pick is its own, so the drag-race toggle is left alone.
     var driverPick by rememberSaveable { mutableStateOf(Drivers.selected(state)?.id ?: "") }
@@ -554,7 +555,16 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,
     )
-    ChipRow(Circuits.all.map { it.id to it.name.substringBefore('-').uppercase(Locale.US) }, circuit.id) { circuitId = it }
+    val upNext = Season.next(state)
+    ChipRow(Circuits.all.map { it.id to (if (it.id == upNext.id) "> " else "") + it.name.substringBefore('-').uppercase(Locale.US) }, circuit.id) { circuitId = it }
+    Text(
+        if (circuit.id == upNext.id) "CHAMPIONSHIP ROUND ${state.seasonRound + 1} of ${Season.ROUNDS}: this race scores points."
+        else "Free race. The championship's next round is ${upNext.name} (marked >).",
+        color = if (circuit.id == upNext.id) Lime else White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
     Text(
         "${circuit.name}, ${circuit.place}  ${String.format(Locale.US, "%.3f", circuit.lapKm)} km  ${circuit.corners} corners  ${circuit.laps} laps  full throttle ${circuit.fullThrottlePct}%",
         color = Cyan,
@@ -628,6 +638,34 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 2.dp),
     )
+    var showTable by rememberSaveable { mutableStateOf(false) }
+    Text(
+        "CHAMPIONSHIP  season ${state.seasonNo}, round ${state.seasonRound} of ${Season.ROUNDS} done, you are P${Season.position(state)}" +
+            if (state.seasonHistory.isNotEmpty()) ", ${Season.titles(state)} title${if (Season.titles(state) == 1) "" else "s"} won" else "",
+        color = Lime,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 8.dp).clickable { showTable = !showTable },
+    )
+    Text(
+        "Points 25 18 15 12 10 8 6 4, nothing for a retirement. Win the title for ${Season.REWARDS.joinToString(", ") { String.format(Locale.US, "%.1f", it) }} entries (top five). Tap to ${if (showTable) "hide" else "show"} the table.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 10.sp,
+    )
+    if (showTable) {
+        Season.standings(state).forEach { row ->
+            Text(
+                "${row.position}. ${if (row.you) "YOU" else row.name}  ${row.team}  ${row.points} pts" + if (row.wins > 0) "  ${row.wins}W" else "",
+                color = if (row.you) Lime else White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+            )
+        }
+        state.seasonHistory.takeLast(5).forEach { rec ->
+            Text("Season ${rec.season}: you P${rec.position} on ${rec.points} pts, champion ${rec.champion}", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+        }
+    }
     val weather = Circuits.weatherFor(state.circuitRaces, circuit.id)
     Text(
         "FORECAST  ${weather.title.uppercase(Locale.US)}. ${weather.blurb}",
@@ -693,6 +731,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
             )
+            if (o.season.isNotEmpty()) Text(o.season, color = Lime, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             if (r.qualifying.rows.isNotEmpty()) {
                 Text("QUALIFYING AND GRID", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                 Circuits.gridLines(r.qualifying).forEachIndexed { i, line ->

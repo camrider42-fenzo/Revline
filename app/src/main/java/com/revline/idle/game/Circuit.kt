@@ -826,7 +826,7 @@ object Circuits {
         return Entry.Paid(state.copy(money = state.money - entry - fee, circuitRaces = state.circuitRaces + 1), driver, fee, entry)
     }
 
-    data class Outcome(val result: Result, val prize: Double, val repair: Double, val fee: Double, val entry: Double, val note: String)
+    data class Outcome(val result: Result, val prize: Double, val repair: Double, val fee: Double, val entry: Double, val note: String, val season: String = "")
 
     /** Runs the race for a paid entry and works out what comes back. [state] is the car and the field's level, as at the start. */
     fun finish(state: GameState, car: Car, circuit: Circuit, driver: Drivers.Driver, fee: Double, entry: Double, seed: Long, orders: Orders = Orders(), weather: Weather = Weather.DRY): Outcome {

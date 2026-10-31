@@ -15,6 +15,7 @@ import com.revline.idle.game.Drivers
 import com.revline.idle.game.Logic
 import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Circuits
+import com.revline.idle.game.Season
 import com.revline.idle.game.Racing
 import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
@@ -316,8 +317,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed, orders, weather)
                     }
                     // The till has moved on since the lights went green: pay onto what is there now.
-                    val game = ui.game.let { it.copy(money = (it.money + outcome.prize - outcome.repair).coerceAtLeast(0.0)) }
-                    publish(ui.copy(game = game, circuitBusy = false, circuitOutcome = outcome))
+                    val settled = Season.settle(ui.game, circuit, outcome)
+                    publish(ui.copy(game = settled.state, circuitBusy = false, circuitOutcome = outcome.copy(season = settled.note)))
                     save()
                 }
             }
