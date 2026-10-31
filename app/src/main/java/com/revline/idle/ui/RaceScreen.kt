@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.revline.idle.game.RaceDrive
+import com.revline.idle.game.RaceLog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -659,6 +660,20 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
             )
+            if (r.log.rows.isNotEmpty()) {
+                var showOrder by rememberSaveable { mutableStateOf(false) }
+                Text("LAP BY LAP", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                val lines = remember(r) { RaceLog.lines(r.log) }
+                r.log.rows.forEachIndexed { i, row ->
+                    Text(lines[i], color = if (row.yourOut) Red else White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    if (showOrder) Text("    " + RaceLog.orderLine(row), color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                    row.events.forEach { e ->
+                        Text("    ${e.text}", color = Amber, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                    }
+                }
+                LineButton(if (showOrder) "Hide order each lap" else "Show order each lap", true, { showOrder = !showOrder }, Modifier.padding(top = 4.dp))
+                Text("FINAL ORDER", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
             r.grid.forEachIndexed { i, f ->
                 Text(
                     "${i + 1}. ${f.name}  " + if (f.out) "DNF" else Circuits.clock(f.time),

@@ -410,6 +410,8 @@ object Circuits {
         val retired: String?,
         val engineFailed: Boolean,
         val grid: List<Finisher>,
+        /** Lap by lap: the order, the gaps and what happened. Empty on a result built by hand. */
+        val log: RaceLog.Log = RaceLog.Log.EMPTY,
     )
 
     /** The seven rivals: how far off the par car each runs (fraction of lap time). Negative is quicker. */
@@ -453,6 +455,9 @@ object Circuits {
         val circuit = plan.circuit
         val incidents = ArrayList<String>()
         val times = ArrayList<Double>()
+        val notes = ArrayList<RaceLog.Event>()
+        var outLap = 0
+        var partial = 0.0
         var total = 0.0
         var retired: String? = null
         var engine = false
@@ -461,9 +466,12 @@ object Circuits {
         for ((index, base) in plan.laps.withIndex()) {
             val lapNo = index + 1
             if (dice.next() < plan.failure[index]) {
-                total += base.time * dice.next()
+                partial = base.time * dice.next()
+                total += partial
+                outLap = lapNo
                 retired = "Engine let go on lap $lapNo."
                 engine = true
+                notes.add(RaceLog.Event(lapNo, "Your engine lets go."))
                 break
             }
             var lap = base.time * (1.0 + (0.002 + 0.004 * h.mistakes) * dice.gauss())
@@ -477,21 +485,26 @@ object Circuits {
                         val loss = base.time * (0.004 + 0.012 * dice.next())
                         lap += loss
                         incidents.add("Lap $lapNo: ran wide at $spot, lost ${fmt(loss)}s.")
+                        notes.add(RaceLog.Event(lapNo, "You run wide at $spot, ${fmt(loss)}s lost."))
                     }
                     dice.next() >= 0.06 * circuit.punish -> {
                         val loss = base.time * (0.03 + 0.04 * dice.next()) * sqrt(circuit.punish)
                         lap += loss
                         incidents.add("Lap $lapNo: spun at $spot, lost ${fmt(loss)}s.")
+                        notes.add(RaceLog.Event(lapNo, "You spin at $spot, ${fmt(loss)}s lost."))
                     }
                     else -> {
                         crashed = true
                         retired = "Hit the wall at $spot on lap $lapNo."
                         incidents.add("Lap $lapNo: hit the wall at $spot.")
+                        notes.add(RaceLog.Event(lapNo, "You hit the wall at $spot."))
                     }
                 }
             }
             if (crashed) {
-                total += lap * dice.next()
+                partial = lap * dice.next()
+                total += partial
+                outLap = lapNo
                 break
             }
             times.add(lap)
@@ -501,23 +514,39 @@ object Circuits {
         val best = (if (times.size > 1) times.drop(1) else times).minOrNull() ?: 0.0
         val mean = par.mean
         val grid = ArrayList<Finisher>()
+        val runs = ArrayList<RaceLog.CarRun>()
         rivals.forEachIndexed { i, (name, offset) ->
             val aptitude = ((((name.hashCode() * 31 + circuit.id.hashCode()) and 0xFFFF) / 65535.0) - 0.5) * 0.012
             val pace = mean * (1.0 + offset + aptitude + 0.004 * dice.gauss())
             var t = START
             var out = false
             val laps = circuit.laps
+            val lapTimes = ArrayList<Double>()
+            var outOn = 0
             val dnfLap = if (dice.next() < 0.04) 1 + (dice.next() * laps).toInt().coerceAtMost(laps - 1) else 0
             for (lapNo in 1..laps) {
-                if (lapNo == dnfLap) { t += pace * dice.next(); out = true; break }
-                t += pace * (1.0 + 0.003 * dice.gauss())
+                if (lapNo == dnfLap) {
+                    val part = pace * dice.next()
+                    t += part
+                    lapTimes.add(part + if (lapNo == 1) START else 0.0)
+                    out = true
+                    outOn = lapNo
+                    break
+                }
+                val lt = pace * (1.0 + 0.003 * dice.gauss())
+                t += lt
+                lapTimes.add(lt + if (lapNo == 1) START else 0.0)
             }
             grid.add(Finisher(name, t, out))
+            runs.add(RaceLog.CarRun(name, "", false, lapTimes, outOn))
         }
-        grid.add(Finisher(driver.name.ifEmpty { "You" }, total, !finished, true))
+        val myName = driver.name.ifEmpty { "You" }
+        grid.add(Finisher(myName, total, !finished, true))
+        runs.add(RaceLog.CarRun(myName, "", true, if (outLap > 0) times + partial else times.toList(), outLap))
         val order = grid.sortedWith(compareBy<Finisher> { it.out }.thenBy { it.time })
         val place = order.indexOfFirst { it.you } + 1
-        return Result(circuit, driver.name.ifEmpty { "You" }, place, grid.size, total, best, times, incidents, retired, engine, order)
+        val log = RaceLog.build(runs, circuit.laps, notes)
+        return Result(circuit, myName, place, grid.size, total, best, times, incidents, retired, engine, order, log)
     }
 
     private fun fmt(x: Double) = String.format(Locale.US, "%.1f", x)
