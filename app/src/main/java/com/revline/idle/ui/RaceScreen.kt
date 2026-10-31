@@ -660,6 +660,12 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String)
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
             )
+            if (r.qualifying.rows.isNotEmpty()) {
+                Text("QUALIFYING AND GRID", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Circuits.gridLines(r.qualifying).forEachIndexed { i, line ->
+                    Text(line, color = if (r.qualifying.rows[i].you) Lime else White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                }
+            }
             if (r.log.rows.isNotEmpty()) {
                 var showOrder by rememberSaveable { mutableStateOf(false) }
                 Text("LAP BY LAP", color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
