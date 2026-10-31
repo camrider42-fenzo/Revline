@@ -199,27 +199,29 @@ fun RaceMeet(
                 frame.lights < 0.4f,
                 frame.lights <= 0f,
             )
-            glowLine(Olive, Offset(size.width * 0.22f, y), Offset(size.width * 0.78f, y), stroke, 0.35f)
             if (frame.countdown > 0f && !frame.jumped) {
+                glowLine(Olive, Offset(size.width * 0.22f, y), Offset(size.width * 0.78f, y), stroke, 0.35f)
                 countdownDigit(ceil(frame.countdown).toInt().coerceIn(1, 5), Offset(size.width * 0.5f, y), size.height * 0.34f, stroke)
                 return@Canvas
             }
-            xs.forEachIndexed { index, at ->
-                stageLamp(colors[index], Offset(size.width * at, y), lamp, stroke, lit[index])
-            }
+            drawDragTree(colors, lit, Offset(size.width * 0.5f, y), lamp, xs)
         }
+        val scenes = remember { DragSceneHolder() }
+        val memory = remember { DragMemory() }
         Canvas(Modifier.fillMaxWidth().height(280.dp).padding(top = 4.dp)) {
-            val stroke = (size.minDimension / 80f).coerceIn(1.5f, 2.6f)
-            val left = 18f
-            val right = size.width - 18f
-            val span = right - left
+            val scene = scenes.get(this, yourId, yourMid, rivalId, finish.toFloat())
             val yourGas = (frame.rpm / setup.redline).toFloat().coerceIn(0.2f, 1f)
             val theirGas = if (frame.lights > 0f) 0.05f else 0.55f
-            lane(Red, size.height * 0.46f, left, right, span, frame.rival / finish.toFloat(), frame.rival / 0.33f, 0f, stroke, rivalId, false, frame.clock.toFloat(), theirGas)
-            lane(Lime, size.height * 0.92f, left, right, span, (frame.distance / finish).toFloat(), (frame.distance / 0.33).toFloat(), frame.slip, stroke, yourId, yourMid, frame.clock.toFloat(), yourGas)
-            gantry(Olive, left, 6f, size.height - 4f, stroke, 0.55f)
-            val finishColor = if (frame.done && frame.won) Lime else if (frame.done) Red else White
-            gantry(finishColor, right, 6f, size.height - 4f, stroke, 1f)
+            drawDragScene(
+                scene,
+                DragFrame(
+                    distance = frame.distance.toFloat(), rival = frame.rival.toFloat(), finish = finish.toFloat(),
+                    slip = frame.slip, speed = frame.speed.toFloat(), clock = frame.clock.toFloat(),
+                    gasYou = yourGas, gasRival = theirGas, countdown = frame.countdown, lights = frame.lights,
+                    done = frame.done, won = frame.won, jumped = frame.jumped,
+                ),
+                memory, yourId, yourMid, rivalId,
+            )
         }
         val gapM = frame.distance - frame.rival
         Text(
@@ -443,46 +445,3 @@ private fun hookAdvice(setup: RaceDrive.Setup): String {
     }
 }
 
-private fun DrawScope.stageLamp(color: Color, center: Offset, radius: Float, stroke: Float, lit: Boolean) {
-    if (lit) glowCircle(color, radius, center, stroke, filled = true, gain = 1.15f)
-    else glowCircle(Olive, radius, center, stroke, filled = false, gain = 0.4f)
-}
-
-private fun DrawScope.gantry(color: Color, x: Float, top: Float, bottom: Float, stroke: Float, gain: Float) {
-    glowLine(color, Offset(x, top), Offset(x, bottom), stroke, gain)
-    glowLine(color, Offset(x - 7f, top), Offset(x + 7f, top), stroke, gain)
-}
-
-private fun DrawScope.lane(
-    color: Color,
-    ground: Float,
-    left: Float,
-    right: Float,
-    span: Float,
-    progress: Float,
-    roll: Float,
-    slip: Float,
-    stroke: Float,
-    chassisId: String,
-    mid: Boolean,
-    time: Float,
-    gas: Float,
-) {
-    glowLine(White, Offset(left, ground), Offset(right, ground), stroke * 0.8f, 0.28f)
-    var mark = 0.25f
-    while (mark < 1f) {
-        val tick = left + span * mark
-        glowLine(Olive, Offset(tick, ground - 5f), Offset(tick, ground + 5f), stroke, 0.4f)
-        mark += 0.25f
-    }
-    // Tall enough to read the cabin, short enough that the car is not the whole track.
-    val scale = (size.height * 0.13f).coerceIn(48f, 84f)
-    val half = Wireframe.length(chassisId) * scale * 0.5f
-    val pad = (scale * 0.22f).coerceAtLeast(10f)
-    val along = progress.coerceIn(0f, 1f)
-    val room = (span - half * 2f - pad * 2f).coerceAtLeast(8f)
-    val x = left + half + pad + along * room
-    with(Wireframe) {
-        draw(chassisId, mid, color, x, ground, scale, roll, slip, stroke, time, gas)
-    }
-}

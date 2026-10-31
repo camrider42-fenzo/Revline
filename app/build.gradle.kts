@@ -13,8 +13,8 @@ android {
         applicationId = "com.revline.idle"
         minSdk = 26
         targetSdk = 35
-        versionCode = 91
-        versionName = "1.75.2"
+        versionCode = 92
+        versionName = "1.76.0"
     }
 
     signingConfigs {
@@ -58,6 +58,7 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
     }
 
     lint {
@@ -94,6 +95,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Renders the drag screen to PNG on the JVM (native graphics), so the art can be checked without a device.
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }
 
 tasks.configureEach {

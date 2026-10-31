@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.75.2). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.76.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -120,3 +120,5 @@ Offline earnings pay 80% of the contract and 20% of passive research, capped at 
 ```
 
 The unit tests cover the Otto and boiling-point anchors, the stock band, energy balance, cam tradeoffs, radiator and intercooler temperature, spark versus EGT, fuel-flow limiting, knock on high compression, the income formula, offline pay, the save file, a scripted first-rebuild timing check, the per-engine pace of the horsepower / torque / mpg sheet, and a full shop run that buys every study and every part level. That full run is the balance and bug gate before an APK is published.
+
+The drag strip is drawn in code, with no art assets: `DragLooks.kt` holds one silhouette per chassis, `DragCars.kt` paints it (gradients, glass, wing, driver), `DragWheels.kt` draws slick and skinny tires with spoked rims that turn with the road covered, and `DragTrack.kt` bakes the night scenery (sky, grandstand, wall, asphalt) into bitmaps once per size and draws the moving parts over it. The screenshot tests (`DragCarsShotTest`, `DragSceneShotTest`) render the same drawing code through Robolectric and write PNGs to `/workspace/drag-gfx/`, or to the folder in `DRAG_GFX_DIR`.

@@ -78,7 +78,7 @@ object Wireframe {
         }
     }
 
-    private fun DrawScope.cloud(
+    internal fun DrawScope.cloud(
         origin: Offset,
         time: Float,
         scale: Float,
