@@ -68,70 +68,73 @@ fun Tachometer(
         shown
     }
     val mark by animateFloatAsState(targetRpm.toFloat(), settle, label = "mark")
-    Canvas(modifier) {
-        val stroke = (size.minDimension / 80f).coerceIn(1.7f, 3.2f)
-        val c = Offset(size.width / 2f, size.height * 0.62f)
-        val r = min(size.width, size.height) * 0.42f
-        val start = 150.0
-        val sweep = 240.0
-        val scale = (kotlin.math.ceil(redline / 1000.0) * 1000.0).coerceAtLeast(redline + 200.0)
-        val arcSize = Size(r * 2, r * 2)
-        val arcTop = Offset(c.x - r, c.y - r)
-        glowArc(White, start.toFloat(), sweep.toFloat(), arcTop, arcSize, stroke, 0.75f)
-        val redFrac = (redline / scale).toFloat().coerceIn(0f, 1f)
-        glowArc(
-            Red,
-            (start + sweep * redFrac).toFloat(),
-            (sweep * (1.0 - redFrac)).toFloat(),
-            arcTop,
-            arcSize,
-            stroke * 1.35f,
-            1.15f,
-        )
-        val ticks = (scale / 1000.0).toInt().coerceAtLeast(1)
-        for (i in 0..ticks) {
-            val f = i / ticks.toFloat()
-            val a = Math.toRadians(start + sweep * f)
-            val inner = r * 0.82f
-            val color = if (i * 1000.0 >= redline) Red else White
-            glowLine(
-                color,
-                Offset(c.x + (cos(a) * inner).toFloat(), c.y + (sin(a) * inner).toFloat()),
-                Offset(c.x + (cos(a) * r).toFloat(), c.y + (sin(a) * r).toFloat()),
-                stroke,
-                0.8f,
-            )
-        }
-        val markFrac = (mark / scale).coerceIn(0.0, 1.0)
-        val ma = Math.toRadians(start + sweep * markFrac)
-        glowCircle(
-            Cyan,
-            stroke * 1.35f,
-            Offset(c.x + (cos(ma) * r * 0.90f).toFloat(), c.y + (sin(ma) * r * 0.90f).toFloat()),
+    Canvas(modifier) { drawTach(needle, redline, mark, bouncing) }
+}
+
+/** The dial of [Tachometer], drawn into whatever canvas it is handed: [needle] and [mark] in rpm, the redline marked and the needle red when [bouncing] or near the redline. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTach(needle: Float, redline: Double, mark: Float, bouncing: Boolean) {
+    val stroke = (size.minDimension / 80f).coerceIn(1.7f, 3.2f)
+    val c = Offset(size.width / 2f, size.height * 0.62f)
+    val r = min(size.width, size.height) * 0.42f
+    val start = 150.0
+    val sweep = 240.0
+    val scale = (kotlin.math.ceil(redline / 1000.0) * 1000.0).coerceAtLeast(redline + 200.0)
+    val arcSize = Size(r * 2, r * 2)
+    val arcTop = Offset(c.x - r, c.y - r)
+    glowArc(White, start.toFloat(), sweep.toFloat(), arcTop, arcSize, stroke, 0.75f)
+    val redFrac = (redline / scale).toFloat().coerceIn(0f, 1f)
+    glowArc(
+        Red,
+        (start + sweep * redFrac).toFloat(),
+        (sweep * (1.0 - redFrac)).toFloat(),
+        arcTop,
+        arcSize,
+        stroke * 1.35f,
+        1.15f,
+    )
+    val ticks = (scale / 1000.0).toInt().coerceAtLeast(1)
+    for (i in 0..ticks) {
+        val f = i / ticks.toFloat()
+        val a = Math.toRadians(start + sweep * f)
+        val inner = r * 0.82f
+        val color = if (i * 1000.0 >= redline) Red else White
+        glowLine(
+            color,
+            Offset(c.x + (cos(a) * inner).toFloat(), c.y + (sin(a) * inner).toFloat()),
+            Offset(c.x + (cos(a) * r).toFloat(), c.y + (sin(a) * r).toFloat()),
             stroke,
-            filled = true,
-            gain = 1.1f,
-        )
-        val frac = (needle / scale).coerceIn(0.0, 1.0)
-        val na = Math.toRadians(start + sweep * frac)
-        val tip = Offset(c.x + (cos(na) * r * 0.78f).toFloat(), c.y + (sin(na) * r * 0.78f).toFloat())
-        val hot = bouncing || needle >= redline.toFloat() - 80f
-        glowLine(if (hot) Red else Lime, c, tip, stroke * 1.35f, 1.2f)
-        glowCircle(if (hot) Red else Lime, stroke * 2f, c, stroke, filled = true)
-        val label = needle.toInt().toString()
-        drawContext.canvas.nativeCanvas.drawText(
-            label,
-            c.x,
-            c.y + r * 0.42f,
-            Paint().apply {
-                color = (if (hot) Red else Lime).toArgb()
-                textAlign = Paint.Align.CENTER
-                textSize = r * 0.20f
-                typeface = Typeface.MONOSPACE
-                isAntiAlias = true
-            },
+            0.8f,
         )
     }
+    val markFrac = (mark / scale).coerceIn(0.0, 1.0)
+    val ma = Math.toRadians(start + sweep * markFrac)
+    glowCircle(
+        Cyan,
+        stroke * 1.35f,
+        Offset(c.x + (cos(ma) * r * 0.90f).toFloat(), c.y + (sin(ma) * r * 0.90f).toFloat()),
+        stroke,
+        filled = true,
+        gain = 1.1f,
+    )
+    val frac = (needle / scale).coerceIn(0.0, 1.0)
+    val na = Math.toRadians(start + sweep * frac)
+    val tip = Offset(c.x + (cos(na) * r * 0.78f).toFloat(), c.y + (sin(na) * r * 0.78f).toFloat())
+    val hot = bouncing || needle >= redline.toFloat() - 80f
+    glowLine(if (hot) Red else Lime, c, tip, stroke * 1.35f, 1.2f)
+    glowCircle(if (hot) Red else Lime, stroke * 2f, c, stroke, filled = true)
+    val label = needle.toInt().toString()
+    drawContext.canvas.nativeCanvas.drawText(
+        label,
+        c.x,
+        c.y + r * 0.42f,
+        Paint().apply {
+            color = (if (hot) Red else Lime).toArgb()
+            textAlign = Paint.Align.CENTER
+            textSize = r * 0.20f
+            typeface = Typeface.MONOSPACE
+            isAntiAlias = true
+        },
+    )
 }
 
 @Composable

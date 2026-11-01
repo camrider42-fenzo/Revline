@@ -274,11 +274,35 @@ object Circuits {
     private fun brakeLimit(mass: Double, mu: Double, down: Double = 0.0) = min(mu * (G + down), 14.5 - 0.0032 * mass).coerceAtLeast(3.0)
 
     /** [power] is the share of engine power left after heat and wear. */
-    fun lap(car: Car, circuit: Circuit, hands: Hands, power: Double = 1.0): Lap {
+    fun lap(car: Car, circuit: Circuit, hands: Hands, power: Double = 1.0): Lap =
+        solve(car, circuit.ds, circuit.radius, hands, power, lapM = circuit.lapMetres)
+
+    /**
+     * What [solve] saw along the lap, one entry per node: the speed at the start of the node in m/s, the gear and the
+     * clock. [t] has one more entry, the lap time. Filled for the last of the laps it drives round, so it is a hot lap.
+     */
+    class Sink(n: Int) {
+        val v = DoubleArray(n)
+        val gear = IntArray(n)
+        val t = DoubleArray(n + 1)
+        /** The rpm at which each gear is changed up, and the rev ceiling. */
+        var upAt = DoubleArray(0)
+        var ceiling = 0.0
+        /** The speed at the end of the last node. */
+        var vEnd = 0.0
+    }
+
+    /**
+     * The lap solver on any list of corner radii (0 on a straight) at an even spacing [ds]. [lap] runs it on the circuit's
+     * sketch, the replay runs it on the real centerline. A [standing] start begins the one lap from the grid in first gear.
+     */
+    internal fun solve(
+        car: Car, ds: Double, radius: DoubleArray, hands: Hands, power: Double = 1.0,
+        sink: Sink? = null, standing: Boolean = false, lapM: Double = radius.size * ds,
+    ): Lap {
         val st = car.setup
         val m = st.massKg
-        val n = circuit.nodes
-        val ds = circuit.ds
+        val n = radius.size
         // Lighter cars use their tires better. A fixed contact patch carries a light car above its static grip.
         val sens = (1000.0 / m).pow(0.08)
         val muBase = st.gripN / (m * G) * sens
@@ -290,7 +314,7 @@ object Circuits {
 
         // v^2 / r = mu (g + df v^2): downforce lifts the corner's speed ceiling as the speed rises.
         val vLim = DoubleArray(n) { i ->
-            val r = circuit.radius[i]
+            val r = radius[i]
             if (r <= 0.0) SPEED_CAP else if (df <= 0.0) sqrt(muCorner * G * r) else {
                 val room = 1.0 / r - muCorner * df
                 if (room <= 1e-9) SPEED_CAP else min(SPEED_CAP, sqrt(muCorner * G / room))
@@ -301,7 +325,7 @@ object Circuits {
         repeat(2) {
             for (k in n - 1 downTo 0) {
                 val next = vb[(k + 1) % n]
-                val r = circuit.radius[k]
+                val r = radius[k]
                 val fc = if (r > 0.0) sqrt((1.0 - (next * next / r / (muBase * (G + df * next * next))).pow(2)).coerceAtLeast(0.0)) else 1.0
                 val a = brakeLimit(m, muBase, df * next * next) * kBrake * fc + (dragK * next * next + roll) / m
                 val cand = sqrt(next * next + 2.0 * a * ds)
@@ -316,16 +340,19 @@ object Circuits {
         val upAt = DoubleArray(gears) { g -> min(Drivers.optimalShiftRpm(st, g + 1) * (1.0 + late), ceiling) }
         val shiftT = st.shiftSeconds * shiftScale(hands)
         val aFrac = accelFrac(hands)
+        sink?.let { it.upAt = upAt; it.ceiling = ceiling }
         var gear = 1
-        var v = vb[0]
+        var v = if (standing) min(3.0, vb[0]) else vb[0]
         var coast = 0.0
         var time = 0.0
         var full = 0.0
         var strain = 0.0
         var top = 0.0
         var lapNo = 0
-        while (lapNo < 2) {
+        val rounds = if (standing) 1 else 2
+        while (lapNo < rounds) {
             if (lapNo == 1) { time = 0.0; full = 0.0; strain = 0.0; top = 0.0 }
+            val record = if (lapNo == rounds - 1) sink else null
             for (i in 0 until n) {
                 var rpm = max(v / RaceDrive.WHEEL_R * st.ratios[gear - 1] * st.finalDrive * 9.5493, st.idle * 1.2)
                 while (gear < gears && rpm > upAt[gear - 1]) {
@@ -337,7 +364,7 @@ object Circuits {
                     gear--
                     rpm = max(v / RaceDrive.WHEEL_R * st.ratios[gear - 1] * st.finalDrive * 9.5493, st.idle * 1.2)
                 }
-                val r = circuit.radius[i]
+                val r = radius[i]
                 val fc = if (r > 0.0) sqrt((1.0 - (v * v / r / (muBase * (G + df * v * v))).pow(2)).coerceAtLeast(0.0)) else 1.0
                 var force = 0.0
                 var tracted = false
@@ -350,6 +377,7 @@ object Circuits {
                     force = min(raw, cap)
                     tracted = raw > cap
                 }
+                record?.let { it.v[i] = v; it.gear[i] = gear; it.t[i] = time }
                 val a = (force - dragK * v * v - roll) / m
                 var vn = sqrt((v * v + 2.0 * a * ds).coerceAtLeast(9.0))
                 val cap = vb[(i + 1) % n]
@@ -365,9 +393,10 @@ object Circuits {
                 if (vn > top) top = vn
                 v = vn
             }
+            record?.let { it.t[n] = time; it.vEnd = v }
             lapNo++
         }
-        return Lap(time, top * 3.6, full / circuit.lapMetres, strain)
+        return Lap(time, top * 3.6, full / lapM, strain)
     }
 
 
@@ -458,6 +487,9 @@ object Circuits {
         val elasticity: Double = 0.5,
         val carWear: Double = 0.0,
         val wetTire: Double = 0.8,
+        /** The car and the share of its power left on each lap, so the replay can draw the speed it ran ([CircuitPace]). */
+        val car: Car? = null,
+        val powers: List<Double> = emptyList(),
     ) {
         val mean: Double get() = laps.map { it.time }.average()
         val fullThrottle: Double get() = laps.map { it.fullThrottle }.average()
@@ -510,6 +542,7 @@ object Circuits {
         val raws = ArrayList<Double>()
         val failure = ArrayList<Double>()
         val mults = ArrayList<Double>()
+        val powers = ArrayList<Double>()
         var fresh = 0.0
         val fit = Tires.legalise(orders.fit, circuit.laps, weather)
         val stops = Tires.stopsOf(fit, circuit.laps)
@@ -538,6 +571,7 @@ object Circuits {
             laps.add(lap)
             raws.add(raw)
             mults.add(m)
+            powers.add(power)
             failure.add(hazard)
         }
         var elasticity = 0.5
@@ -549,7 +583,7 @@ object Circuits {
         return Plan(
             circuit, laps, failure, hands, car.mistakes * felt(pace.mistakes, hands.care) * wetMistakes(weather, skill),
             trace.pits, trace.mid, Orders(fit.start, fit.stop, fit.finish, pace, fit.stop2, fit.middle), weather, fresh,
-            trace.end, trace.compounds, raws, mults, freshMult, elasticity, car.wear, car.wetTire,
+            trace.end, trace.compounds, raws, mults, freshMult, elasticity, car.wear, car.wetTire, car, powers,
         )
     }
 
@@ -700,6 +734,8 @@ object Circuits {
         /** What the pit wall was told. */
         val orders: Orders = Orders(),
         val weather: Weather = Weather.DRY,
+        /** What the replay needs to draw each car's speed along the lap; null on a result built by hand. */
+        val pacing: CircuitPace.Pacing? = null,
     )
 
     /** One car's qualifying lap. [slot] is its place on the grid, 1 on pole. */
@@ -888,6 +924,7 @@ object Circuits {
         val grid = ArrayList<Finisher>()
         val rivalNotes = ArrayList<RaceLog.Event>()
         val runs = ArrayList<RaceLog.CarRun>()
+        val rivalPacing = LinkedHashMap<String, CircuitPace.RivalEntry>()
         Rivals.all.forEachIndexed { i, rival ->
             val name = rival.name
             val style = rival.style
@@ -896,12 +933,14 @@ object Circuits {
             var t = launch
             var out = false
             val lapTimes = ArrayList<Double>()
+            val nominal = ArrayList<Double>()
             var outOn = 0
             val dnfLap = if (dice.next() < 0.04 * style.dnf * (1.0 + 0.5 * sev)) 1 + (dice.next() * laps).toInt().coerceAtMost(laps - 1) else 0
             val pitLoss = pitLoss(circuit)
             for (lapNo in 1..laps) {
                 // His lap is the par car's lap on this lap's tires: the same shape, scaled by his pace and by his grip against hers.
                 val pace = paces[i] * par.raw[lapNo - 1] * (rt.mult[lapNo - 1] / par.gripMult[lapNo - 1]).pow(-e)
+                nominal.add(pace)
                 if (lapNo == dnfLap) {
                     val part = pace * dice.next()
                     t += part
@@ -920,6 +959,7 @@ object Circuits {
                 lapTimes.add(lt + if (lapNo == 1) launch else 0.0)
             }
             grid.add(Finisher(name, t, out, false, rival.team))
+            rivalPacing[name] = CircuitPace.RivalEntry(rt.mult, nominal, style)
             runs.add(RaceLog.CarRun(name, rival.team, false, lapTimes, outOn, rt.trace.pits.filter { outOn == 0 || it < outOn }.toSet(), rt.trace.compounds))
         }
         grid.add(Finisher(myName, total, !finished, true, Rivals.YOUR_TEAM))
@@ -927,7 +967,14 @@ object Circuits {
         val order = grid.sortedWith(compareBy<Finisher> { it.out }.thenBy { it.time })
         val place = order.indexOfFirst { it.you } + 1
         val log = RaceLog.build(runs, circuit.laps, notes + rivalNotes)
-        return Result(circuit, myName, place, grid.size, total, best, times, incidents, retired, engine, order, log, qualifying, plan.orders, plan.weather)
+        val pacing = plan.car?.let { mine ->
+            CircuitPace.Pacing(
+                CircuitPace.Entry(mine, plan.hands, plan.powers, plan.gripMult, plan.raw),
+                par.car?.let { CircuitPace.Entry(it, par.hands, par.powers, par.gripMult, par.raw) },
+                rivalPacing,
+            )
+        }
+        return Result(circuit, myName, place, grid.size, total, best, times, incidents, retired, engine, order, log, qualifying, plan.orders, plan.weather, pacing)
     }
 
     private fun fmt2(x: Double) = String.format(Locale.US, "%.2f", x)

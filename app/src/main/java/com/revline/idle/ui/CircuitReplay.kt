@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.revline.idle.game.CircuitPace
 import com.revline.idle.game.Circuits
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -40,13 +41,51 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** One car's race as times at the end of each lap: [cum] has the lap-0 time (zero) then one entry per lap it finished. */
-internal class ReplayCar(val name: String, val team: String, val you: Boolean, val cum: DoubleArray, val out: Boolean) {
+/**
+ * One car's race as times at the end of each lap: [cum] has the lap-0 time (zero) then one entry per lap it finished.
+ * With [runs] (one speed trace per lap, stretched to the lap's time) the car is placed by integrating its speed, so it brakes,
+ * corners and pulls the way its stats say; without them it is linear inside a lap. [partial] marks a last lap the car did not finish.
+ */
+internal class ReplayCar(
+    val name: String, val team: String, val you: Boolean, val cum: DoubleArray, val out: Boolean,
+    val runs: List<CircuitPace.Run>? = null, val partial: Boolean = false,
+) {
     val completed: Int get() = cum.size - 1
 
-    /** How far round the race the car is at [t] seconds, in laps. Linear inside a lap. A car that stopped creeps a bit further and halts. */
+    /** Where a car is on the speed traces: the lap's run and the seconds since its line, or null when it is parked. */
+    class Spot(val run: CircuitPace.Run, val tin: Double, val lap: Int, val parked: Boolean)
+
+    private fun spot(t: Double): Spot? {
+        val runs = runs ?: return null
+        if (runs.isEmpty() || completed == 0 && !out) return null
+        if (t <= 0.0) return Spot(runs[0], 0.0, 0, true)
+        val last = cum[completed]
+        if (t >= last) {
+            if (out) {
+                if (partial) return Spot(runs[completed - 1], cum[completed] - cum[completed - 1], completed - 1, true)
+                val run = runs.getOrNull(completed) ?: return Spot(runs[completed - 1], runs[completed - 1].span, completed - 1, true)
+                val cap = run.span * 0.4
+                val tin = t - last
+                return Spot(run, min(tin, cap), completed, tin >= cap)
+            }
+            return Spot(runs[completed - 1], t - last, completed, false)
+        }
+        var k = 0
+        while (k < completed - 1 && cum[k + 1] <= t) k++
+        return Spot(runs[k], t - cum[k], k, false)
+    }
+
+    /** The gauges at [t]: speed, rpm and gear on the trace, or null with no traces. */
+    fun dash(t: Double): CircuitPace.Dash? {
+        val at = spot(t) ?: return null
+        return if (at.parked) at.run.parked() else at.run.dash(at.tin)
+    }
+
+    /** How far round the race the car is at [t] seconds, in laps. A car that stopped creeps a bit further and halts. */
     fun progress(t: Double): Double {
         if (t <= 0.0 || completed == 0 && !out) return 0.0
+        val at = spot(t)
+        if (at != null) return at.lap + at.run.fracAt(at.tin)
         val last = cum[completed]
         val lastLap = if (completed > 0) cum[completed] - cum[completed - 1] else 90.0
         if (t >= last) {
@@ -73,11 +112,36 @@ internal class Replay(val you: ReplayCar, val rival: ReplayCar, val laps: Int, v
             if (r.lapTimes.isEmpty()) return null
             val yourCum = DoubleArray(r.lapTimes.size + 1)
             for (i in r.lapTimes.indices) yourCum[i + 1] = yourCum[i] + r.lapTimes[i]
-            val you = ReplayCar(r.driver, "", true, yourCum, r.retired != null)
-            val rival = (if (r.log.rows.isNotEmpty()) fromLog(r, yourCum) else fromGrid(r, yourCum, laps)) ?: return null
+            val partial = r.retired != null
+            val pacing = r.pacing
+            val youRuns = pacing?.let { p -> runsOf(r.circuit.id, yourCum, partial, partial) { CircuitPace.youSpec(p, it) } }
+            val you = ReplayCar(r.driver, "", true, yourCum, partial, youRuns, partial && youRuns != null)
+            val plain = (if (r.log.rows.isNotEmpty()) fromLog(r, yourCum) else fromGrid(r, yourCum, laps)) ?: return null
+            val rivalRuns = pacing?.let { p -> runsOf(r.circuit.id, plain.cum, false, plain.out) { CircuitPace.rivalSpec(p, plain.name, it) } }
+            val rival = ReplayCar(plain.name, plain.team, false, plain.cum, plain.out, rivalRuns)
             val lastLap = yourCum[yourCum.size - 1] - yourCum[yourCum.size - 2]
             val duration = if (r.retired != null) yourCum[yourCum.size - 1] + 0.4 * lastLap + 2.5 else yourCum[yourCum.size - 1] + 3.0
             return Replay(you, rival, laps, duration, r.retired != null)
+        }
+
+        /**
+         * One speed trace per lap of a car whose lap-end times are [cum], each stretched to the lap's time ([CircuitPace]),
+         * or null when the circuit has no centerline or the race kept no car for it. The first lap is a standing start. A last lap
+         * the car did not finish ([partial]) or a lap past the last one it finished (a retirement) runs at the pace the sim planned.
+         */
+        private fun runsOf(id: String, cum: DoubleArray, partial: Boolean, out: Boolean, spec: (Int) -> CircuitPace.Spec?): List<CircuitPace.Run>? {
+            if (!CircuitLayouts.has(id)) return null
+            val radii = CircuitRadii.of(CircuitLayouts.of(id))
+            val finished = cum.size - 1
+            val laps = finished + if (out && !partial) 1 else 0
+            val runs = ArrayList<CircuitPace.Run>(laps)
+            for (k in 0 until laps) {
+                val s = spec(k + 1) ?: return null
+                val trace = CircuitPace.trace(s, radii.radius, radii.ds, standing = k == 0)
+                val planned = k >= finished || partial && k == finished - 1
+                runs.add(CircuitPace.run(trace, if (k < finished) cum[k + 1] - cum[k] else s.nominal, if (planned) s.nominal else null))
+            }
+            return runs
         }
 
         /** Every car's lap-end times from the log's gaps to the leader, which are tied to the player's own clock. */
@@ -226,6 +290,7 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
             val cars = ReplayLook.cars(scene.geo, replay, t, yourId, yourMid)
             drawCircuitView(scene, cars, size.width, size.height, followYou = zoomed)
         }
+        CircuitDash(if (clock < 0f) null else replay.you.dash(t), Modifier.padding(top = 4.dp))
         val state = when {
             clock < 0f -> "ON THE GRID"
             finished && replay.retired -> "OUT"

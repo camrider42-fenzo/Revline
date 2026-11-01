@@ -1,6 +1,7 @@
 package com.revline.idle.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.unit.Density
 import com.revline.idle.game.Circuits
 import androidx.compose.ui.geometry.Offset
@@ -43,7 +44,8 @@ class CircuitTrackShotTest {
 
     @Test fun raceFrames() {
         val asp = CircuitLayouts.aspect("silverstone")
-        for ((name, w, h) in listOf(Triple("", 936, (936f / asp).toInt()), Triple("-big", 2808, (2808f / asp).toInt()))) {
+        for ((name, w, mapH) in listOf(Triple("", 936, (936f / asp).toInt()), Triple("-big", 2808, (2808f / asp).toInt()))) {
+            val dashH = (w / DASH_ASPECT).toInt()
             val r = race("silverstone", 7L)
             val replay = Replay.build(r)!!
             // The moment the two run closest through the middle of the race.
@@ -56,9 +58,10 @@ class CircuitTrackShotTest {
                 t += 0.5
             }
             for ((file, at) in listOf("race-start" to 0.0, "race-mid" to tMid)) {
-                CircuitShots.shoot(file + name, w, h, density = 2.6f * w / 936f) {
-                    val scene = bakeCircuitScene(CircuitGeo(size.width, size.height, "silverstone"), this, "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
+                CircuitShots.shoot(file + name, w, mapH + dashH, density = 2.6f * w / 936f) {
+                    val scene = bakeCircuitScene(CircuitGeo(w.toFloat(), mapH.toFloat(), "silverstone"), this, "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
                     drawCircuitScene(scene, ReplayLook.cars(scene.geo, replay, at, "p911", false))
+                    inset(0f, mapH.toFloat(), 0f, 0f) { drawCircuitDash(if (at > 0.0) replay.you.dash(at) else null) }
                 }
             }
         }
