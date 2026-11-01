@@ -67,11 +67,33 @@ class CircuitLayoutTest {
         }
     }
 
-    @Test fun startLineHasRoomForTwoGridRows() {
+    @Test fun gridHasASlotForEveryCarAndFollowsTheRoadBack() {
+        assertEquals(5, GRID_ROWS)
+        assertTrue(GRID_ROWS * 2 >= Circuits.FIELD + 1)
         for (c in Circuits.all) {
             val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect(c.id), c.id)
-            assertTrue("${c.id} room ${g.line.gridRoom} vs ${g.carUnits}", g.line.gridRoom > g.carUnits * 1.5f)
+            val back = -gridArc(g, GRID_ROWS - 1, -1) + g.carUnits * 0.6f
+            // The last slot is still well inside the lap and clear of the first corner ahead of the line.
+            assertTrue("${c.id}: grid is ${back} units long", back < g.line.length * 0.2f)
+            val last = g.line.cornerArc.last()
+            assertTrue("${c.id}: grid runs into the corner before the line", g.line.length - last > 0f)
         }
+    }
+
+    @Test fun silverstoneStartLineSitsWellAlongTheHamiltonStraightAndTheGridRunsBackThroughClub() {
+        val l = CircuitLayouts.of("silverstone")
+        val g = CircuitGeo(936f, 936f / l.aspect, "silverstone")
+        val clubToLineM = (l.length - l.cornerArc.last()) * l.metersPerUnit
+        assertTrue("Club to the line is $clubToLineM m", clubToLineM in 180f..300f)
+        val toAbbeyM = l.cornerArc[0] * l.metersPerUnit
+        assertTrue("line to Abbey is $toAbbeyM m", toAbbeyM in 250f..450f)
+        assertEquals(150f, l.shiftUnits * l.metersPerUnit, 10f)
+        // The last row stands behind Club's apex, on the bend, not on the straight.
+        val lastRowM = -gridArc(g, GRID_ROWS - 1, 1) * l.metersPerUnit
+        assertTrue("grid is $lastRowM m deep", lastRowM > clubToLineM)
+        // Boxes turn with the road: the front and back row headings differ by the bend they stand on.
+        val turn = abs(CircuitLine.angleDiff(g.heading(gridArc(g, 0, 1)), g.heading(gridArc(g, GRID_ROWS - 1, 1))))
+        assertTrue("grid bends only $turn rad", turn > 0.3f)
     }
 
     @Test fun replayProgressRunsThroughEveryLapAndStopsWhenOut() {

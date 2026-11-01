@@ -62,6 +62,8 @@ internal class CircuitLine(data: TrackData) {
     val aspect: Float
     val boxW: Float = CircuitLayouts.BOX_W
     val boxH: Float
+    /** How far the start line was slid forward from the data's own origin, in units. */
+    val shiftUnits: Float
     /** Arc distance of each official turn, from the start line. */
     val cornerArc: FloatArray
     /** +1 where the corner turns right (clockwise on the page), -1 left. */
@@ -134,6 +136,14 @@ internal class CircuitLine(data: TrackData) {
             rx[i] = dx[j] + (dx[(j + 1) % m] - dx[j]) * f
             ry[i] = dy[j] + (dy[(j + 1) % m] - dy[j]) * f
         }
+        // Some start lines sit further along the straight than the data has them: slide the origin forward.
+        val shift = (data.startShiftM / metersPerUnit / step).roundToInt().coerceIn(0, n - 1)
+        shiftUnits = shift * step
+        if (shift != 0) {
+            val ox = rx.copyOf()
+            val oy = ry.copyOf()
+            for (i in 0 until n) { rx[i] = ox[(i + shift) % n]; ry[i] = oy[(i + shift) % n] }
+        }
         xs = rx
         ys = ry
         length = total
@@ -161,7 +171,7 @@ internal class CircuitLine(data: TrackData) {
         val arcs = data.cornerArcM.split(',').map { it.toFloat() }
         val ratio = (lengthM / data.measuredM).toFloat()
         corners = arcs.size
-        cornerArc = FloatArray(corners) { (arcs[it] * ratio / metersPerUnit).coerceIn(0f, total - step) }
+        cornerArc = FloatArray(corners) { (arcs[it] * ratio / metersPerUnit - shiftUnits).coerceIn(0f, total - step) }
         cornerSide = IntArray(corners) { if (data.cornerSides[it] == 'R') 1 else -1 }
         minX = xs.min(); maxX = xs.max(); minY = ys.min(); maxY = ys.max()
     }

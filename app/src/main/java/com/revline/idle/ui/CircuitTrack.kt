@@ -93,6 +93,9 @@ internal fun bakeCircuitScene(geo: CircuitGeo, density: Density, title: String, 
     return CircuitScene(geo, img)
 }
 
+/** Rows on the grid: two cars to a row, room for the whole field and you. */
+internal val GRID_ROWS = (com.revline.idle.game.Circuits.FIELD + 2) / 2
+
 /** Arc distance of a grid slot: [row] 0 is the front row, [sign] picks the lane (+1 right), and the left lane sits a little behind. */
 internal fun gridArc(geo: CircuitGeo, row: Int, sign: Int): Float =
     -(geo.carUnits * 0.9f + row * geo.carUnits * 1.7f) - (if (sign > 0) 0f else geo.carUnits * 0.28f)
@@ -316,10 +319,10 @@ private fun DrawScope.circuitScenery(geo: CircuitGeo, title: String, subtitle: S
     }
 
     // Grid slots behind the line, two to a row, where the lanes run.
-    for (row in 0 until 5) {
+    // The slots follow the line back through any bend, each box turned to the local tangent.
+    for (row in 0 until GRID_ROWS) {
         for (sign in intArrayOf(-1, 1)) {
             val s = gridArc(geo, row, sign)
-            if (s - geo.carUnits * 0.6f < -line.gridRoom) continue
             val c = geo.point(s, sign * geo.laneOffset)
             val hd = Math.toDegrees(geo.heading(s).toDouble()).toFloat()
             withTransform({ translate(c.x, c.y); rotate(hd, Offset.Zero) }) {

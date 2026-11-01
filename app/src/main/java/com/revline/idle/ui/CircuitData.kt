@@ -22,6 +22,8 @@ internal class TrackData(
     val pitSide: Int,
     /** How wide the drawn road is, as a share of the picture width. Much wider than the real road (about 12 m), see README. */
     val roadShare: Float,
+    /** Metres to slide the start/finish line forward along the direction of travel from the data's origin. */
+    val startShiftM: Double = 0.0,
 )
 
 internal object CircuitData {
@@ -75,7 +77,7 @@ internal object CircuitData {
                 + "7373636364636464546454545544555554555464536463646463646364546454371;0A2H3J5K4K4K4J2G0B0=1:46455554546463738292"
                 + "92:1:1;1;0<1;1=0>0A0E1G2I2H2I3I3I3",
             measuredM = 5864.0, cornerArcM = "464,684,944,1088,1280,2024,2228,2580,3132,3652,3756,3916,4064,4220,5088,5548,5624,5792",
-            cornerSides = "RLRLLLRRRLRLRLRLRR", pitSide = 1, roadShare = 0.036f,
+            cornerSides = "RLRLLLRRRLRLRLRLRR", pitSide = 1, roadShare = 0.036f, startShiftM = 150.0,
         ),
         TrackData(
             "spa", 7.004, -335, -1803,

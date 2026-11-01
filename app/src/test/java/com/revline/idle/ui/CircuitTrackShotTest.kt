@@ -70,7 +70,7 @@ class CircuitTrackShotTest {
         val asp = CircuitLayouts.aspect("silverstone")
         val w = 936
         val h = (w / asp).toInt()
-        for ((file, at) in listOf("follow-start" to 0.0, "follow-mid" to replay.duration * 0.4)) {
+        for ((file, at) in listOf("follow-start" to 0.0, "silverstone-grid" to 0.0, "follow-mid" to replay.duration * 0.4)) {
             CircuitShots.shoot(file, w, h) {
                 val zoom = CircuitView.zoomFor(size.width, size.height)
                 val scene = bakeCircuitScene(CircuitGeo(size.width * zoom, size.height * zoom, "silverstone"), Density(2.6f * zoom), "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
