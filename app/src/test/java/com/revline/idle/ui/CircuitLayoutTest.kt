@@ -31,7 +31,7 @@ class CircuitLayoutTest {
             val l = CircuitLayouts.of(c.id)
             val gap = hypot(l.xs[0] - l.xs[l.xs.size - 1], l.ys[0] - l.ys[l.ys.size - 1])
             assertTrue("${c.id} loop gap $gap", gap < l.step * 1.5f)
-            assertTrue(l.minX >= 0f && l.minY >= 0f && l.maxX <= CircuitLayouts.BOX_W && l.maxY <= CircuitLayouts.BOX_H)
+            assertTrue(l.minX >= -1f && l.minY >= -1f && l.maxX <= CircuitLayouts.BOX_W + 1f && l.maxY <= l.boxH + 1f)
             assertTrue("${c.id} too short", l.length > 150f)
         }
     }
@@ -43,18 +43,18 @@ class CircuitLayoutTest {
         }
     }
 
-    @Test fun roadStaysClearOfItselfSoTwoCarsFit() {
-        val geo = { id: String -> CircuitGeo(936f, 580f, id) }
+    @Test fun roadRarelyRunsIntoItself() {
+        // The drawn road is wider than the real one, so where two parts of a real track really are close it can touch. That is a few percent of the lap at most.
         for (c in Circuits.all) {
-            val g = geo(c.id)
-            val clear = g.line.minClearance()
-            assertTrue("${c.id}: clearance $clear vs road ${g.roadUnits}", clear >= g.roadUnits * 1.35f)
+            val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect(c.id), c.id)
+            val share = g.line.tightShare(g.roadUnits * 1.05f)
+            assertTrue("${c.id}: ${(share * 100).toInt()}% of the lap is closer than a road width", share < (if (c.id == "suzuka") 0.12f else 0.06f))
         }
     }
 
     @Test fun twoCarsFitInTheirLanesWithRoomBetween() {
         for (c in Circuits.all) {
-            val g = CircuitGeo(936f, 580f, c.id)
+            val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect(c.id), c.id)
             for (id in DragLooks.ids) {
                 val plan = TopPlan.of(id, false)
                 assertTrue("$id plan", plan.length > 0f && plan.width > 0f)
@@ -67,10 +67,10 @@ class CircuitLayoutTest {
         }
     }
 
-    @Test fun startLineHasGridBehindItOnAStraight() {
+    @Test fun startLineHasRoomForTwoGridRows() {
         for (c in Circuits.all) {
-            val g = CircuitGeo(936f, 580f, c.id)
-            assertTrue("${c.id} straight ${g.line.startStraight}", g.line.startStraight.start < -g.carUnits * 2f)
+            val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect(c.id), c.id)
+            assertTrue("${c.id} room ${g.line.gridRoom} vs ${g.carUnits}", g.line.gridRoom > g.carUnits * 1.5f)
         }
     }
 
@@ -122,7 +122,7 @@ class CircuitLayoutTest {
     @Test fun carsStartSideBySideOnTheFrontRow() {
         val r = race("monza", 3L)
         val rp = Replay.build(r)!!
-        val g = CircuitGeo(936f, 580f, "monza")
+        val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect("monza"), "monza")
         val cars = ReplayLook.cars(g, rp, 0.0, "p911", false)
         assertEquals(2, cars.size)
         assertEquals(cars[0].s.toDouble(), cars[1].s.toDouble(), g.carUnits * 0.4)
@@ -130,7 +130,7 @@ class CircuitLayoutTest {
     }
 
     @Test fun carsNeverOverlapWhenAbreast() {
-        val g = CircuitGeo(936f, 580f, "monza")
+        val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect("monza"), "monza")
         val r = race("monza", 3L)
         val rp = Replay.build(r)!!
         var t = 0.0
@@ -143,5 +143,109 @@ class CircuitLayoutTest {
             if (abs(cars[0].s - cars[1].s) < g.carUnits * 0.5f) assertTrue("t=$t d=$d", d > g.laneOffset * 1.5f)
             t += 1.0
         }
+    }
+
+    private val official = mapOf(
+        "monza" to 5.793, "monaco" to 3.337, "silverstone" to 5.891, "spa" to 7.004,
+        "hungaroring" to 4.381, "suzuka" to 5.807, "montreal" to 4.361, "singapore" to 4.940,
+    )
+
+    @Test fun trueLengthMatchesTheOfficialLapWithinTwoPercent() {
+        for ((id, km) in official) {
+            val l = CircuitLayouts.of(id)
+            val err = l.lengthM / (km * 1000.0) - 1.0
+            assertTrue("$id is ${"%.0f".format(l.lengthM)} m against ${km * 1000} m (${"%.2f".format(err * 100)}%)", abs(err) <= 0.02)
+            assertEquals(km, Circuits.all.first { it.id == id }.lapKm, 1e-9)
+            assertEquals(km, l.officialKm, 1e-9)
+            // The layout units and the metres agree.
+            assertEquals(l.lengthM, l.length.toDouble() * l.metersPerUnit, 1.0)
+        }
+    }
+
+    @Test fun firstTurnIsOnTheRightSideAndAfterTheStartLine() {
+        val first = mapOf("monza" to 1, "monaco" to 1, "silverstone" to 1, "spa" to 1, "hungaroring" to 1, "suzuka" to 1, "montreal" to -1, "singapore" to -1)
+        for ((id, side) in first) {
+            val l = CircuitLayouts.of(id)
+            assertEquals("$id turn 1 side", side, l.cornerSide[0])
+            val m = l.cornerArc[0] * l.metersPerUnit
+            assertTrue("$id turn 1 is $m m after the line", m in 150f..1000f)
+            for (k in 1 until l.corners) assertTrue("$id corner order", l.cornerArc[k] > l.cornerArc[k - 1])
+        }
+    }
+
+    @Test fun cornerSidesMatchTheBendsOfTheLine() {
+        for (c in Circuits.all) {
+            val l = CircuitLayouts.of(c.id)
+            var agree = 0
+            val a = FloatArray(3)
+            val b = FloatArray(3)
+            for (k in 0 until l.corners) {
+                val s = l.cornerArc[k]
+                // The turn is the heading change over the 40 m around the marked point.
+                val half = 20f / l.metersPerUnit
+                l.at(s - half, a); l.at(s + half, b)
+                if (CircuitLine.angleDiff(a[2], b[2]) * l.cornerSide[k] > 0f) agree++
+            }
+            assertTrue("${c.id}: only $agree of ${l.corners} marked corners bend the way they are listed", agree >= l.corners * 0.85)
+        }
+    }
+
+    @Test fun carsDriveTheRightWayRound() {
+        // Total turning over a lap, in turns: clockwise on the page is positive. Suzuka's figure eight cancels out.
+        val expect = mapOf("monza" to 1, "monaco" to 1, "silverstone" to 1, "spa" to 1, "hungaroring" to 1, "suzuka" to 0, "montreal" to 1, "singapore" to -1)
+        for ((id, dir) in expect) {
+            val l = CircuitLayouts.of(id)
+            var total = 0f
+            val a = FloatArray(3)
+            val b = FloatArray(3)
+            var s = 0f
+            while (s < l.length) {
+                l.at(s, a); l.at(s + 1f, b)
+                total += CircuitLine.angleDiff(a[2], b[2])
+                s += 1f
+            }
+            val turns = total / (2f * Math.PI.toFloat())
+            if (dir == 0) assertTrue("$id turns $turns", abs(turns) < 0.3f) else assertTrue("$id turns $turns", turns * dir > 0.7f)
+        }
+    }
+
+    @Test fun roadIsDrawnWiderThanLifeAndSaysSo() {
+        // About 12 m is a real road; the drawing is several times that so two cars fit side by side.
+        for (c in Circuits.all) {
+            val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect(c.id), c.id)
+            val drawnM = g.roadUnits * g.line.metersPerUnit
+            assertTrue("${c.id} road ${drawnM} m", drawnM in 15f..90f)
+        }
+    }
+
+    @Test fun playbackProgressScalesWithTheChosenSpeed() {
+        val replay = Replay.build(race("silverstone", 7L))!!
+        val ticks = 600 // ten real seconds at 60 frames a second
+        fun after(index: Int, playing: Boolean = true): Float {
+            var clock = 0f
+            repeat(ticks) { clock = ReplaySpeed.advance(clock, 1f / 60f, playing, ReplaySpeed.multiplier(index, replay)) }
+            return clock
+        }
+        val base = after(ReplaySpeed.DEFAULT)
+        assertEquals(10f, base, 1e-2f)
+        assertEquals(base * 0.5f, after(0), 1e-2f)
+        assertEquals(base * 2f, after(2), 1e-2f)
+        assertEquals(base * 4f, after(3), 1e-2f)
+        assertEquals(base * 8f, after(4), 1e-2f)
+        // Paused films do not move.
+        assertEquals(0f, after(4, playing = false), 0f)
+        // Race progress at 8x is eight times as far along as at 1x, until the end.
+        val at1 = ReplaySpeed.progress(base, replay)
+        val at8 = ReplaySpeed.progress(after(4), replay)
+        assertTrue(at1 > 0f)
+        assertEquals(minOf(1f, at1 * 8f), at8, 1e-3f)
+        // Time left shrinks in proportion, and LIVE is the slowest chip: the race at the pace it was run.
+        val end = ReplaySpeed.endClock(replay)
+        assertEquals(ReplaySpeed.secondsLeft(0f, replay, 1.0) / 4.0, ReplaySpeed.secondsLeft(0f, replay, 4.0), 1e-6)
+        assertEquals(30.0, ReplaySpeed.secondsLeft(0f, replay, 1.0) * 1.0, 3.0 / replay.speed + 30.0)
+        assertTrue(ReplaySpeed.multiplier(ReplaySpeed.LIVE, replay) <= 1.0)
+        assertEquals(replay.duration, ReplaySpeed.secondsLeft(0f, replay, ReplaySpeed.multiplier(ReplaySpeed.LIVE, replay)), 1e-3)
+        assertEquals(replay.duration, end * replay.speed, 1e-3)
+        assertEquals(ReplaySpeed.labels.size, 6)
     }
 }

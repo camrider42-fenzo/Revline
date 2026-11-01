@@ -7,6 +7,17 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -147,6 +158,32 @@ internal object ReplayLook {
     }
 }
 
+/** How fast the film runs and how its clock moves; plain functions so a test can drive them without a screen. */
+internal object ReplaySpeed {
+    /** Speed chips: multiples of the normal half-minute playback, then LIVE, which is the race at its own pace. */
+    val labels = listOf("0.5x", "1x", "2x", "4x", "8x", "LIVE")
+    private val multiples = doubleArrayOf(0.5, 1.0, 2.0, 4.0, 8.0)
+    const val DEFAULT = 1
+    const val LIVE = 5
+
+    /** Film seconds per real second at chip [index]. LIVE runs the race at its real pace, however long it was. */
+    fun multiplier(index: Int, replay: Replay): Double =
+        if (index == LIVE) 1.0 / replay.speed else multiples[index.coerceIn(0, multiples.size - 1)]
+
+    /** The film clock after [dt] real seconds; a paused film stays where it is. The clock counts at the normal rate, [Replay.speed] converts it to race time. */
+    fun advance(clock: Float, dt: Float, playing: Boolean, multiplier: Double): Float =
+        if (playing) clock + (dt * multiplier).toFloat() else clock
+
+    /** Where the clock stands when the race is over. */
+    fun endClock(replay: Replay): Float = (replay.duration / replay.speed).toFloat()
+
+    /** Real seconds until the end at the given multiplier, from film clock [clock]. */
+    fun secondsLeft(clock: Float, replay: Replay, multiplier: Double): Double = max(0.0, (endClock(replay) - clock) / multiplier)
+
+    /** Share of the race run by film clock [clock], 0 to 1. */
+    fun progress(clock: Float, replay: Replay): Float = ((clock * replay.speed) / replay.duration).toFloat().coerceIn(0f, 1f)
+}
+
 /** A short film of the race: you and the closest rival round the circuit, lap by lap. */
 @Composable
 internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid: Boolean, modifier: Modifier = Modifier) {
@@ -154,20 +191,27 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
     val scenes = remember { CircuitSceneHolder() }
     var clock by remember(result) { mutableFloatStateOf(-1.5f) }
     var run by remember(result) { mutableIntStateOf(0) }
-    var playing by remember(result) { mutableStateOf(true) }
+    var finished by remember(result) { mutableStateOf(false) }
+    var paused by remember(result) { mutableStateOf(false) }
+    // The chosen speed and the close-up survive leaving the screen and rotating.
+    var speedIndex by rememberSaveable { mutableIntStateOf(ReplaySpeed.DEFAULT) }
+    var zoomed by rememberSaveable { mutableStateOf(false) }
+    val speedNow by rememberUpdatedState(speedIndex)
+    val pausedNow by rememberUpdatedState(paused)
     LaunchedEffect(result, run) {
         clock = -1.5f
-        playing = true
+        finished = false
+        paused = false
         var last = 0L
         while (isActive && clock * replay.speed < replay.duration) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.05f)
                 last = now
-                clock += dt
+                clock = ReplaySpeed.advance(clock, dt, !pausedNow, ReplaySpeed.multiplier(speedNow, replay))
             }
         }
-        clock = (replay.duration / replay.speed).toFloat()
-        playing = false
+        clock = ReplaySpeed.endClock(replay)
+        finished = true
     }
     val t = max(0.0, clock * replay.speed)
     val youLaps = replay.you.progress(t)
@@ -176,15 +220,18 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
     Column(modifier.fillMaxWidth()) {
         val title = result.circuit.name.substringBefore('-').uppercase(Locale.US)
         val sub = String.format(Locale.US, "%.3f km  %d corners", result.circuit.lapKm, result.circuit.corners)
-        Canvas(Modifier.fillMaxWidth().aspectRatio(1.6f).padding(top = 4.dp)) {
-            val scene = scenes.get(this, result.circuit.id, title, sub)
-            drawCircuitScene(scene, ReplayLook.cars(scene.geo, replay, t, yourId, yourMid))
+        Canvas(Modifier.fillMaxWidth().aspectRatio(CircuitLayouts.aspect(result.circuit.id)).padding(top = 4.dp).clipToBounds()) {
+            val zoom = if (zoomed) CircuitView.zoomFor(size.width, size.height) else 1f
+            val scene = scenes.get(this, result.circuit.id, title, sub, zoom)
+            val cars = ReplayLook.cars(scene.geo, replay, t, yourId, yourMid)
+            drawCircuitView(scene, cars, size.width, size.height, followYou = zoomed)
         }
         val state = when {
             clock < 0f -> "ON THE GRID"
-            playing -> "LAP $lap of ${replay.laps}"
-            replay.retired -> "OUT"
-            else -> "FINISHED"
+            finished && replay.retired -> "OUT"
+            finished -> "FINISHED"
+            paused -> "PAUSED  LAP $lap of ${replay.laps}"
+            else -> "LAP $lap of ${replay.laps}"
         }
         val ahead = youLaps >= rivalLaps
         Text(
@@ -194,8 +241,29 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
             fontSize = 11.sp,
         )
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.revline.idle.ui.LineButton(if (paused) "Play" else "Pause", !finished, { paused = !paused })
             com.revline.idle.ui.LineButton("Replay", true, { run++ })
-            com.revline.idle.ui.LineButton("Skip to the end", playing, { clock = (replay.duration / replay.speed).toFloat() })
+            com.revline.idle.ui.LineButton("Skip to the end", !finished, { clock = ReplaySpeed.endClock(replay) })
+            com.revline.idle.ui.LineButton(if (zoomed) "Whole track" else "Follow", true, { zoomed = !zoomed })
+        }
+        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for ((i, label) in ReplaySpeed.labels.withIndex()) SpeedChip(label, i == speedIndex) { speedIndex = i }
         }
     }
+}
+
+@Composable
+private fun SpeedChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    val color = if (selected) Lime else Olive
+    Text(
+        text,
+        color = if (selected) Color.Black else color,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier
+            .background(if (selected) Lime else Color.Transparent)
+            .border(BorderStroke(1.dp, color))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 6.dp),
+    )
 }

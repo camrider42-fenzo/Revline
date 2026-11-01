@@ -864,7 +864,7 @@ private fun CircuitMap(circuit: Circuits.Circuit, chassis: String, mid: Boolean)
     val scenes = remember { CircuitSceneHolder() }
     val title = circuit.name.substringBefore('-').uppercase(Locale.US)
     val sub = String.format(Locale.US, "%.3f km  %d corners", circuit.lapKm, circuit.corners)
-    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().aspectRatio(1.6f).padding(top = 4.dp)) {
+    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().aspectRatio(CircuitLayouts.aspect(circuit.id)).padding(top = 4.dp)) {
         val scene = scenes.get(this, circuit.id, title, sub)
         val geo = scene.geo
         drawCircuitScene(

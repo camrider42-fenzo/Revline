@@ -22,7 +22,7 @@ class CircuitTrackShotTest {
 
     @Test fun overviews() {
         for (c in Circuits.all) {
-            CircuitShots.shoot(c.id, 936, 580) {
+            CircuitShots.shoot(c.id, 936, (936f / CircuitLayouts.aspect(c.id)).toInt()) {
                 val scene = bakeCircuitScene(CircuitGeo(size.width, size.height, c.id), Density(2.6f), c.name.uppercase(), "${c.lapKm} km  ${c.corners} corners")
                 val geo = scene.geo
                 val cars = listOf(
@@ -42,7 +42,8 @@ class CircuitTrackShotTest {
     }
 
     @Test fun raceFrames() {
-        for ((name, w, h) in listOf(Triple("", 936, 580), Triple("-big", 2808, 1740))) {
+        val asp = CircuitLayouts.aspect("silverstone")
+        for ((name, w, h) in listOf(Triple("", 936, (936f / asp).toInt()), Triple("-big", 2808, (2808f / asp).toInt()))) {
             val r = race("silverstone", 7L)
             val replay = Replay.build(r)!!
             // The moment the two run closest through the middle of the race.
@@ -59,6 +60,21 @@ class CircuitTrackShotTest {
                     val scene = bakeCircuitScene(CircuitGeo(size.width, size.height, "silverstone"), this, "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
                     drawCircuitScene(scene, ReplayLook.cars(scene.geo, replay, at, "p911", false))
                 }
+            }
+        }
+    }
+
+    @Test fun followFrames() {
+        val r = race("silverstone", 7L)
+        val replay = Replay.build(r)!!
+        val asp = CircuitLayouts.aspect("silverstone")
+        val w = 936
+        val h = (w / asp).toInt()
+        for ((file, at) in listOf("follow-start" to 0.0, "follow-mid" to replay.duration * 0.4)) {
+            CircuitShots.shoot(file, w, h) {
+                val zoom = CircuitView.zoomFor(size.width, size.height)
+                val scene = bakeCircuitScene(CircuitGeo(size.width * zoom, size.height * zoom, "silverstone"), Density(2.6f * zoom), "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
+                drawCircuitView(scene, ReplayLook.cars(scene.geo, replay, at, "p911", false), size.width, size.height, followYou = true)
             }
         }
     }

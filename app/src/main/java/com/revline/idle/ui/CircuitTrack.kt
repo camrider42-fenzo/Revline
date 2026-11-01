@@ -34,7 +34,7 @@ import kotlin.math.sin
  */
 internal class CircuitGeo(val w: Float, val h: Float, id: String) {
     val line: CircuitLine = CircuitLayouts.of(id)
-    val roadW = w * ROAD_SHARE
+    val roadW = w * line.roadShare
     val carLen = roadW * CAR_OF_ROAD
     /** Where the two lanes run, across the road from its middle. */
     val laneOffset = roadW * LANE_OF_ROAD
@@ -73,7 +73,6 @@ internal class CircuitGeo(val w: Float, val h: Float, id: String) {
     }
 
     companion object {
-        const val ROAD_SHARE = 0.036f
         const val CAR_OF_ROAD = 0.8f
         const val LANE_OF_ROAD = 0.24f
     }
@@ -101,9 +100,10 @@ internal fun gridArc(geo: CircuitGeo, row: Int, sign: Int): Float =
 /** The side of the start straight with more room, which gets the pit lane; the stand goes on the other. */
 internal fun pitSide(geo: CircuitGeo): Int {
     val line = geo.line
-    var best = 1
+    var best = line.pitSide
     var bestRoom = -1f
-    for (side in intArrayOf(1, -1)) {
+    var realRoom = 0f
+    for (side in intArrayOf(line.pitSide, -line.pitSide)) {
         var room = Float.MAX_VALUE
         val probe = FloatArray(3)
         var s = -20f
@@ -115,11 +115,13 @@ internal fun pitSide(geo: CircuitGeo): Int {
                 val arc = (i * line.step - s).let { d -> val m = ((d % line.length) + line.length) % line.length; min(m, line.length - m) }
                 if (arc > 24f) room = min(room, hypot(line.xs[i] - px, line.ys[i] - py))
             }
-            val inside = px < 0f || px > CircuitLayouts.BOX_W || py < 0f || py > CircuitLayouts.BOX_H
+            val inside = px < 0f || px > line.boxW || py < 0f || py > line.boxH
             if (inside) room = min(room, 0f)
             s += 5f
         }
-        if (room > bestRoom) { bestRoom = room; best = side }
+        // The real pit lane's side wins unless there is no room for it there.
+        if (side == line.pitSide) { realRoom = room; best = side; bestRoom = room }
+        else if (realRoom < geo.roadUnits * 1.6f && room > bestRoom) { bestRoom = room; best = side }
     }
     return best
 }
@@ -317,7 +319,7 @@ private fun DrawScope.circuitScenery(geo: CircuitGeo, title: String, subtitle: S
     for (row in 0 until 5) {
         for (sign in intArrayOf(-1, 1)) {
             val s = gridArc(geo, row, sign)
-            if (s - geo.carUnits * 0.6f < line.startStraight.start) continue
+            if (s - geo.carUnits * 0.6f < -line.gridRoom) continue
             val c = geo.point(s, sign * geo.laneOffset)
             val hd = Math.toDegrees(geo.heading(s).toDouble()).toFloat()
             withTransform({ translate(c.x, c.y); rotate(hd, Offset.Zero) }) {
@@ -382,15 +384,45 @@ internal fun DrawScope.drawCircuitScene(scene: CircuitScene, cars: List<CircuitC
     }
 }
 
+/** The close-up: the same scene drawn [zoomFor] times larger, with the picture a window onto it that follows your car. */
+internal object CircuitView {
+    private const val MAX_ZOOM = 2.4f
+    private const val MAX_PIXELS = 6_000_000f
+
+    /** How much bigger the world is than the window in the close-up, held down so the baked picture stays a sane size. */
+    fun zoomFor(w: Float, h: Float): Float = min(MAX_ZOOM, kotlin.math.sqrt(MAX_PIXELS / (w * h))).coerceAtLeast(1f)
+
+    /** Top-left of the window onto a world of [world] size, centered on [focus] and kept inside the world. */
+    fun window(focus: Offset, viewW: Float, viewH: Float, worldW: Float, worldH: Float): Offset =
+        Offset((focus.x - viewW / 2f).coerceIn(0f, max(0f, worldW - viewW)), (focus.y - viewH / 2f).coerceIn(0f, max(0f, worldH - viewH)))
+}
+
+/** The scene with its cars; in the close-up only the part around your car (the last in [cars]) shows. */
+internal fun DrawScope.drawCircuitView(scene: CircuitScene, cars: List<CircuitCar>, viewW: Float, viewH: Float, followYou: Boolean) {
+    if (!followYou || scene.geo.w <= viewW + 0.5f) {
+        drawCircuitScene(scene, cars)
+        return
+    }
+    val geo = scene.geo
+    val you = cars.last()
+    val me = geo.point(you.s, you.lat)
+    var focus = me
+    // With the rival close by, the window sits between the two.
+    val other = cars.firstOrNull { it !== you }?.let { geo.point(it.s, it.lat) }
+    if (other != null && hypot(other.x - me.x, other.y - me.y) < min(viewW, viewH) * 0.4f) focus = Offset((me.x + other.x) / 2f, (me.y + other.y) / 2f)
+    val o = CircuitView.window(focus, viewW, viewH, geo.w, geo.h)
+    withTransform({ translate(-o.x, -o.y) }) { drawCircuitScene(scene, cars) }
+}
+
 internal class CircuitSceneHolder {
     private var key: List<Any> = emptyList()
     private var scene: CircuitScene? = null
 
-    fun get(scope: DrawScope, id: String, title: String, subtitle: String): CircuitScene {
-        val k = listOf(scope.size.width, scope.size.height, id, title, subtitle, scope.density)
+    fun get(scope: DrawScope, id: String, title: String, subtitle: String, zoom: Float = 1f): CircuitScene {
+        val k = listOf(scope.size.width, scope.size.height, id, title, subtitle, scope.density, zoom)
         val cached = scene
         if (cached != null && k == key) return cached
-        val geo = CircuitGeo(scope.size.width, scope.size.height, id)
+        val geo = CircuitGeo(scope.size.width * zoom, scope.size.height * zoom, id)
         return bakeCircuitScene(geo, scope, title, subtitle).also { scene = it; key = k }
     }
 }
