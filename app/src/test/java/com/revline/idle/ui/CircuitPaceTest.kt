@@ -184,4 +184,21 @@ class CircuitPaceTest {
         assertTrue("${d.mph} mph", d.mph in 20.0..230.0)
         assertTrue(replay.you.dash(0.0)?.speed ?: 0.0 < 5.0)
     }
+
+    @Test fun theLiveTraceFollowsTheLapAndResetsAtTheLine() {
+        val replay = Replay.build(race("silverstone", 3L))!!
+        val you = replay.you
+        assertTrue(liveCeiling(replay) >= 100.0)
+        val cross = you.cum[1]
+        val before = you.lapTrace(cross - 0.5)!!
+        val after = you.lapTrace(cross + 0.5)!!
+        assertTrue("near the end of lap 1: ${before.second}", before.second > 0.95)
+        assertTrue("start of lap 2: ${after.second}", after.second < 0.05)
+        assertEquals(1, you.lapNumber(cross - 0.5))
+        assertEquals(2, you.lapNumber(cross + 0.5))
+        // The line only ever grows within a lap.
+        var last = 0.0
+        var t = cross + 0.1
+        while (t < you.cum[2]) { val f = you.lapTrace(t)!!.second; assertTrue(f >= last); last = f; t += 0.5 }
+    }
 }

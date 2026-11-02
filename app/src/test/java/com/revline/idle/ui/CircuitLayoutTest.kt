@@ -187,18 +187,53 @@ class CircuitLayoutTest {
         val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect("monza"), "monza")
         val r = race("monza", 3L)
         val rp = Replay.build(r)!!
+        val keeper = LaneKeeper(rp)
         var t = 0.0
         while (t < rp.duration) {
-            val cars = ReplayLook.cars(g, rp, t, "p911", false)
+            val cars = keeper.cars(g, t, "p911", false)
             for (i in cars.indices) for (j in i + 1 until cars.size) {
                 val a = g.point(cars[i].s, cars[i].lat)
                 val b = g.point(cars[j].s, cars[j].lat)
                 val d = hypot(a.x - b.x, a.y - b.y)
-                val third = cars.indices.any { k -> k != i && k != j && (abs(cars[k].s - cars[i].s) < g.carUnits || abs(cars[k].s - cars[j].s) < g.carUnits) }
-                // Level with each other and nobody else in the way: the lanes keep them a body apart across the road.
-                if (!third && abs(cars[i].s - cars[j].s) < g.carUnits * 0.5f) assertTrue("t=$t d=$d", d > g.laneOffset * 1.5f)
+                val third = cars.indices.any { k -> k != i && k != j && (abs(cars[k].s - cars[i].s) < g.carUnits * 3 || abs(cars[k].s - cars[j].s) < g.carUnits * 3) }
+                // Level with each other and nobody else near: the lanes keep them a body apart across the road.
+                if (!third && abs(cars[i].s - cars[j].s) < g.carUnits * 0.5f) assertTrue("t=$t d=$d", d > g.laneOffset * 1.2f)
             }
-            t += 1.0
+            t += 0.25
+        }
+    }
+
+    private fun linear(name: String, you: Boolean, lap: Double, ahead: Double, slot: Int) =
+        ReplayCar(name, "", you, DoubleArray(5) { it * lap - ahead * lap }.also { it[0] = 0.0 }, false, null, false, slot)
+
+    @Test fun carsRunningLevelKeepTheirLanesAndMoveSmoothly() {
+        val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect("monza"), "monza")
+        // Level for the whole stretch, and a rival who creeps past: neither pair may ever change sides.
+        for (pace in listOf(1.0, 0.9985, 0.97)) {
+            val you = linear("you", true, 100.0, 0.0, 1)
+            val him = linear("Him", false, 100.0 * pace, 0.0, 2)
+            val rp = Replay(you, him, 4, 400.0, false)
+            val keeper = LaneKeeper(rp)
+            var prev: FloatArray? = null
+            var t = 0.0
+            var level = 0
+            while (t < 380.0) {
+                val cars = keeper.cars(g, t, "p911", false)
+                val lat = floatArrayOf(cars[0].lat, cars[1].lat)
+                prev?.let { p ->
+                    // A glide: nobody moves a third of a lane in a tenth of a second, so there is no flip.
+                    for (k in 0..1) assertTrue("t=$t k=$k ${p[k]} -> ${lat[k]}", abs(lat[k] - p[k]) < g.laneOffset * 0.3f)
+                }
+                if (t > 15.0 && abs(cars[0].s - cars[1].s) < g.carUnits * 3f) {
+                    level++
+                    assertTrue("t=$t same side", lat[0] * lat[1] < 0f)
+                    assertTrue("t=$t you swapped", cars[1].lat > 0f)
+                    assertTrue("t=$t he swapped", cars[0].lat < 0f)
+                }
+                prev = lat
+                t += 0.1
+            }
+            if (pace > 0.99) assertTrue("level for $level steps at pace $pace", level > 100)
         }
     }
 

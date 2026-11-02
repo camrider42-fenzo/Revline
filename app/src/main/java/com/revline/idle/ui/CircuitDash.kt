@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -12,6 +13,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.inset
 import com.revline.idle.game.CircuitPace
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Width over height of the dash. */
@@ -73,6 +75,23 @@ internal fun Replay.bestLaps(): List<BestLap> = all.mapNotNull { c ->
 
 internal class BestLap(val name: String, val you: Boolean, val lap: Int, val run: CircuitPace.Run, val color: Color = if (you) Lime else Red)
 
+/** The gridlines and labels of a speed chart: mph up the side every 50, a kilometre mark along the bottom. */
+private fun DrawScope.drawSpeedAxes(left: Float, right: Float, top: Float, bottom: Float, len: Double, vMax: Double, u: Float, tick: Float) {
+    fun x(m: Double) = left + (right - left) * (m / len).toFloat()
+    fun y(mph: Double) = bottom - (bottom - top) * (mph / vMax).toFloat()
+    val grid = Color(0xFF2A3010)
+    var g = 0.0
+    while (g <= vMax) {
+        drawLine(grid, Offset(left, y(g)), Offset(right, y(g)), 1.5f)
+        textLabel(g.toInt().toString(), left - 1f * u, y(g) + tick * 0.35f, tick, Olive, 2)
+        g += 50.0
+    }
+    for (km in 0..(len / 1000.0).toInt()) {
+        drawLine(grid, Offset(x(km * 1000.0), top), Offset(x(km * 1000.0), bottom), 1.5f)
+        textLabel("$km km", x(km * 1000.0), bottom + tick * 1.5f, tick, Olive, 1)
+    }
+}
+
 internal fun DrawScope.drawBestLaps(laps: List<BestLap>) {
     drawRect(Color.Black)
     val u = size.width / 100f
@@ -87,17 +106,7 @@ internal fun DrawScope.drawBestLaps(laps: List<BestLap>) {
     val peak = laps.maxOf { l -> l.run.trace.v.max() / l.run.tau * 2.23694 }
     val vMax = (kotlin.math.ceil(peak / 50.0) * 50.0).coerceAtLeast(100.0)
     fun y(mph: Double) = bottom - (bottom - top) * (mph / vMax).toFloat()
-    val grid = Color(0xFF2A3010)
-    var g = 0.0
-    while (g <= vMax) {
-        drawLine(grid, Offset(left, y(g)), Offset(right, y(g)), 1.5f)
-        textLabel(g.toInt().toString(), left - 1f * u, y(g) + tick * 0.35f, tick, Olive, 2)
-        g += 50.0
-    }
-    for (km in 0..(len / 1000.0).toInt()) {
-        drawLine(grid, Offset(x(km * 1000.0), top), Offset(x(km * 1000.0), bottom), 1.5f)
-        textLabel("$km km", x(km * 1000.0), bottom + tick * 1.5f, tick, Olive, 1)
-    }
+    drawSpeedAxes(left, right, top, bottom, len, vMax, u, tick)
     textLabel("BEST LAP SPEED (mph)", left, tick * 1.3f, tick * 1.1f, Lime, 0)
     // The player's line is full and thick; the rest are thin and faded, drawn under it.
     for (l in laps.sortedBy { it.you }) {
@@ -120,4 +129,59 @@ internal fun DrawScope.drawBestLaps(laps: List<BestLap>) {
 private fun DrawScope.legend(l: BestLap, x: Float, baseline: Float, tick: Float) {
     val name = l.name.substringAfterLast(' ')
     textLabel("$name  L${l.lap}  ${com.revline.idle.game.Circuits.clock(l.run.span)}", x, baseline, tick, if (l.you) l.color else l.color.copy(alpha = 0.8f), 0)
+}
+
+/**
+ * The speed trace of the lap in progress, drawn as the car runs it (mph against distance round the lap) and wiped at the line.
+ * The player's is bold; the followed rival's is faint underneath. [t] is the race clock, null before the start.
+ */
+@Composable
+internal fun LiveTrace(replay: Replay, t: Double?, modifier: Modifier = Modifier) {
+    if (replay.you.runs == null) return
+    val vMax = remember(replay) { liveCeiling(replay) }
+    Canvas(modifier.fillMaxWidth().aspectRatio(3.2f)) {
+        val you = t?.let { replay.you.lapTrace(it) }
+        val rival = t?.let { replay.rival.lapTrace(it) }
+        drawLiveTrace(you, rival, vMax, ReplayLook.livery(replay.rival.name), (t?.let { replay.you.lapNumber(it) } ?: 1))
+    }
+}
+
+/** The chart's top: the fastest any car goes on any lap, to the next 50 mph, so the axis stays put from lap to lap. */
+internal fun liveCeiling(replay: Replay): Double {
+    val peak = replay.all.maxOf { c -> c.runs?.maxOfOrNull { it.trace.v.max() / it.tau * 2.23694 } ?: 0.0 }
+    return (kotlin.math.ceil(peak / 50.0) * 50.0).coerceAtLeast(100.0)
+}
+
+internal fun DrawScope.drawLiveTrace(you: Pair<CircuitPace.Run, Double>?, rival: Pair<CircuitPace.Run, Double>?, vMax: Double, rivalColor: Color, lap: Int) {
+    drawRect(Color.Black)
+    val u = size.width / 100f
+    val left = 9f * u
+    val right = size.width - 2f * u
+    val top = 8f * u
+    val bottom = size.height - 9f * u
+    val tick = 3.4f * u
+    val len = (you ?: rival)?.first?.trace?.lengthM ?: 5000.0
+    fun x(m: Double) = left + (right - left) * (m / len).toFloat()
+    fun y(mph: Double) = bottom - (bottom - top) * (mph / vMax).toFloat()
+    drawSpeedAxes(left, right, top, bottom, len, vMax, u, tick)
+    textLabel("SPEED THIS LAP (mph)  LAP $lap", left, tick * 1.3f, tick * 1.1f, Lime, 0)
+    fun line(c: Pair<CircuitPace.Run, Double>, color: Color, width: Float) {
+        val (run, frac) = c
+        val tr = run.trace
+        val reach = frac.coerceIn(0.0, 1.0) * tr.n
+        val whole = reach.toInt()
+        if (whole <= 0 && reach <= 0.0) return
+        val path = androidx.compose.ui.graphics.Path()
+        fun mph(k: Int) = tr.v[k % tr.n] / run.tau * 2.23694
+        path.moveTo(x(0.0), y(mph(0)))
+        for (k in 1..min(whole, tr.n)) path.lineTo(x(k * tr.ds), y(mph(k)))
+        if (whole < tr.n && reach > whole) {
+            val a = mph(whole)
+            val b = mph(whole + 1)
+            path.lineTo(x(reach * tr.ds), y(a + (b - a) * (reach - whole)))
+        }
+        drawPath(path, color, style = Stroke(width = width))
+    }
+    rival?.let { line(it, rivalColor.copy(alpha = 0.35f), 1.6f) }
+    you?.let { line(it, Lime, 3.2f) }
 }

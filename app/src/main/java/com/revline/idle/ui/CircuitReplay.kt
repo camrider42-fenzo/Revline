@@ -86,6 +86,12 @@ internal class ReplayCar(
         return Spot(runs[k], t - cum[k], k, false)
     }
 
+    /** The lap the car is on at [t], from 1. */
+    fun lapNumber(t: Double): Int = (spot(t)?.lap ?: 0) + 1
+
+    /** The lap in progress at [t]: its run and how far round it the car is, 0 to 1, or null without traces. */
+    fun lapTrace(t: Double): Pair<CircuitPace.Run, Double>? = spot(t)?.let { it.run to it.run.fracAt(it.tin) }
+
     /** The gauges at [t]: speed, rpm and gear on the trace, or null with no traces. */
     fun dash(t: Double): CircuitPace.Dash? {
         val at = spot(t) ?: return null
@@ -227,54 +233,11 @@ internal object ReplayLook {
         return liveries[(if (i >= 0) i else name.hashCode() and 0x7fffffff) % liveries.size]
     }
 
-    private fun accent(c: Color): Color = if (c.red * 0.3f + c.green * 0.59f + c.blue * 0.11f > 0.6f) ink else Color.White
+    fun accent(c: Color): Color = if (c.red * 0.3f + c.green * 0.59f + c.blue * 0.11f > 0.6f) ink else Color.White
 
-    /**
-     * Every car on the track at [t] seconds, the player last. Cars start in their grid slots and take the line, and in a bunch
-     * they take alternate lanes so none sits on another; a car with clear road runs near the middle.
-     */
-    fun cars(geo: CircuitGeo, replay: Replay, t: Double, yourId: String, yourMid: Boolean): List<CircuitCar> {
-        val len = geo.line.length
-        val field = replay.all
-        val n = field.size
-        val ramp = 0.12f * len
-        val base = FloatArray(n) { (field[it].progress(t) * len).toFloat() }
-        val grid = IntArray(n) { if ((field[it].slot - 1) % 2 == 0) 1 else -1 }
-        val s = FloatArray(n) { visual(geo, base[it], gridArc(geo, (field[it].slot - 1) / 2, grid[it])) }
-        fun apart(i: Int, j: Int): Float {
-            val d = abs(s[i] - s[j]) % len
-            return min(d, len - d) / geo.carUnits
-        }
-        val lane = IntArray(n) { grid[it] }
-        val done = ArrayList<Int>()
-        for (i in (0 until n).sortedWith(compareByDescending<Int> { base[it] }.thenBy { it })) {
-            val near = done.minByOrNull { apart(i, it) }
-            if (near != null && apart(i, near) < 3.5f) lane[i] = -lane[near]
-            done.add(i)
-        }
-        val lat = FloatArray(n) { i ->
-            var close = 0f
-            for (j in 0 until n) if (j != i) close = max(close, 1f - smooth(1.3f, 3.5f, apart(i, j)))
-            val onGrid = max(0f, 1f - base[i] / ramp)
-            geo.laneOffset * (grid[i] * onGrid + lane[i] * (0.35f + 0.65f * close) * (1f - onGrid))
-        }
-        // Cars level with each other must sit in opposite lanes, a body apart, whatever the grid and the lanes above said.
-        val placed = ArrayList<Int>()
-        for (i in (0 until n).sortedWith(compareByDescending<Int> { base[it] }.thenBy { it })) {
-            for (j in placed) {
-                if (apart(i, j) >= 0.9f || abs(lat[i] - lat[j]) >= geo.laneOffset * 1.5f) continue
-                val side = if (lat[j] != 0f) (if (lat[j] > 0f) 1 else -1) else -grid[i]
-                lat[i] = -side * geo.laneOffset
-                lat[j] = side * max(abs(lat[j]), geo.laneOffset * 0.65f)
-            }
-            placed.add(i)
-        }
-        return (0 until n).sortedBy { field[it].you }.map { i ->
-            val car = field[i]
-            if (car.you) CircuitCar(yourId, yourMid, lime, ink, s[i], lat[i])
-            else livery(car.name).let { CircuitCar(rivalId(car.name), false, it, accent(it), s[i], lat[i]) }
-        }
-    }
+    /** Every car at [t] with a fresh [LaneKeeper], settled as a car that has been running a while. For stills and tests. */
+    fun cars(geo: CircuitGeo, replay: Replay, t: Double, yourId: String, yourMid: Boolean): List<CircuitCar> =
+        LaneKeeper(replay).cars(geo, t, yourId, yourMid)
 
     /** From the grid slot to the line over the first stretch, so nobody jumps at the start. */
     fun visual(geo: CircuitGeo, base: Float, slot: Float): Float {
@@ -282,9 +245,76 @@ internal object ReplayLook {
         return base + slot * (1f - min(1f, base / ramp))
     }
 
-    private fun smooth(a: Float, b: Float, x: Float): Float {
+    fun smooth(a: Float, b: Float, x: Float): Float {
         val t = ((x - a) / (b - a)).coerceIn(0f, 1f)
         return t * t * (3f - 2f * t)
+    }
+}
+
+/**
+ * Puts the cars on the track and keeps each in its lane. A car starts in its grid lane and stays in it; it only changes lane
+ * when it comes up level with a car in the same lane, and then it is the one behind that moves over. A car in a bunch keeps its
+ * full lane until the road has been clear for a while, then drifts back toward the middle slowly. Every move is a glide, never
+ * a jump. It remembers the last frame, so feed it the clock forward; going back or skipping ahead starts it afresh.
+ */
+internal class LaneKeeper(private val replay: Replay) {
+    private val n = replay.all.size
+    private val lane = IntArray(n)
+    /** Sideways place in lanes: 1 is a full lane to the right, -1 to the left, 0 the middle. */
+    private val off = FloatArray(n)
+    private val bunched = BooleanArray(n)
+    private var last = Double.NaN
+
+    fun cars(geo: CircuitGeo, t: Double, yourId: String, yourMid: Boolean): List<CircuitCar> {
+        val len = geo.line.length
+        val field = replay.all
+        val ramp = 0.12f * len
+        val base = FloatArray(n) { (field[it].progress(t) * len).toFloat() }
+        val grid = IntArray(n) { if ((field[it].slot - 1) % 2 == 0) 1 else -1 }
+        val s = FloatArray(n) { ReplayLook.visual(geo, base[it], gridArc(geo, (field[it].slot - 1) / 2, grid[it])) }
+        fun apart(i: Int, j: Int): Float {
+            val d = abs(s[i] - s[j]) % len
+            return min(d, len - d) / geo.carUnits
+        }
+        val fresh = last.isNaN() || t < last || t - last > 3.0
+        val settle = fresh && t > 1.0
+        if (fresh) for (i in 0 until n) { lane[i] = grid[i]; off[i] = grid[i].toFloat(); bunched[i] = false }
+        val dt = if (fresh) 0f else (t - last).toFloat()
+        last = t
+        // The car behind moves over when it comes level with a car in its lane.
+        val placed = ArrayList<Int>()
+        for (i in (0 until n).sortedWith(compareByDescending<Int> { base[it] }.thenBy { it })) {
+            for (j in placed) if (apart(i, j) < CONFLICT && lane[i] == lane[j]) lane[i] = -lane[j]
+            placed.add(i)
+        }
+        for (i in 0 until n) {
+            var near = Float.MAX_VALUE
+            for (j in 0 until n) if (j != i) near = min(near, apart(i, j))
+            // Hysteresis: a car counts as bunched from close in and as clear only from well out.
+            if (near < JOIN) bunched[i] = true else if (near > LEAVE) bunched[i] = false
+            val target = lane[i] * (if (bunched[i]) 1f else 0.35f)
+            if (settle) { off[i] = target; continue }
+            val inward = off[i] * target > 0f && abs(target) < abs(off[i])
+            val step = (if (inward) DRIFT else SWING) * dt
+            off[i] += (target - off[i]).coerceIn(-step, step)
+        }
+        return (0 until n).sortedBy { field[it].you }.map { i ->
+            val onGrid = max(0f, 1f - base[i] / ramp)
+            val lat = geo.laneOffset * (grid[i] * onGrid + off[i] * (1f - onGrid))
+            val car = field[i]
+            if (car.you) CircuitCar(yourId, yourMid, ReplayLook.lime, ReplayLook.ink, s[i], lat)
+            else ReplayLook.livery(car.name).let { CircuitCar(ReplayLook.rivalId(car.name), false, it, ReplayLook.accent(it), s[i], lat) }
+        }
+    }
+
+    private companion object {
+        /** Car lengths: level enough to need separate lanes, close enough to count as a bunch, and far enough to count as clear. */
+        const val CONFLICT = 3f
+        const val JOIN = 2.5f
+        const val LEAVE = 5f
+        /** Lanes per second: a change of lane, and the slow drift back to the middle. */
+        const val SWING = 2.5f
+        const val DRIFT = 0.12f
     }
 }
 
@@ -318,6 +348,7 @@ internal object ReplaySpeed {
 internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid: Boolean, modifier: Modifier = Modifier, endContent: @Composable () -> Unit = {}) {
     val replay = remember(result) { Replay.build(result) } ?: return
     val scenes = remember { CircuitSceneHolder() }
+    val lanes = remember(replay) { LaneKeeper(replay) }
     var clock by remember(result) { mutableFloatStateOf(-1.5f) }
     var run by remember(result) { mutableIntStateOf(0) }
     var finished by remember(result) { mutableStateOf(false) }
@@ -353,10 +384,11 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
         Canvas(Modifier.fillMaxWidth().aspectRatio(CircuitLayouts.aspect(result.circuit.id)).padding(top = 4.dp).clipToBounds()) {
             val zoom = if (zoomed) CircuitView.zoomFor(size.width, size.height) else 1f
             val scene = scenes.get(this, result.circuit.id, title, sub, zoom)
-            val cars = ReplayLook.cars(scene.geo, replay, t, yourId, yourMid)
+            val cars = lanes.cars(scene.geo, t, yourId, yourMid)
             drawCircuitView(scene, cars, size.width, size.height, followYou = zoomed)
         }
         CircuitDash(if (clock < 0f) null else replay.you.dash(t), Modifier.padding(top = 4.dp))
+        LiveTrace(replay, if (clock < 0f) null else t, Modifier.padding(top = 4.dp))
         val state = when {
             clock < 0f -> "ON THE GRID"
             finished && replay.retired -> "OUT"
