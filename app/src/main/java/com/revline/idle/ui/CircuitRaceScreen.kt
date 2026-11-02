@@ -7,8 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -29,14 +28,25 @@ import com.revline.idle.game.Circuits
 @Composable
 internal fun CircuitRaceScreen(result: Circuits.Result, yourId: String, yourMid: Boolean, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Column(Modifier.fillMaxSize().background(Color.Black).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(result.circuit.name.uppercase(java.util.Locale.US), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-                LineButton("Close", true, onClose)
-            }
-            CircuitReplayView(result, yourId, yourMid, Modifier.padding(vertical = 4.dp)) {
+        CircuitRaceBody(result, yourId, yourMid, onClose)
+    }
+}
+
+/** The screen's contents, filling whatever it is given. */
+@Composable
+internal fun CircuitRaceBody(result: Circuits.Result, yourId: String, yourMid: Boolean, onClose: () -> Unit) {
+    run {
+        // Wide or near-square (a landscape phone, the unfolded Fold) puts the map beside the dials; a tall narrow screen stacks them.
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 12.dp, vertical = 16.dp)) {
+            val wide = maxWidth >= maxHeight * 0.85f
+            CircuitReplayView(result, yourId, yourMid, Modifier.fillMaxSize(), wide, header = {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(result.circuit.name.uppercase(java.util.Locale.US), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                    LineButton("Close", true, onClose)
+                }
+            }) { m ->
                 val replay = remember(result) { Replay.build(result) }
-                if (replay != null) BestLapTraces(replay, Modifier.padding(top = 8.dp))
+                if (replay != null) BestLapTraces(replay, m, fit = true)
             }
         }
     }

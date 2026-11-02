@@ -2,6 +2,10 @@ package com.revline.idle.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -345,7 +349,15 @@ internal object ReplaySpeed {
 
 /** A short film of the race: you and the closest rival round the circuit, lap by lap. */
 @Composable
-internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid: Boolean, modifier: Modifier = Modifier, endContent: @Composable () -> Unit = {}) {
+internal fun CircuitReplayView(
+    result: Circuits.Result, yourId: String, yourMid: Boolean, modifier: Modifier = Modifier,
+    /** Side by side (the map left, the dials, trace and controls right) rather than stacked: for a wide or near-square screen. */
+    wide: Boolean = false,
+    /** The title bar, put at the top of the stack or of the right-hand column. */
+    header: @Composable () -> Unit = {},
+    /** What replaces the live trace once the race is over; given a modifier that fits it to its slot. */
+    endContent: @Composable (Modifier) -> Unit = {},
+) {
     val replay = remember(result) { Replay.build(result) } ?: return
     val scenes = remember { CircuitSceneHolder() }
     val lanes = remember(replay) { LaneKeeper(replay) }
@@ -378,41 +390,76 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
     val rivalLaps = replay.rival.progress(t)
     val lap = min(replay.laps, youLaps.toInt() + 1)
     val place = 1 + replay.rivals.count { it.progress(t) > youLaps }
-    Column(modifier.fillMaxWidth()) {
-        val title = result.circuit.name.substringBefore('-').uppercase(Locale.US)
-        val sub = String.format(Locale.US, "%.3f km  %d corners", result.circuit.lapKm, result.circuit.corners)
-        Canvas(Modifier.fillMaxWidth().aspectRatio(CircuitLayouts.aspect(result.circuit.id)).padding(top = 4.dp).clipToBounds()) {
-            val zoom = if (zoomed) CircuitView.zoomFor(size.width, size.height) else 1f
-            val scene = scenes.get(this, result.circuit.id, title, sub, zoom)
-            val cars = lanes.cars(scene.geo, t, yourId, yourMid)
-            drawCircuitView(scene, cars, size.width, size.height, followYou = zoomed)
+    val title = result.circuit.name.substringBefore('-').uppercase(Locale.US)
+    val sub = String.format(Locale.US, "%.3f km  %d corners", result.circuit.lapKm, result.circuit.corners)
+    val map: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize().padding(2.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.aspectRatio(CircuitLayouts.aspect(result.circuit.id)).clipToBounds()) {
+                val zoom = if (zoomed) CircuitView.zoomFor(size.width, size.height) else 1f
+                val scene = scenes.get(this, result.circuit.id, title, sub, zoom)
+                val cars = lanes.cars(scene.geo, t, yourId, yourMid)
+                drawCircuitView(scene, cars, size.width, size.height, followYou = zoomed)
+            }
         }
-        CircuitDash(if (clock < 0f) null else replay.you.dash(t), Modifier.padding(top = 4.dp))
-        LiveTrace(replay, if (clock < 0f) null else t, Modifier.padding(top = 4.dp))
-        val state = when {
-            clock < 0f -> "ON THE GRID"
-            finished && replay.retired -> "OUT"
-            finished -> "FINISHED"
-            paused -> "PAUSED  LAP $lap of ${replay.laps}"
-            else -> "LAP $lap of ${replay.laps}"
+    }
+    val dials: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize().padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+            CircuitDash(if (clock < 0f) null else replay.you.dash(t), Modifier, fit = true)
         }
-        val ahead = youLaps >= rivalLaps
+    }
+    val trace: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize().padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+            if (finished) endContent(Modifier) else LiveTrace(replay, if (clock < 0f) null else t, Modifier, fit = true)
+        }
+    }
+    val state = when {
+        clock < 0f -> "ON THE GRID"
+        finished && replay.retired -> "OUT"
+        finished -> "FINISHED"
+        paused -> "PAUSED  LAP $lap of ${replay.laps}"
+        else -> "LAP $lap of ${replay.laps}"
+    }
+    val ahead = youLaps >= rivalLaps
+    val controls: @Composable () -> Unit = {
         Text(
             "$state   P$place of ${replay.all.size}  vs ${replay.rival.name.substringAfterLast(' ')}  " + if (clock < 0f) "" else if (ahead) "ahead" else "behind",
             color = if (ahead) ReplayLook.lime else ReplayLook.red,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
         )
-        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            com.revline.idle.ui.LineButton(if (paused) "Play" else "Pause", !finished, { paused = !paused })
-            com.revline.idle.ui.LineButton("Replay", true, { run++ })
-            com.revline.idle.ui.LineButton("Skip to the end", !finished, { clock = ReplaySpeed.endClock(replay) })
-            com.revline.idle.ui.LineButton(if (zoomed) "Whole track" else "Follow", true, { zoomed = !zoomed })
+        val pause: @Composable () -> Unit = { com.revline.idle.ui.LineButton(if (paused) "Play" else "Pause", !finished, { paused = !paused }) }
+        val again: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Replay", true, { run++ }) }
+        val skip: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Skip to the end", !finished, { clock = ReplaySpeed.endClock(replay) }) }
+        val follow: @Composable () -> Unit = { com.revline.idle.ui.LineButton(if (zoomed) "Whole track" else "Follow", true, { zoomed = !zoomed }) }
+        if (wide) Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { pause(); again(); skip(); follow() }
+        else {
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { pause(); again() }
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { skip(); follow() }
         }
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for ((i, label) in ReplaySpeed.labels.withIndex()) SpeedChip(label, i == speedIndex) { speedIndex = i }
         }
-        if (finished) endContent()
+    }
+    // Nothing scrolls: every part has a share of the height (or the width) and keeps its own proportions inside it. At the flag
+    // the live trace gives way to the best-lap chart, which takes a bigger share, and the map gives up some.
+    if (wide) {
+        Row(modifier.fillMaxSize()) {
+            Box(Modifier.weight(1.2f).fillMaxHeight()) { map() }
+            Column(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp)) {
+                header()
+                Box(Modifier.weight(1.1f).fillMaxWidth()) { dials() }
+                Box(Modifier.weight(if (finished) 2.1f else 1f).fillMaxWidth()) { trace() }
+                controls()
+            }
+        }
+    } else {
+        Column(modifier.fillMaxSize()) {
+            header()
+            Box(Modifier.weight(if (finished) 1.5f else 2.4f).fillMaxWidth()) { map() }
+            Box(Modifier.weight(1f).fillMaxWidth()) { dials() }
+            Box(Modifier.weight(if (finished) 1.9f else 0.9f).fillMaxWidth()) { trace() }
+            controls()
+        }
     }
 }
 

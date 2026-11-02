@@ -21,8 +21,8 @@ internal const val DASH_ASPECT = 2.5f
 
 /** The player's car on the race screen: tachometer, speedometer in mph (the unit of the drag screen), gear and a brake lamp. [dash] is null before the start. */
 @Composable
-internal fun CircuitDash(dash: CircuitPace.Dash?, modifier: Modifier = Modifier) {
-    Canvas(modifier.fillMaxWidth().aspectRatio(DASH_ASPECT)) { drawCircuitDash(dash) }
+internal fun CircuitDash(dash: CircuitPace.Dash?, modifier: Modifier = Modifier, fit: Boolean = false) {
+    Canvas((if (fit) modifier else modifier.fillMaxWidth()).aspectRatio(DASH_ASPECT)) { drawCircuitDash(dash) }
 }
 
 /** The dash of [CircuitDash], drawn into whatever canvas it is handed. */
@@ -62,10 +62,10 @@ internal fun DrawScope.drawCircuitDash(dash: CircuitPace.Dash?) {
 
 /** The session's best laps: each car's speed in mph against the distance round its quickest lap. Draws nothing without traces. */
 @Composable
-internal fun BestLapTraces(replay: Replay, modifier: Modifier = Modifier) {
+internal fun BestLapTraces(replay: Replay, modifier: Modifier = Modifier, fit: Boolean = false) {
     val laps = replay.bestLaps()
     if (laps.isEmpty()) return
-    Canvas(modifier.fillMaxWidth().aspectRatio(if (laps.size > 2) 1.5f else 2.1f)) { drawBestLaps(laps) }
+    Canvas((if (fit) modifier else modifier.fillMaxWidth()).aspectRatio(if (laps.size > 2) 1.5f else 2.1f)) { drawBestLaps(laps) }
 }
 
 /** Every car's quickest lap with a trace, in the car's livery. */
@@ -136,10 +136,10 @@ private fun DrawScope.legend(l: BestLap, x: Float, baseline: Float, tick: Float)
  * The player's is bold; the followed rival's is faint underneath. [t] is the race clock, null before the start.
  */
 @Composable
-internal fun LiveTrace(replay: Replay, t: Double?, modifier: Modifier = Modifier) {
+internal fun LiveTrace(replay: Replay, t: Double?, modifier: Modifier = Modifier, fit: Boolean = false) {
     if (replay.you.runs == null) return
     val vMax = remember(replay) { liveCeiling(replay) }
-    Canvas(modifier.fillMaxWidth().aspectRatio(3.2f)) {
+    Canvas((if (fit) modifier else modifier.fillMaxWidth()).aspectRatio(3.2f)) {
         val you = t?.let { replay.you.lapTrace(it) }
         val rival = t?.let { replay.rival.lapTrace(it) }
         drawLiveTrace(you, rival, vMax, ReplayLook.livery(replay.rival.name), (t?.let { replay.you.lapNumber(it) } ?: 1))

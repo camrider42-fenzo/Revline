@@ -1,40 +1,36 @@
 package com.revline.idle.ui
 
-import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.revline.idle.economy.DriverBuilds
 import com.revline.idle.game.Circuits
 import com.revline.idle.game.Drivers
 import com.revline.idle.game.Racing
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** One picture of the full race screen: map, dash and (at the flag) the best-lap traces. */
+/** The real race dialog contents, composed at the unfolded Fold's size (21.6:18, about 830 x 690 dp) and captured. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w830dp-h690dp-xhdpi")
 class RaceScreenShotTest {
+    @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+
     @Test fun raceScreen() {
         val c = Circuits.all.first { it.id == "silverstone" }
         val d = Drivers.byId("colette")!!
         val car = Circuits.carOf(DriverBuilds.make(3, Racing.Build.MEDIUM, "race", "close", "lsd", 0.8))
         val r = Circuits.race(Circuits.plan(car, c, d), d, Circuits.parPlan(3, c), 7L)
-        val replay = Replay.build(r)!!
-        val w = 936
-        val mapH = (w / CircuitLayouts.aspect("silverstone")).toInt()
-        val dashH = (w / DASH_ASPECT).toInt()
-        val liveH = (w / 3.2f).toInt()
-        val chartH = (w / 1.5f).toInt()
-        val at = replay.duration * 0.4
-        CircuitShots.shoot("race-screen", w, mapH + dashH + liveH + chartH, density = 2.6f) {
-            val scene = bakeCircuitScene(CircuitGeo(w.toFloat(), mapH.toFloat(), "silverstone"), this, "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
-            drawCircuitScene(scene, ReplayLook.cars(scene.geo, replay, at, "p911", false))
-            inset(0f, mapH.toFloat(), 0f, (liveH + chartH).toFloat()) { drawCircuitDash(replay.you.dash(at)) }
-            inset(0f, (mapH + dashH).toFloat(), 0f, chartH.toFloat()) { drawLiveTrace(replay.you.lapTrace(at), replay.rival.lapTrace(at), liveCeiling(replay), ReplayLook.livery(replay.rival.name), replay.you.lapNumber(at)) }
-            val laps = replay.bestLaps()
-            inset(0f, (mapH + dashH + liveH).toFloat(), 0f, 0f) { drawBestLaps(laps) }
-        }
+        rule.mainClock.autoAdvance = false
+        rule.setContent { CircuitRaceBody(r, "p911", false) {} }
+        rule.mainClock.advanceTimeBy(40_000)
+        val v = rule.activity.window.decorView
+        val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+        rule.runOnUiThread { v.draw(android.graphics.Canvas(bmp)) }
+        CircuitShots.dir.mkdirs()
+        java.io.File(CircuitShots.dir, "race-screen.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 }

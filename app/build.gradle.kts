@@ -13,8 +13,8 @@ android {
         applicationId = "com.revline.idle"
         minSdk = 26
         targetSdk = 35
-        versionCode = 99
-        versionName = "1.82.0"
+        versionCode = 100
+        versionName = "1.82.1"
     }
 
     signingConfigs {
@@ -97,6 +97,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Renders the drag screen to PNG on the JVM (native graphics), so the art can be checked without a device.
     testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 tasks.configureEach {
