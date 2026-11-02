@@ -52,6 +52,14 @@ internal class ReplayCar(
 ) {
     val completed: Int get() = cum.size - 1
 
+    /** The lap number (from 1) and the speed trace of the quickest lap this car finished, or null without traces. */
+    fun bestLap(): Pair<Int, CircuitPace.Run>? {
+        val runs = runs ?: return null
+        var best = -1
+        for (k in 0 until min(completed, runs.size)) if (best < 0 || cum[k + 1] - cum[k] < cum[best + 1] - cum[best]) best = k
+        return if (best < 0) null else (best + 1) to runs[best]
+    }
+
     /** Where a car is on the speed traces: the lap's run and the seconds since its line, or null when it is parked. */
     class Spot(val run: CircuitPace.Run, val tin: Double, val lap: Int, val parked: Boolean)
 
@@ -101,12 +109,10 @@ internal class ReplayCar(
 
 /** The race rebuilt from the result, for a picture. Nothing here feeds back into the sim. */
 internal class Replay(val you: ReplayCar, val rival: ReplayCar, val laps: Int, val duration: Double, val retired: Boolean) {
-    /** Replay seconds per real second, so a long race still plays in about half a minute. */
-    val speed: Double get() = max(1.0, duration / TARGET_S)
+    /** Race seconds per film second at the 1x chip: the real pace, so a lap takes the sim's lap time. */
+    val speed: Double get() = 1.0
 
     companion object {
-        const val TARGET_S = 30.0
-
         fun build(r: Circuits.Result): Replay? {
             val laps = r.circuit.laps
             if (r.lapTimes.isEmpty()) return null
@@ -224,15 +230,14 @@ internal object ReplayLook {
 
 /** How fast the film runs and how its clock moves; plain functions so a test can drive them without a screen. */
 internal object ReplaySpeed {
-    /** Speed chips: multiples of the normal half-minute playback, then LIVE, which is the race at its own pace. */
-    val labels = listOf("0.5x", "1x", "2x", "4x", "8x", "LIVE")
+    /** Speed chips: multiples of the real pace, where 1x takes the sim's lap time in real seconds. */
+    val labels = listOf("0.5x", "1x", "2x", "4x", "8x")
     private val multiples = doubleArrayOf(0.5, 1.0, 2.0, 4.0, 8.0)
     const val DEFAULT = 1
-    const val LIVE = 5
 
-    /** Film seconds per real second at chip [index]. LIVE runs the race at its real pace, however long it was. */
-    fun multiplier(index: Int, replay: Replay): Double =
-        if (index == LIVE) 1.0 / replay.speed else multiples[index.coerceIn(0, multiples.size - 1)]
+    /** Film seconds per real second at chip [index]. */
+    @Suppress("UNUSED_PARAMETER")
+    fun multiplier(index: Int, replay: Replay): Double = multiples[index.coerceIn(0, multiples.size - 1)]
 
     /** The film clock after [dt] real seconds; a paused film stays where it is. The clock counts at the normal rate, [Replay.speed] converts it to race time. */
     fun advance(clock: Float, dt: Float, playing: Boolean, multiplier: Double): Float =
@@ -250,7 +255,7 @@ internal object ReplaySpeed {
 
 /** A short film of the race: you and the closest rival round the circuit, lap by lap. */
 @Composable
-internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid: Boolean, modifier: Modifier = Modifier) {
+internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid: Boolean, modifier: Modifier = Modifier, endContent: @Composable () -> Unit = {}) {
     val replay = remember(result) { Replay.build(result) } ?: return
     val scenes = remember { CircuitSceneHolder() }
     var clock by remember(result) { mutableFloatStateOf(-1.5f) }
@@ -314,6 +319,7 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for ((i, label) in ReplaySpeed.labels.withIndex()) SpeedChip(label, i == speedIndex) { speedIndex = i }
         }
+        if (finished) endContent()
     }
 }
 

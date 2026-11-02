@@ -57,3 +57,52 @@ internal fun DrawScope.drawCircuitDash(dash: CircuitPace.Dash?) {
     drawRect(if (braking) Red else Red.copy(alpha = 0.12f), Offset(lx, boxTop), Size(w * 0.34f, boxH))
     textLabel("BRAKE", lx + w * 0.17f, boxTop + boxH * 0.68f, boxH * 0.52f, if (braking) Color.Black else Red.copy(alpha = 0.5f), 1)
 }
+
+/** The session's best laps: each car's speed in mph against the distance round its quickest lap. Draws nothing without traces. */
+@Composable
+internal fun BestLapTraces(replay: Replay, modifier: Modifier = Modifier) {
+    val laps = listOf(replay.you, replay.rival).mapNotNull { c -> c.bestLap()?.let { c to it } }
+    if (laps.isEmpty()) return
+    Canvas(modifier.fillMaxWidth().aspectRatio(2.1f)) { drawBestLaps(laps.map { (c, l) -> BestLap(c.name, c.you, l.first, l.second) }) }
+}
+
+internal class BestLap(val name: String, val you: Boolean, val lap: Int, val run: CircuitPace.Run)
+
+internal fun DrawScope.drawBestLaps(laps: List<BestLap>) {
+    drawRect(Color.Black)
+    val u = size.width / 100f
+    val left = 9f * u
+    val right = size.width - 2f * u
+    val top = 20f * u
+    val bottom = size.height - 9f * u
+    val len = laps.maxOf { it.run.trace.lengthM }
+    val tick = 3.4f * u
+    fun x(m: Double) = left + (right - left) * (m / len).toFloat()
+    val peak = laps.maxOf { l -> l.run.trace.v.max() / l.run.tau * 2.23694 }
+    val vMax = (kotlin.math.ceil(peak / 50.0) * 50.0).coerceAtLeast(100.0)
+    fun y(mph: Double) = bottom - (bottom - top) * (mph / vMax).toFloat()
+    val grid = Color(0xFF2A3010)
+    var g = 0.0
+    while (g <= vMax) {
+        drawLine(grid, Offset(left, y(g)), Offset(right, y(g)), 1.5f)
+        textLabel(g.toInt().toString(), left - 1f * u, y(g) + tick * 0.35f, tick, Olive, 2)
+        g += 50.0
+    }
+    for (km in 0..(len / 1000.0).toInt()) {
+        drawLine(grid, Offset(x(km * 1000.0), top), Offset(x(km * 1000.0), bottom), 1.5f)
+        textLabel("$km km", x(km * 1000.0), bottom + tick * 1.5f, tick, Olive, 1)
+    }
+    textLabel("BEST LAP SPEED (mph)", left, tick * 1.3f, tick * 1.1f, Lime, 0)
+    laps.forEachIndexed { i, l ->
+        val color = if (l.you) Lime else Red
+        val t = l.run.trace
+        val path = androidx.compose.ui.graphics.Path()
+        for (k in 0..t.n) {
+            val px = x(k * t.ds)
+            val py = y(t.v[k % t.n] / l.run.tau * 2.23694)
+            if (k == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        drawPath(path, color, style = Stroke(width = 2.6f))
+        textLabel("${l.name.substringAfterLast(' ')}  lap ${l.lap}  ${com.revline.idle.game.Circuits.clock(l.run.span)}", left + 1f * u, tick * 2.7f + i * tick * 1.2f, tick, color, 0)
+    }
+}

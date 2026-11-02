@@ -781,7 +781,13 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
         Text("${r.name}, ${r.team}: ${r.style.title}, aggression ${(r.style.aggression * 100).toInt()}. ${r.style.blurb}", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
     }
     val can = picked != null && breach == null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
-    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onRun(circuit.id, picked?.id ?: "", orders) }, Modifier.padding(top = 6.dp))
+    // Running a race opens the race screen: the map, the dash and the replay live there and nowhere else.
+    var watching by rememberSaveable { mutableStateOf(false) }
+    var armed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(ui.circuitOutcome) {
+        if (armed && ui.circuitOutcome?.result?.log?.rows?.isNotEmpty() == true) { watching = true; armed = false }
+    }
+    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { armed = true; onRun(circuit.id, picked?.id ?: "", orders) }, Modifier.padding(top = 6.dp))
     ui.circuitOutcome?.let { o ->
         val r = o.result
         Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, if (r.retired != null) Red else Lime).padding(8.dp)) {
@@ -794,7 +800,11 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
             Text("Driver ${r.driver}  ${Circuits.planText(r.orders)}, ${r.orders.pace.title.lowercase(Locale.US)}, ${r.weather.title.lowercase(Locale.US)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             if (r.retired != null) Text(r.retired, color = Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             else Text("Total ${Circuits.clock(r.totalTime)}  best lap ${Circuits.clock(r.bestLap)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-            if (r.log.rows.isNotEmpty()) CircuitReplayView(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID", Modifier.padding(vertical = 4.dp))
+            if (r.log.rows.isNotEmpty()) {
+                LineButton("Watch the race", true, { watching = true }, Modifier.padding(top = 4.dp))
+                remember(r) { Replay.build(r) }?.let { BestLapTraces(it, Modifier.padding(vertical = 4.dp)) }
+                if (watching) CircuitRaceScreen(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID") { watching = false }
+            }
             Text(
                 "Laps " + r.lapTimes.joinToString("  ") { Circuits.clock(it) },
                 color = White,

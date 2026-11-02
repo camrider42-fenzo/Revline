@@ -1,0 +1,43 @@
+package com.revline.idle.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.revline.idle.game.Circuits
+
+/**
+ * The race on its own full screen: the track map, the tachometer and speedometer, the speed control, and at the flag each car's
+ * best-lap speed trace. The map lives only here; the race screen under it never draws one.
+ */
+@Composable
+internal fun CircuitRaceScreen(result: Circuits.Result, yourId: String, yourMid: Boolean, onClose: () -> Unit) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Column(Modifier.fillMaxSize().background(Color.Black).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(result.circuit.name.uppercase(java.util.Locale.US), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                LineButton("Close", true, onClose)
+            }
+            CircuitReplayView(result, yourId, yourMid, Modifier.padding(vertical = 4.dp)) {
+                val replay = remember(result) { Replay.build(result) }
+                if (replay != null) BestLapTraces(replay, Modifier.padding(top = 8.dp))
+            }
+        }
+    }
+}

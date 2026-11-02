@@ -123,7 +123,7 @@ class CircuitLayoutTest {
                 assertEquals(him.gap!! - me.gap!!, rp.rival.cum[row.lap] - rp.you.cum[row.lap], 1e-6)
             }
             assertTrue(rp.duration > rp.you.cum.last())
-            assertTrue(rp.speed >= 1.0)
+            assertEquals(1.0, rp.speed, 0.0)
         }
     }
 
@@ -261,13 +261,16 @@ class CircuitLayoutTest {
         val at8 = ReplaySpeed.progress(after(4), replay)
         assertTrue(at1 > 0f)
         assertEquals(minOf(1f, at1 * 8f), at8, 1e-3f)
-        // Time left shrinks in proportion, and LIVE is the slowest chip: the race at the pace it was run.
+        // Time left shrinks in proportion, and 1x is the race at the pace it was run: a lap takes its lap time in real seconds.
         val end = ReplaySpeed.endClock(replay)
         assertEquals(ReplaySpeed.secondsLeft(0f, replay, 1.0) / 4.0, ReplaySpeed.secondsLeft(0f, replay, 4.0), 1e-6)
-        assertEquals(30.0, ReplaySpeed.secondsLeft(0f, replay, 1.0) * 1.0, 3.0 / replay.speed + 30.0)
-        assertTrue(ReplaySpeed.multiplier(ReplaySpeed.LIVE, replay) <= 1.0)
-        assertEquals(replay.duration, ReplaySpeed.secondsLeft(0f, replay, ReplaySpeed.multiplier(ReplaySpeed.LIVE, replay)), 1e-3)
+        assertEquals(replay.duration, ReplaySpeed.secondsLeft(0f, replay, ReplaySpeed.multiplier(ReplaySpeed.DEFAULT, replay)), 1e-3)
         assertEquals(replay.duration, end * replay.speed, 1e-3)
-        assertEquals(ReplaySpeed.labels.size, 6)
+        assertEquals(1.0, replay.speed, 0.0)
+        val lap = replay.you.cum[2] - replay.you.cum[1]
+        assertEquals(lap, (replay.you.cum[2] - replay.you.cum[1]) / replay.speed / ReplaySpeed.multiplier(ReplaySpeed.DEFAULT, replay), 1e-9)
+        val b = replay.you.bestLap()!!
+        assertEquals((1..replay.you.completed).minOf { replay.you.cum[it] - replay.you.cum[it - 1] }, b.second.span, 1e-6)
+        assertEquals(ReplaySpeed.labels.size, 5)
     }
 }
