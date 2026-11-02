@@ -100,7 +100,7 @@ class CircuitPaceTest {
             val r = race("silverstone", seed)
             val replay = Replay.build(r)
             assertNotNull(replay)
-            for (c in listOf(replay!!.you, replay.rival)) {
+            for (c in replay!!.all) {
                 val runs = c.runs
                 assertNotNull(runs)
                 assertTrue(runs!!.size >= c.completed)
@@ -116,7 +116,7 @@ class CircuitPaceTest {
 
     @Test fun carsNeverGoBackwardsAndMeetEachLapLineOnTheClock() {
         val replay = Replay.build(race("monza", 11L))!!
-        for (c in listOf(replay.you, replay.rival)) {
+        for (c in replay.all) {
             var last = 0.0
             var t = 0.0
             while (t < replay.duration + 5.0) {

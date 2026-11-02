@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.game.CircuitPace
 import com.revline.idle.game.Circuits
+import com.revline.idle.game.Rivals
 import kotlinx.coroutines.isActive
 import java.util.Locale
 import kotlin.math.abs
@@ -49,6 +50,8 @@ import kotlin.math.min
 internal class ReplayCar(
     val name: String, val team: String, val you: Boolean, val cum: DoubleArray, val out: Boolean,
     val runs: List<CircuitPace.Run>? = null, val partial: Boolean = false,
+    /** Place on the starting grid, 1 on pole. */
+    val slot: Int = 1,
 ) {
     val completed: Int get() = cum.size - 1
 
@@ -108,7 +111,14 @@ internal class ReplayCar(
 }
 
 /** The race rebuilt from the result, for a picture. Nothing here feeds back into the sim. */
-internal class Replay(val you: ReplayCar, val rival: ReplayCar, val laps: Int, val duration: Double, val retired: Boolean) {
+internal class Replay(
+    val you: ReplayCar, val rival: ReplayCar, val laps: Int, val duration: Double, val retired: Boolean,
+    /** Every rival in the race, the closest one ([rival]) included. */
+    val rivals: List<ReplayCar> = listOf(rival),
+) {
+    /** Everyone on the track, the player last. */
+    val all: List<ReplayCar> get() = rivals + you
+
     /** Race seconds per film second at the 1x chip: the real pace, so a lap takes the sim's lap time. */
     val speed: Double get() = 1.0
 
@@ -120,14 +130,18 @@ internal class Replay(val you: ReplayCar, val rival: ReplayCar, val laps: Int, v
             for (i in r.lapTimes.indices) yourCum[i + 1] = yourCum[i] + r.lapTimes[i]
             val partial = r.retired != null
             val pacing = r.pacing
+            val slots = slotsOf(r)
             val youRuns = pacing?.let { p -> runsOf(r.circuit.id, yourCum, partial, partial) { CircuitPace.youSpec(p, it) } }
-            val you = ReplayCar(r.driver, "", true, yourCum, partial, youRuns, partial && youRuns != null)
-            val plain = (if (r.log.rows.isNotEmpty()) fromLog(r, yourCum) else fromGrid(r, yourCum, laps)) ?: return null
-            val rivalRuns = pacing?.let { p -> runsOf(r.circuit.id, plain.cum, false, plain.out) { CircuitPace.rivalSpec(p, plain.name, it) } }
-            val rival = ReplayCar(plain.name, plain.team, false, plain.cum, plain.out, rivalRuns)
+            val you = ReplayCar(r.driver, "", true, yourCum, partial, youRuns, partial && youRuns != null, slots[r.driver] ?: 1)
+            val plain = if (r.log.rows.isNotEmpty()) fieldFromLog(r, yourCum) else fromGrid(r, laps)
+            val field = plain.map { c ->
+                val runs = pacing?.let { p -> runsOf(r.circuit.id, c.cum, false, c.out) { CircuitPace.rivalSpec(p, c.name, it) } }
+                ReplayCar(c.name, c.team, false, c.cum, c.out, runs, false, slots[c.name] ?: c.slot)
+            }
+            val rival = closest(field, yourCum) ?: return null
             val lastLap = yourCum[yourCum.size - 1] - yourCum[yourCum.size - 2]
             val duration = if (r.retired != null) yourCum[yourCum.size - 1] + 0.4 * lastLap + 2.5 else yourCum[yourCum.size - 1] + 3.0
-            return Replay(you, rival, laps, duration, r.retired != null)
+            return Replay(you, rival, laps, duration, r.retired != null, field)
         }
 
         /**
@@ -150,12 +164,26 @@ internal class Replay(val you: ReplayCar, val rival: ReplayCar, val laps: Int, v
             return runs
         }
 
-        /** Every car's lap-end times from the log's gaps to the leader, which are tied to the player's own clock. */
-        private fun fromLog(r: Circuits.Result, yourCum: DoubleArray): ReplayCar? {
-            val rows = r.log.rows
-            val usable = rows.filter { it.lap < yourCum.size && it.gapLeader != null }
-            if (usable.isEmpty()) return null
-            val times = HashMap<String, ArrayList<Double>>()
+        /** Grid places by name: from qualifying, else the player on pole and the rest as they come. */
+        private fun slotsOf(r: Circuits.Result): Map<String, Int> {
+            if (r.qualifying.rows.isNotEmpty()) return r.qualifying.rows.associate { it.name to it.slot }
+            val names = listOf(r.driver) + r.grid.filter { !it.you }.map { it.name }
+            return names.withIndex().associate { (i, n) -> n to i + 1 }
+        }
+
+        /** The rival that ran closest to the player, a car that dropped out counting last. */
+        private fun closest(field: List<ReplayCar>, yourCum: DoubleArray): ReplayCar? =
+            field.filter { it.completed > 0 }.minWithOrNull(compareBy<ReplayCar> { c ->
+                var sum = 0.0
+                val n = min(c.cum.size, yourCum.size) - 1
+                for (lap in 1..n) sum += abs(c.cum[lap] - yourCum[lap])
+                (sum / n) + (if (c.out) 1e6 else 0.0)
+            }.thenBy { it.name }) ?: field.firstOrNull()
+
+        /** Every rival's lap-end times from the log's gaps to the leader, which are tied to the player's own clock. */
+        private fun fieldFromLog(r: Circuits.Result, yourCum: DoubleArray): List<ReplayCar> {
+            val usable = r.log.rows.filter { it.lap < yourCum.size && it.gapLeader != null }
+            val times = LinkedHashMap<String, ArrayList<Double>>()
             val teams = HashMap<String, String>()
             val dead = HashSet<String>()
             for (row in usable) {
@@ -163,31 +191,19 @@ internal class Replay(val you: ReplayCar, val rival: ReplayCar, val laps: Int, v
                 for (slot in row.order) {
                     if (slot.you) continue
                     teams[slot.name] = slot.team
+                    val list = times.getOrPut(slot.name) { arrayListOf(0.0) }
                     val gap = slot.gap
                     if (gap == null || slot.name in dead) { dead.add(slot.name); continue }
-                    val list = times.getOrPut(slot.name) { arrayListOf(0.0) }
                     if (list.size == row.lap) list.add(offset + gap)
                 }
             }
-            val best = times.entries
-                .filter { it.value.size > 1 }
-                .minWithOrNull(compareBy<Map.Entry<String, ArrayList<Double>>> { e ->
-                    var sum = 0.0
-                    val n = min(e.value.size, yourCum.size) - 1
-                    for (lap in 1..n) sum += abs(e.value[lap] - yourCum[lap])
-                    // A car that dropped out is a poor rival however close it ran before.
-                    (sum / n) + (if (e.key in dead) 1e6 else 0.0)
-                }.thenBy { it.key }) ?: return null
-            return ReplayCar(best.key, teams[best.key] ?: "", false, best.value.toDoubleArray(), best.key in dead)
+            return times.map { (name, list) -> ReplayCar(name, teams[name] ?: "", false, list.toDoubleArray(), name in dead) }
         }
 
-        /** With no lap log, the car finishing next to the player, running even laps. */
-        private fun fromGrid(r: Circuits.Result, yourCum: DoubleArray, laps: Int): ReplayCar? {
-            val mine = r.grid.indexOfFirst { it.you }
-            if (mine < 0) return null
-            val other = r.grid.getOrNull(if (mine > 0) mine - 1 else mine + 1) ?: return null
+        /** With no lap log, every rival running even laps to his finishing time. */
+        private fun fromGrid(r: Circuits.Result, laps: Int): List<ReplayCar> = r.grid.filter { !it.you }.map { other ->
             val cum = DoubleArray(laps + 1) { other.time * it / laps }
-            return ReplayCar(other.name, other.team, false, if (other.out) cum.copyOf(max(2, laps / 2)) else cum, other.out)
+            ReplayCar(other.name, other.team, false, if (other.out) cum.copyOf(max(2, laps / 2)) else cum, other.out)
         }
     }
 }
@@ -200,20 +216,64 @@ internal object ReplayLook {
     val red = Color(0xFFFF3B30)
     val ink = Color(0xFF101010)
 
-    /** The two cars at [t] seconds. Both leave the grid side by side and share the lanes when they run close. */
+    /** A livery per rival, none of them the player's lime, so the whole field tells apart on the map and the chart. */
+    private val liveries = listOf(
+        Color(0xFFFF3B30), Color(0xFF4DFFF0), Color(0xFFFF9F1C), Color(0xFFFF4FD8), Color(0xFF4D8DFF), Color(0xFFF2F2F2), Color(0xFFA56BFF),
+    )
+
+    /** A rival's colour, steady for his name: the named rivals each have their own, any other name picks from the same set. */
+    fun livery(name: String): Color {
+        val i = Rivals.all.indexOfFirst { it.name == name }
+        return liveries[(if (i >= 0) i else name.hashCode() and 0x7fffffff) % liveries.size]
+    }
+
+    private fun accent(c: Color): Color = if (c.red * 0.3f + c.green * 0.59f + c.blue * 0.11f > 0.6f) ink else Color.White
+
+    /**
+     * Every car on the track at [t] seconds, the player last. Cars start in their grid slots and take the line, and in a bunch
+     * they take alternate lanes so none sits on another; a car with clear road runs near the middle.
+     */
     fun cars(geo: CircuitGeo, replay: Replay, t: Double, yourId: String, yourMid: Boolean): List<CircuitCar> {
         val len = geo.line.length
-        val youLaps = replay.you.progress(t)
-        val rivalLaps = replay.rival.progress(t)
-        val youS = visual(geo, (youLaps * len).toFloat(), gridArc(geo, 0, 1))
-        val rivalS = visual(geo, (rivalLaps * len).toFloat(), gridArc(geo, 0, -1))
-        val gapCars = abs(youLaps - rivalLaps).toFloat() * len / geo.carUnits
-        val close = 1f - smooth(1.3f, 3.5f, gapCars)
-        val spread = 0.35f + 0.65f * close
-        return listOf(
-            CircuitCar(ReplayLook.rivalId(replay.rival.name), false, red, Color.White, rivalS, -geo.laneOffset * spread),
-            CircuitCar(yourId, yourMid, lime, ink, youS, geo.laneOffset * spread),
-        )
+        val field = replay.all
+        val n = field.size
+        val ramp = 0.12f * len
+        val base = FloatArray(n) { (field[it].progress(t) * len).toFloat() }
+        val grid = IntArray(n) { if ((field[it].slot - 1) % 2 == 0) 1 else -1 }
+        val s = FloatArray(n) { visual(geo, base[it], gridArc(geo, (field[it].slot - 1) / 2, grid[it])) }
+        fun apart(i: Int, j: Int): Float {
+            val d = abs(s[i] - s[j]) % len
+            return min(d, len - d) / geo.carUnits
+        }
+        val lane = IntArray(n) { grid[it] }
+        val done = ArrayList<Int>()
+        for (i in (0 until n).sortedWith(compareByDescending<Int> { base[it] }.thenBy { it })) {
+            val near = done.minByOrNull { apart(i, it) }
+            if (near != null && apart(i, near) < 3.5f) lane[i] = -lane[near]
+            done.add(i)
+        }
+        val lat = FloatArray(n) { i ->
+            var close = 0f
+            for (j in 0 until n) if (j != i) close = max(close, 1f - smooth(1.3f, 3.5f, apart(i, j)))
+            val onGrid = max(0f, 1f - base[i] / ramp)
+            geo.laneOffset * (grid[i] * onGrid + lane[i] * (0.35f + 0.65f * close) * (1f - onGrid))
+        }
+        // Cars level with each other must sit in opposite lanes, a body apart, whatever the grid and the lanes above said.
+        val placed = ArrayList<Int>()
+        for (i in (0 until n).sortedWith(compareByDescending<Int> { base[it] }.thenBy { it })) {
+            for (j in placed) {
+                if (apart(i, j) >= 0.9f || abs(lat[i] - lat[j]) >= geo.laneOffset * 1.5f) continue
+                val side = if (lat[j] != 0f) (if (lat[j] > 0f) 1 else -1) else -grid[i]
+                lat[i] = -side * geo.laneOffset
+                lat[j] = side * max(abs(lat[j]), geo.laneOffset * 0.65f)
+            }
+            placed.add(i)
+        }
+        return (0 until n).sortedBy { field[it].you }.map { i ->
+            val car = field[i]
+            if (car.you) CircuitCar(yourId, yourMid, lime, ink, s[i], lat[i])
+            else livery(car.name).let { CircuitCar(rivalId(car.name), false, it, accent(it), s[i], lat[i]) }
+        }
     }
 
     /** From the grid slot to the line over the first stretch, so nobody jumps at the start. */
@@ -286,6 +346,7 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
     val youLaps = replay.you.progress(t)
     val rivalLaps = replay.rival.progress(t)
     val lap = min(replay.laps, youLaps.toInt() + 1)
+    val place = 1 + replay.rivals.count { it.progress(t) > youLaps }
     Column(modifier.fillMaxWidth()) {
         val title = result.circuit.name.substringBefore('-').uppercase(Locale.US)
         val sub = String.format(Locale.US, "%.3f km  %d corners", result.circuit.lapKm, result.circuit.corners)
@@ -305,7 +366,7 @@ internal fun CircuitReplayView(result: Circuits.Result, yourId: String, yourMid:
         }
         val ahead = youLaps >= rivalLaps
         Text(
-            "$state   you vs ${replay.rival.name.substringAfterLast(' ')}  " + if (clock < 0f) "" else if (ahead) "ahead" else "behind",
+            "$state   P$place of ${replay.all.size}  vs ${replay.rival.name.substringAfterLast(' ')}  " + if (clock < 0f) "" else if (ahead) "ahead" else "behind",
             color = if (ahead) ReplayLook.lime else ReplayLook.red,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

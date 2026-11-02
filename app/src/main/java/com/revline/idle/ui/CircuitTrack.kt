@@ -410,8 +410,8 @@ internal fun DrawScope.drawCircuitView(scene: CircuitScene, cars: List<CircuitCa
     val you = cars.last()
     val me = geo.point(you.s, you.lat)
     var focus = me
-    // With the rival close by, the window sits between the two.
-    val other = cars.firstOrNull { it !== you }?.let { geo.point(it.s, it.lat) }
+    // With a rival close by, the window sits between the two.
+    val other = cars.filter { it !== you }.map { geo.point(it.s, it.lat) }.minByOrNull { hypot(it.x - me.x, it.y - me.y) }
     if (other != null && hypot(other.x - me.x, other.y - me.y) < min(viewW, viewH) * 0.4f) focus = Offset((me.x + other.x) / 2f, (me.y + other.y) / 2f)
     val o = CircuitView.window(focus, viewW, viewH, geo.w, geo.h)
     withTransform({ translate(-o.x, -o.y) }) { drawCircuitScene(scene, cars) }

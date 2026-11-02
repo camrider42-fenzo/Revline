@@ -25,13 +25,13 @@ class RaceScreenShotTest {
         val w = 936
         val mapH = (w / CircuitLayouts.aspect("silverstone")).toInt()
         val dashH = (w / DASH_ASPECT).toInt()
-        val chartH = (w / 2.1f).toInt()
+        val chartH = (w / 1.5f).toInt()
         val at = replay.duration * 0.4
         CircuitShots.shoot("race-screen", w, mapH + dashH + chartH, density = 2.6f) {
             val scene = bakeCircuitScene(CircuitGeo(w.toFloat(), mapH.toFloat(), "silverstone"), this, "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
             drawCircuitScene(scene, ReplayLook.cars(scene.geo, replay, at, "p911", false))
             inset(0f, mapH.toFloat(), 0f, chartH.toFloat()) { drawCircuitDash(replay.you.dash(at)) }
-            val laps = listOf(replay.you, replay.rival).mapNotNull { x -> x.bestLap()?.let { BestLap(x.name, x.you, it.first, it.second) } }
+            val laps = replay.bestLaps()
             inset(0f, (mapH + dashH).toFloat(), 0f, 0f) { drawBestLaps(laps) }
         }
     }

@@ -141,14 +141,46 @@ class CircuitLayoutTest {
         assertTrue("rivals were close in $closest of 20", closest >= 15)
     }
 
-    @Test fun carsStartSideBySideOnTheFrontRow() {
+    @Test fun theWholeFieldIsOnTheTrackEachCarItsOwn() {
+        for (id in listOf("monza", "spa", "silverstone")) for (seed in 1L..6L) {
+            val r = race(id, seed)
+            val rp = Replay.build(r)!!
+            val names = r.log.rows.first().order.filter { !it.you }.map { it.name }.toSet()
+            assertEquals("$id $seed", names, rp.rivals.map { it.name }.toSet())
+            assertEquals(names.size + 1, rp.all.size)
+            assertTrue(rp.rivals.contains(rp.rival))
+            assertTrue(rp.all.last().you)
+            // Each rival has its own traces, lap times from the log and a livery nobody else has.
+            for (c in rp.rivals) {
+                assertNotNull("${c.name} traces", c.runs)
+                for (row in r.log.rows) {
+                    val me = row.order.first { it.you }
+                    val him = row.order.firstOrNull { it.name == c.name } ?: continue
+                    if (me.gap == null || him.gap == null || row.lap > c.completed || row.lap >= rp.you.cum.size) continue
+                    assertEquals(him.gap!! - me.gap!!, c.cum[row.lap] - rp.you.cum[row.lap], 1e-6)
+                }
+            }
+            val colours = rp.rivals.map { ReplayLook.livery(it.name) }.toSet() + ReplayLook.lime
+            assertEquals(rp.all.size, colours.size)
+            assertEquals(rp.all.size, rp.all.map { it.slot }.toSet().size)
+            // Everyone with a lap has a best-lap trace at the flag.
+            assertEquals(rp.all.count { it.completed > 0 }, rp.bestLaps().size)
+            assertEquals(1, rp.bestLaps().count { it.you })
+        }
+    }
+
+    @Test fun everyCarStartsInItsOwnGridSlotAndTheMapDrawsThemAll() {
         val r = race("monza", 3L)
         val rp = Replay.build(r)!!
         val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect("monza"), "monza")
         val cars = ReplayLook.cars(g, rp, 0.0, "p911", false)
-        assertEquals(2, cars.size)
-        assertEquals(cars[0].s.toDouble(), cars[1].s.toDouble(), g.carUnits * 0.4)
-        assertTrue(cars[0].lat * cars[1].lat < 0f)
+        assertEquals(rp.all.size, cars.size)
+        assertEquals(rp.all.size, cars.map { it.color }.toSet().size)
+        assertEquals(ReplayLook.lime, cars.last().color)
+        // Nobody shares a spot on the grid, and each row has a car in each lane.
+        assertEquals(cars.size, cars.map { it.s to it.lat }.toSet().size)
+        for (c in cars) assertTrue(abs(c.lat) > g.laneOffset * 0.9f)
+        assertTrue(cars.any { it.lat > 0f } && cars.any { it.lat < 0f })
     }
 
     @Test fun carsNeverOverlapWhenAbreast() {
@@ -158,11 +190,14 @@ class CircuitLayoutTest {
         var t = 0.0
         while (t < rp.duration) {
             val cars = ReplayLook.cars(g, rp, t, "p911", false)
-            val a = g.point(cars[0].s, cars[0].lat)
-            val b = g.point(cars[1].s, cars[1].lat)
-            val d = hypot(a.x - b.x, a.y - b.y)
-            // Same lap position within a car's width of each other: the lanes must keep them a body apart across the road.
-            if (abs(cars[0].s - cars[1].s) < g.carUnits * 0.5f) assertTrue("t=$t d=$d", d > g.laneOffset * 1.5f)
+            for (i in cars.indices) for (j in i + 1 until cars.size) {
+                val a = g.point(cars[i].s, cars[i].lat)
+                val b = g.point(cars[j].s, cars[j].lat)
+                val d = hypot(a.x - b.x, a.y - b.y)
+                val third = cars.indices.any { k -> k != i && k != j && (abs(cars[k].s - cars[i].s) < g.carUnits || abs(cars[k].s - cars[j].s) < g.carUnits) }
+                // Level with each other and nobody else in the way: the lanes keep them a body apart across the road.
+                if (!third && abs(cars[i].s - cars[j].s) < g.carUnits * 0.5f) assertTrue("t=$t d=$d", d > g.laneOffset * 1.5f)
+            }
             t += 1.0
         }
     }

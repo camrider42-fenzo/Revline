@@ -61,19 +61,25 @@ internal fun DrawScope.drawCircuitDash(dash: CircuitPace.Dash?) {
 /** The session's best laps: each car's speed in mph against the distance round its quickest lap. Draws nothing without traces. */
 @Composable
 internal fun BestLapTraces(replay: Replay, modifier: Modifier = Modifier) {
-    val laps = listOf(replay.you, replay.rival).mapNotNull { c -> c.bestLap()?.let { c to it } }
+    val laps = replay.bestLaps()
     if (laps.isEmpty()) return
-    Canvas(modifier.fillMaxWidth().aspectRatio(2.1f)) { drawBestLaps(laps.map { (c, l) -> BestLap(c.name, c.you, l.first, l.second) }) }
+    Canvas(modifier.fillMaxWidth().aspectRatio(if (laps.size > 2) 1.5f else 2.1f)) { drawBestLaps(laps) }
 }
 
-internal class BestLap(val name: String, val you: Boolean, val lap: Int, val run: CircuitPace.Run)
+/** Every car's quickest lap with a trace, in the car's livery. */
+internal fun Replay.bestLaps(): List<BestLap> = all.mapNotNull { c ->
+    c.bestLap()?.let { BestLap(c.name, c.you, it.first, it.second, if (c.you) Lime else ReplayLook.livery(c.name)) }
+}
+
+internal class BestLap(val name: String, val you: Boolean, val lap: Int, val run: CircuitPace.Run, val color: Color = if (you) Lime else Red)
 
 internal fun DrawScope.drawBestLaps(laps: List<BestLap>) {
     drawRect(Color.Black)
     val u = size.width / 100f
     val left = 9f * u
     val right = size.width - 2f * u
-    val top = 20f * u
+    val legendRows = (laps.size + 1) / 2
+    val top = (if (laps.size > 2) 8f + 4.1f * legendRows else 20f) * u
     val bottom = size.height - 9f * u
     val len = laps.maxOf { it.run.trace.lengthM }
     val tick = 3.4f * u
@@ -93,8 +99,8 @@ internal fun DrawScope.drawBestLaps(laps: List<BestLap>) {
         textLabel("$km km", x(km * 1000.0), bottom + tick * 1.5f, tick, Olive, 1)
     }
     textLabel("BEST LAP SPEED (mph)", left, tick * 1.3f, tick * 1.1f, Lime, 0)
-    laps.forEachIndexed { i, l ->
-        val color = if (l.you) Lime else Red
+    // The player's line is full and thick; the rest are thin and faded, drawn under it.
+    for (l in laps.sortedBy { it.you }) {
         val t = l.run.trace
         val path = androidx.compose.ui.graphics.Path()
         for (k in 0..t.n) {
@@ -102,7 +108,16 @@ internal fun DrawScope.drawBestLaps(laps: List<BestLap>) {
             val py = y(t.v[k % t.n] / l.run.tau * 2.23694)
             if (k == 0) path.moveTo(px, py) else path.lineTo(px, py)
         }
-        drawPath(path, color, style = Stroke(width = 2.6f))
-        textLabel("${l.name.substringAfterLast(' ')}  lap ${l.lap}  ${com.revline.idle.game.Circuits.clock(l.run.span)}", left + 1f * u, tick * 2.7f + i * tick * 1.2f, tick, color, 0)
+        val strong = l.you || laps.size <= 2
+        drawPath(path, if (strong) l.color else l.color.copy(alpha = 0.6f), style = Stroke(width = if (l.you) 3.4f else if (strong) 2.6f else 1.6f))
     }
+    // Names and lap times, quickest first, in two columns that follow the livery colours.
+    val sorted = laps.sortedBy { it.run.span }
+    if (laps.size <= 2) sorted.forEachIndexed { i, l -> legend(l, left + 1f * u, tick * 2.7f + i * tick * 1.2f, tick) }
+    else sorted.forEachIndexed { i, l -> legend(l, left + 1f * u + (i % 2) * 44f * u, tick * 2.7f + (i / 2) * tick * 1.2f, tick * 0.8f) }
+}
+
+private fun DrawScope.legend(l: BestLap, x: Float, baseline: Float, tick: Float) {
+    val name = l.name.substringAfterLast(' ')
+    textLabel("$name  L${l.lap}  ${com.revline.idle.game.Circuits.clock(l.run.span)}", x, baseline, tick, if (l.you) l.color else l.color.copy(alpha = 0.8f), 0)
 }
