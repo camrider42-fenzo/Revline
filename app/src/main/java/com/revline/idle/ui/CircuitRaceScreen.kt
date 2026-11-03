@@ -38,7 +38,7 @@ internal fun CircuitRaceBody(result: Circuits.Result, yourId: String, yourMid: B
     run {
         // Wide or near-square (a landscape phone, the unfolded Fold) puts the map beside the dials; a tall narrow screen stacks them.
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 12.dp, vertical = 16.dp)) {
-            val wide = maxWidth >= maxHeight * 0.85f
+            val wide = maxWidth >= maxHeight * 0.75f
             CircuitReplayView(result, yourId, yourMid, Modifier.fillMaxSize(), wide, header = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(result.circuit.name.uppercase(java.util.Locale.US), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)

@@ -12,10 +12,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** The real race dialog contents, composed at the unfolded Fold's size (21.6:18, about 830 x 690 dp) and captured. */
+/** The real race dialog contents, composed at the unfolded Fold's size (18:21.6, about 18:21.6 portrait, 690 x 830 dp) and captured. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w830dp-h690dp-xhdpi")
+@Config(sdk = [34], qualifiers = "w690dp-h830dp-xhdpi")
 class RaceScreenShotTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 

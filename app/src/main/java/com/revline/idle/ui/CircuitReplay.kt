@@ -2,6 +2,9 @@ package com.revline.idle.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -348,6 +351,7 @@ internal object ReplaySpeed {
 }
 
 /** A short film of the race: you and the closest rival round the circuit, lap by lap. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun CircuitReplayView(
     result: Circuits.Result, yourId: String, yourMid: Boolean, modifier: Modifier = Modifier,
@@ -403,12 +407,12 @@ internal fun CircuitReplayView(
         }
     }
     val dials: @Composable () -> Unit = {
-        Box(Modifier.fillMaxSize().padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
             CircuitDash(if (clock < 0f) null else replay.you.dash(t), Modifier, fit = true)
         }
     }
     val trace: @Composable () -> Unit = {
-        Box(Modifier.fillMaxSize().padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
             if (finished) endContent(Modifier) else LiveTrace(replay, if (clock < 0f) null else t, Modifier, fit = true)
         }
     }
@@ -431,33 +435,39 @@ internal fun CircuitReplayView(
         val again: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Replay", true, { run++ }) }
         val skip: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Skip to the end", !finished, { clock = ReplaySpeed.endClock(replay) }) }
         val follow: @Composable () -> Unit = { com.revline.idle.ui.LineButton(if (zoomed) "Whole track" else "Follow", true, { zoomed = !zoomed }) }
-        if (wide) Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { pause(); again(); skip(); follow() }
-        else {
-            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { pause(); again() }
-            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { skip(); follow() }
-        }
+        FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { pause(); again(); skip(); follow() }
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for ((i, label) in ReplaySpeed.labels.withIndex()) SpeedChip(label, i == speedIndex) { speedIndex = i }
         }
     }
     // Nothing scrolls: every part has a share of the height (or the width) and keeps its own proportions inside it. At the flag
     // the live trace gives way to the best-lap chart, which takes a bigger share, and the map gives up some.
+    // The dials and the trace take no more than their share, so when there is room they sit together at their natural size
+    // (centred) rather than stretched apart.
+    val slot = Alignment.Center
     if (wide) {
-        Row(modifier.fillMaxSize()) {
-            Box(Modifier.weight(1.2f).fillMaxHeight()) { map() }
-            Column(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp)) {
-                header()
-                Box(Modifier.weight(1.1f).fillMaxWidth()) { dials() }
-                Box(Modifier.weight(if (finished) 2.1f else 1f).fillMaxWidth()) { trace() }
-                controls()
+        BoxWithConstraints(modifier.fillMaxSize()) {
+            // The map is only as wide as its shape and the height allow (but never more than 55% of the width), so a tall map
+            // does not leave a blank strip beside it.
+            val mapW = minOf(maxWidth * 0.55f, maxHeight * CircuitLayouts.aspect(result.circuit.id) + 4.dp)
+            Row(Modifier.fillMaxSize()) {
+                Box(Modifier.width(mapW).fillMaxHeight()) { map() }
+                Column(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp)) {
+                    header()
+                    Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.Center) {
+                        Box(Modifier.weight(1.1f, fill = false).fillMaxWidth(), contentAlignment = slot) { dials() }
+                        Box(Modifier.weight(if (finished) 2.1f else 1f, fill = false).fillMaxWidth(), contentAlignment = slot) { trace() }
+                    }
+                    controls()
+                }
             }
         }
     } else {
         Column(modifier.fillMaxSize()) {
             header()
             Box(Modifier.weight(if (finished) 1.5f else 2.4f).fillMaxWidth()) { map() }
-            Box(Modifier.weight(1f).fillMaxWidth()) { dials() }
-            Box(Modifier.weight(if (finished) 1.9f else 0.9f).fillMaxWidth()) { trace() }
+            Box(Modifier.weight(1f, fill = false).fillMaxWidth(), contentAlignment = slot) { dials() }
+            Box(Modifier.weight(if (finished) 1.9f else 0.9f, fill = false).fillMaxWidth(), contentAlignment = slot) { trace() }
             controls()
         }
     }
