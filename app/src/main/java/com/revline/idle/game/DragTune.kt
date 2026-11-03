@@ -159,19 +159,27 @@ object DragTune {
     }
 
     /**
-     * Where the nose comes up, in g, for a car as it stands: a short, light, rear-drive car lifts first, and a car
-     * driving all four wheels or sitting heavy holds the front down. Front drive does not lift.
+     * Centre-of-gravity height over wheelbase: the lever that moves weight to the back wheels as the car pulls.
+     * A short, light car sits relatively higher on its wheelbase.
      */
-    fun baseLift(body: Racing.Car): Double {
-        if (body.spec.drive == Racing.Drive.FWD) return 99.0
-        val place = when (body.spec.place) {
-            Racing.Place.REAR -> 1.9
-            Racing.Place.MID -> 2.0
-            Racing.Place.FRONT -> 2.15
-        }
-        val awd = if (body.spec.drive == Racing.Drive.AWD) 0.4 else 0.0
-        val light = if (body.spec.chassis.build == Racing.Build.LIGHT) -0.2 else 0.0
-        return place + awd + light
+    fun cgRatio(body: Racing.Car): Double = when (body.spec.chassis.build) {
+        Racing.Build.LIGHT -> 0.22
+        Racing.Build.MEDIUM -> 0.20
+        Racing.Build.HEAVY -> 0.18
+    }
+
+    /** The share of the car's weight on the rear axle standing still: more with the engine behind. */
+    fun rearShare(body: Racing.Car): Double = when (body.spec.place) {
+        Racing.Place.FRONT -> 0.50
+        Racing.Place.MID -> 0.57
+        Racing.Place.REAR -> 0.63
+    }
+
+    /** The share of the car's weight on the wheels that drive it, standing still. All four for all-wheel drive. */
+    fun drivenShare(body: Racing.Car): Double = when (body.spec.drive) {
+        Racing.Drive.AWD -> 1.0
+        Racing.Drive.RWD -> rearShare(body)
+        Racing.Drive.FWD -> 1.0 - rearShare(body)
     }
 
     /** The Drag tune page's forecast: a clean pass on this car as tuned. */

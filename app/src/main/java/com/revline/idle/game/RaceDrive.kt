@@ -71,7 +71,23 @@ object RaceDrive {
         val shotFrac: Double = 0.0,
         val shotAtM: Double = 60.0,
         val bottleS: Double = 0.0,
+        // Whole-run traction (see [holdN]). muEff 0 leaves it off: the launch alone is checked, against the flat gripN.
+        /** Tire grip coefficient on its driven axle at the reference temperature, before load transfer. 0 means the model is off. */
+        val muEff: Double = 0.0,
+        /** Share of the car's weight on the driven wheels standing still. */
+        val loadStatic: Double = 0.0,
+        /** Weight moved onto (or off) the driven wheels per g of push: centre-of-gravity height over wheelbase, signed. */
+        val loadSlope: Double = 0.0,
+        /** Down-load on the driven wheels per (m/s)^2, in newtons: the aero kit's downforce. */
+        val downK: Double = 0.0,
+        /** Tire temperature the run starts at, 0 cold to 1 hot. A burnout starts it high. */
+        val heat0: Double = TIRE_COOL,
+        /** Grip gained per unit of temperature above [TIRE_COOL] (and lost below it). A slick has the most to gain. */
+        val tempGain: Double = 0.0,
     )
+
+    /** Tire temperature of a car that has not had a burnout. */
+    const val TIRE_COOL = 0.5
 
     data class Run(
         var gear: Int = 1,
@@ -91,6 +107,17 @@ object RaceDrive {
         var jumped: Boolean = false,
         /** Seconds of nitrous used. */
         var nitrousS: Double = 0.0,
+        /** Tire temperature, 0..1. It comes up with the miles and the slip, and the grip comes with it. */
+        var heat: Double = TIRE_COOL,
+        // What the traction model saw on the last driven step, for the dash and the tests. Newtons, and the grip coefficient used.
+        /** The most the driven tires could hold this step. */
+        var holdN: Double = 0.0,
+        /** The push that actually went to the road this step. */
+        var driveN: Double = 0.0,
+        /** The load on the driven tires this step, newtons: weight moved by the push, plus downforce. */
+        var loadN: Double = 0.0,
+        /** The grip coefficient this step: the tire's, as warm as it is. */
+        var gripMu: Double = 0.0,
     )
 
     fun setup(state: GameState): Setup = setup(state, Logic.sheet(state))
@@ -151,17 +178,47 @@ object RaceDrive {
         // The strip's own terms. The circuit uses none of them: its Setup stays what it was.
         val warmth = if (circuit) 0.0 else DragTune.warmth(body.spec.tire.id)
         val pressure = rig.psi + (if (warmth > 0.0) kit.burnout else 0.0)
-        val warm = kit.burnout * warmth
-        val stripGrip = if (circuit) 1.0 else {
-            (1.0 - 0.018 * pressure) * (1.0 + 0.05 * warm) * (1.0 - 0.012 * rig.front) *
-                (1.0 - 0.010 * rig.rear) * (1.0 + 0.0008 * rig.heightMm)
-        }
         val stripDrag = if (circuit) 1.0 else 1.0 + 0.0012 * rig.heightMm
         val squat = if (circuit) 1.0 else 1.0 - 0.003 * (-rig.rear).coerceAtLeast(0.0)
-        val grip = body.spec.tire.mu * axle.grip * balance * body.massKg * 9.81 * (if (circuit) 1.0 else kit.launch) * stripGrip
         val drag = body.spec.chassis.cd * body.spec.chassis.area * (1.0 + 0.018 * body.spec.slots) * body.spec.tire.drag * kit.dragMult * stripDrag
         val hp = peakHp.coerceAtLeast(8.0)
-        val lift = if (circuit) 99.0 else DragTune.baseLift(body) + kit.liftG + 0.04 * rig.front - 0.004 * rig.heightMm
+        // The grip of the tire on this axle and balance, before the strip's terms. The circuit stops here.
+        val gRef = body.spec.tire.mu * axle.grip * balance * (if (circuit) 1.0 else kit.launch)
+        val mass = body.massKg
+        var muEff = 0.0
+        var loadStatic = 0.0
+        var loadSlope = 0.0
+        var downK = 0.0
+        var heat0 = TIRE_COOL
+        var tempGain = 0.0
+        var grip = gRef * mass * 9.81
+        var lift = 99.0
+        if (!circuit) {
+            // Weight transfer: the share of the car on the driven wheels, and the lever (CG height over wheelbase) that moves it.
+            val k0 = DragTune.cgRatio(body)
+            val kMag = k0 * (1.0 - 0.02 * rig.front) * (1.0 + 0.0035 * rig.heightMm)
+            val sign = when (body.spec.drive) {
+                Racing.Drive.RWD -> 1.0
+                Racing.Drive.FWD -> -1.0
+                Racing.Drive.AWD -> 0.0
+            }
+            loadStatic = DragTune.drivenShare(body)
+            loadSlope = sign * kMag
+            // The tire's coefficient is set so a flat launch holds what it always has. The tune and the parts move it from there.
+            val mu0 = gRef / (loadStatic + gRef * sign * k0).coerceAtLeast(0.2)
+            muEff = mu0 * (1.0 - 0.018 * pressure) * (1.0 - 0.010 * rig.rear)
+            tempGain = TEMP_BASE + TEMP_WARM * warmth
+            heat0 = (TIRE_COOL + (1.0 - TIRE_COOL) * (kit.burnout * warmth).coerceIn(0.0, 1.0)).coerceIn(0.0, 1.0)
+            val aeroShare = when (body.spec.drive) {
+                Racing.Drive.RWD -> DragTune.drivenShare(body)
+                Racing.Drive.FWD -> DragTune.drivenShare(body)
+                Racing.Drive.AWD -> 1.0
+            }
+            downK = mass * kit.downforce * aeroShare
+            val mu = muEff * (1.0 + tempGain * (heat0 - TIRE_COOL))
+            grip = launchHold(mu, mass, loadStatic, loadSlope)
+            lift = if (body.spec.drive == Racing.Drive.FWD) 99.0 else (1.0 - DragTune.rearShare(body)) / kMag + kit.liftG
+        }
         val red = redline.coerceAtLeast(3000.0)
         val base = Setup(
             peakHp = hp,
@@ -186,6 +243,12 @@ object RaceDrive {
             shotFrac = if (circuit) 0.0 else kit.shot,
             shotAtM = rig.nosAtM,
             bottleS = kit.bottleS,
+            muEff = muEff,
+            loadStatic = loadStatic,
+            loadSlope = loadSlope,
+            downK = downK,
+            heat0 = heat0,
+            tempGain = tempGain,
         )
         if (kit.preload <= 0.0 || circuit) return base
         // A transbrake holds the engine at a launch rpm. The tune moves it off the rpm that just fits the tires.
@@ -213,6 +276,19 @@ object RaceDrive {
 
     private const val LAUNCH_CAP = 0.96
 
+    /** Grip a tire gains per unit of temperature: the floor every tire has, and what its warmth rating adds. */
+    private const val TEMP_BASE = 0.03
+    private const val TEMP_WARM = 0.07
+
+    /** Share of the grip a spinning tire still gives: sliding rubber holds less than rolling rubber. */
+    private const val SLIDE_GRIP = 0.82
+
+    /** The most the tires can push on a flat start: weight on the driven wheels, moved by the push itself. */
+    private fun launchHold(mu: Double, mass: Double, share: Double, slope: Double): Double =
+        mu * mass * 9.81 * share / (1.0 - mu * slope).coerceAtLeast(MIN_DENOM)
+
+    private const val MIN_DENOM = 0.25
+
     /** The rpm the engine is at for the launch: held with a transbrake, otherwise wound up by the throttle. */
     private fun launchRpmFor(setup: Setup, th: Double): Double =
         if (setup.launchRpm > 0.0) setup.launchRpm else setup.idle + th * (setup.redline * 0.74 - setup.idle)
@@ -237,13 +313,12 @@ object RaceDrive {
         setup.shotFrac > 0.0 && th > 0.5 && setup.shotAtM <= 0.5
 
     /**
-     * The shot's push, on top of [dry]. In first and second the tires can only take so much more than they hold,
-     * so a shot opened there on a car that already has more push than grip adds nothing. It pays in the gears
-     * the tires can take it.
+     * The shot's push, on top of [dry]. With the whole-run traction model on, the tires clip it like any other push
+     * (see [holdN]). Without it, in first and second the tires can only take so much more than they hold.
      */
     private fun withShot(setup: Setup, run: Run, dry: Double): Double {
         val full = dry * (1.0 + setup.shotFrac)
-        if (run.gear > 2) return full
+        if (setup.muEff > 0.0 || run.gear > 2) return full
         return maxOf(dry, minOf(full, setup.gripN * SHOT_TRACTION))
     }
 
@@ -254,12 +329,12 @@ object RaceDrive {
         (setup.massKg - setup.flywheelKgm2 * (overall / WHEEL_R).pow(2.0)).coerceAtLeast(setup.massKg * 0.85)
 
     /**
-     * The nose comes up past [Setup.liftG]. Most of the push over the limit is wasted. Only the low gears are
-     * short enough to do it.
+     * The nose comes up past [Setup.liftG]. Most of the push over the limit is wasted. It takes a push that
+     * big to get there, so on the strip it is the low gears that do it.
      */
     private fun lifted(setup: Setup, run: Run, accel: Double): Double {
         val limit = setup.liftG * 9.81
-        return if (run.gear <= 2 && accel > limit) limit + (accel - limit) * 0.25 else accel
+        return if (accel > limit) limit + (accel - limit) * 0.25 else accel
     }
 
     /** Where the pilot shifts: just under the redline, moved by the tune. */
@@ -300,14 +375,16 @@ object RaceDrive {
         if (run.jumped) return true
         val clock = run.time
         val bottle = run.nitrousS
+        val heat = run.heat
         drive(setup, run, throttle, false, dt, clutch)
         run.time = clock
         run.nitrousS = bottle
+        run.heat = heat
         if (run.distance > JUMP_M) run.jumped = true
         return run.jumped
     }
 
-    fun fresh(setup: Setup): Run = Run(rpm = setup.idle)
+    fun fresh(setup: Setup): Run = Run(rpm = setup.idle, heat = setup.heat0)
 
     /**
      * One slice of the strip. [shift] is a rising edge: the next gear.
@@ -369,26 +446,32 @@ object RaceDrive {
             if (shotOn) run.nitrousS += stepDt
             val biteRpm = launchRpmFor(setup, th)
             val requested = launchForce(setup, th, engagement, overall, shotOn)
-            if (requested > setup.gripN && th > 0.05) {
+            val grip = holdN(setup, run, overall)
+            note(setup, run, grip, overall)
+            if (requested > grip && th > 0.05) {
                 run.spinning = true
                 val trim = setup.spinTrim.coerceIn(0.0, 1.0)
-                val target = slipAmount(requested, setup.gripN) * (1.0 - 0.85 * trim)
+                val target = slipAmount(requested, grip) * (1.0 - 0.85 * trim)
                 run.slip += (target - run.slip) * (stepDt * 12.0).coerceAtMost(1.0)
                 val flare = setup.idle + th * (setup.redline - setup.idle)
                 run.rpm += (flare - run.rpm) * stepDt * 4.5
-                val floor = setup.gripN * 0.22
-                val held = minOf(requested, setup.gripN * 1.03)
+                val floor = grip * 0.22
+                val held = minOf(requested, grip * 1.03)
                 val force = floor + trim * (held - floor)
+                run.driveN = force
                 val accel = lifted(setup, run, (force - dragForce(setup, run.speed)) / effMass(setup, overall))
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
+                warmUp(run, force / grip, true, stepDt)
             } else {
                 run.spinning = false
                 val locked = biteRpm.coerceAtLeast(roadRpm)
                 val flare = setup.idle + th * (setup.redline - setup.idle)
                 val target = if (engagement >= 0.92) locked else roadRpm * engagement + flare * (1.0 - engagement)
                 run.rpm += (target - run.rpm) * stepDt * 4.0
+                run.driveN = requested
                 val accel = lifted(setup, run, (requested - dragForce(setup, run.speed)) / effMass(setup, overall))
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
+                warmUp(run, requested / grip, false, stepDt)
                 if (run.speed > 4.0 && roadRpm > setup.idle * 1.2) run.hooked = true
             }
             run.rpm = run.rpm.coerceIn(setup.idle * 0.8, setup.redline * 1.05)
@@ -406,14 +489,33 @@ object RaceDrive {
                 run.limiter = false
                 val shotOn = shotActive(setup, run, th)
                 if (shotOn) run.nitrousS += stepDt
-                val tq = torqueNm(setup, roadRpm.coerceAtMost(setup.redline)) * setup.efficiency
-                val dry = tq * engagement * overall / WHEEL_R
-                val force = if (shotOn) withShot(setup, run, dry) else dry
+                val want = inGearForce(setup, run, th, engagement, overall, roadRpm, shotOn)
+                val grip = holdN(setup, run, overall)
+                note(setup, run, grip, overall)
+                var force = want
+                val ratio = if (grip > 0.0) want / grip else 0.0
+                if (setup.muEff > 0.0 && ratio > 1.0 && th > 0.05) {
+                    // More push than the tires hold, in any gear: they break loose and give less than they held.
+                    run.spinning = true
+                    val trim = setup.spinTrim.coerceIn(0.0, 1.0)
+                    val over = ((ratio - 1.0) / SLIDE_RAMP).coerceIn(0.0, 1.0)
+                    val slide = SLIDE_GRIP + (1.0 - SLIDE_GRIP) * trim * 0.5
+                    force = grip * (1.0 - (1.0 - slide) * over)
+                    val target = slipAmount(want, grip) * (1.0 - 0.85 * trim)
+                    run.slip += (target - run.slip) * (stepDt * 12.0).coerceAtMost(1.0)
+                }
+                run.driveN = force
                 val accel = lifted(setup, run, (force - dragForce(setup, run.speed)) / effMass(setup, overall))
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
+                warmUp(run, force / grip, run.spinning, stepDt)
                 val road = roadRpm(run.speed, overall).coerceAtLeast(setup.idle * 0.8)
                 run.rpm = if (engagement >= 0.92) {
-                    road
+                    if (run.spinning) {
+                        val flared = (road * (1.0 + (ratio - 1.0).coerceIn(0.0, 0.3))).coerceAtMost(setup.redline)
+                        run.rpm + (flared.coerceAtLeast(road) - run.rpm) * (stepDt * 8.0).coerceAtMost(1.0)
+                    } else {
+                        road
+                    }
                 } else {
                     val flare = setup.idle + th * (setup.redline - setup.idle)
                     (road * engagement + flare * (1.0 - engagement)).coerceAtLeast(setup.idle * 0.8)
@@ -422,6 +524,83 @@ object RaceDrive {
         }
         advance(run, stepDt)
     }
+
+    private const val SLIDE_RAMP = 0.25
+
+    /** The push at the wheels in gear: the torque at this speed through the clutch and the pedal, and the shot if it is open. */
+    private fun inGearForce(setup: Setup, run: Run, th: Double, engagement: Double, overall: Double, roadRpm: Double, shotOn: Boolean): Double {
+        val tq = torqueNm(setup, roadRpm.coerceAtMost(setup.redline)) * setup.efficiency
+        val dry = tq * engagement * overall / WHEEL_R * (if (setup.muEff > 0.0) th else 1.0)
+        return if (shotOn) withShot(setup, run, dry) else dry
+    }
+
+    /** The grip coefficient right now: the tire's, as warm as it is. */
+    fun gripMu(setup: Setup, run: Run): Double =
+        setup.muEff * (1.0 + setup.tempGain * (run.heat - TIRE_COOL)) * (1.0 + SPEED_GRIP * (1.0 - exp(-run.speed / SPEED_GRIP_V)))
+
+
+    /**
+     * Rubber works into the surface and the tire grows as it goes faster, so a tire holds more at speed than it
+     * did at the line: up to [SPEED_GRIP] more, reached around [SPEED_GRIP_V] m/s.
+     */
+    private const val SPEED_GRIP = 0.7
+    private const val SPEED_GRIP_V = 22.0
+
+    /** The share of the car's weight on the driven wheels when it pushes at [accel] m/s2, before downforce. Signed lever: rear drive gains, front drive loses. */
+    fun driveLoadShare(setup: Setup, accel: Double): Double {
+        val raw = setup.loadStatic + setup.loadSlope * accel / 9.81
+        return if (setup.loadSlope >= 0.0) raw.coerceIn(MIN_LOAD, 1.0) else raw.coerceIn(MIN_LOAD, setup.loadStatic)
+    }
+
+    private const val MIN_LOAD = 0.2
+
+    /**
+     * The most push the driven tires can hold at this instant, in newtons: the grip coefficient times the load on
+     * them. The load is the car's weight on the driven wheels, plus the weight the push itself moves onto them
+     * (centre-of-gravity height over wheelbase, times the acceleration), plus the aero kit's downforce at this speed.
+     * The push and the acceleration depend on each other, so it is solved: F = mu (W s + down + k m (F - drag) / m_eff).
+     * Rear drive gains load as it pulls and front drive loses it. With the model off it is the flat [Setup.gripN].
+     */
+    fun holdN(setup: Setup, run: Run, overall: Double): Double {
+        if (setup.muEff <= 0.0) return setup.gripN
+        val mu = gripMu(setup, run)
+        val weight = setup.massKg * 9.81
+        val down = setup.downK * run.speed * run.speed
+        val q = setup.loadSlope * setup.massKg / effMass(setup, overall)
+        val drag = dragForce(setup, run.speed)
+        val solved = mu * (weight * setup.loadStatic + down - q * drag) / (1.0 - mu * q).coerceAtLeast(MIN_DENOM)
+        val most = mu * (weight * (if (setup.loadSlope >= 0.0) 1.0 else setup.loadStatic) + down)
+        val least = mu * (weight * MIN_LOAD + down)
+        return solved.coerceIn(least, most)
+    }
+
+    /** Records what the model saw this step: the hold, the grip coefficient, and the load that gave it. */
+    private fun note(setup: Setup, run: Run, hold: Double, overall: Double) {
+        run.holdN = hold
+        run.gripMu = if (setup.muEff > 0.0) gripMu(setup, run) else if (setup.massKg > 0.0) setup.gripN / (setup.massKg * 9.81) else 0.0
+        run.loadN = if (run.gripMu > 0.0) hold / run.gripMu else 0.0
+    }
+
+    /** Tires warm with the miles, with the push they carry, and fast with slip. Cold tires are slower to hook. */
+    private fun warmUp(run: Run, load: Double, slipping: Boolean, dt: Double) {
+        val rate = 0.05 + 0.10 * load.coerceIn(0.0, 1.3) + (if (slipping) 0.5 else 0.0)
+        run.heat += (1.0 - run.heat) * (rate * dt).coerceAtMost(1.0)
+    }
+
+    /**
+     * The share of the throttle the tires hold in gear, right now: 1 when they hold full throttle, less when
+     * full throttle would spin them. A clean pass and a good hand feather to this.
+     */
+    fun gripThrottle(setup: Setup, run: Run): Double {
+        if (setup.muEff <= 0.0 || run.gear > setup.ratios.size || run.gear < 1) return 1.0
+        val overall = setup.ratios[run.gear - 1] * setup.finalDrive
+        val road = roadRpm(run.speed, overall)
+        val full = inGearForce(setup, run, 1.0, 1.0, overall, road, shotActive(setup, run, 1.0))
+        if (full <= 0.0) return 1.0
+        return (HOLD_MARGIN * holdN(setup, run, overall) / full).coerceIn(0.05, 1.0)
+    }
+
+    private const val HOLD_MARGIN = 0.985
 
     /** Pedal travel (inside the bite band) that lets full throttle leave without breaking the tires. 0 means the tires already hold it. */
     fun clutchForLaunch(setup: Setup): Double {
@@ -445,7 +624,7 @@ object RaceDrive {
         val cap = (90.0 * setup.distanceM / FINISH_M).coerceIn(40.0, 160.0)
         while (run.distance < setup.distanceM && run.time < cap && guard < 20_000) {
             guard++
-            val launch = if (run.gear == 1 && run.speed < 14.0 && !run.hooked) launchThrottle(setup) else 1.0
+            val launch = if (run.gear == 1 && run.speed < 14.0 && !run.hooked) launchThrottle(setup) else gripThrottle(setup, run)
             val up = run.shiftLeft <= 0.0 && run.gear < setup.ratios.size && run.rpm > shiftPoint(setup) && run.hooked
             step(setup, run, launch, up, 1.0 / 60.0)
             if (mark != null) mark(run)

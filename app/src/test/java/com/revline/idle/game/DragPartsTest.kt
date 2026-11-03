@@ -112,8 +112,10 @@ class DragPartsTest {
     }
 
     @Test fun wheelieBarsKeepTheNoseDownOnAPowerfulLightCarAndCostWeightAndDrag() {
-        val bare = strip(strong)
-        val bars = strip(strong, with("wbars", 2))
+        // The grip limit keeps most cars' noses down on its own: bars pay once the push is far past what any tire holds.
+        val huge = 1600.0
+        val bare = strip(huge, with("tbrake", 1))
+        val bars = strip(huge, with("tbrake", 1, "wbars" to 2))
         assertTrue(bars.liftG > bare.liftG)
         assertTrue("bars ${clean(bars).time} bare ${clean(bare).time}", clean(bars).time < clean(bare).time)
         assertTrue(bars.drag > bare.drag)

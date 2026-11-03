@@ -97,11 +97,14 @@ class DragRivalsTest {
                     val launching = !race.staging && run.gear == 1 && run.speed < 14.0 && !run.hooked
                     val v0 = run.speed
                     val t0 = run.time
+                    val hold0 = run.holdN
                     race.advance(1.0 / 60.0)
                     if (launching && run.time > t0 && run.speed > v0) {
                         val drag = RaceDrive.dragForce(setup, v0)
                         val force = setup.massKg * (run.speed - v0) / (run.time - t0) + drag
-                        worst = maxOf(worst, force / setup.gripN)
+                        // The hold is the model's, which grows a little with speed and heat; the flat grip when it is off.
+                        val cap = if (setup.muEff > 0.0) maxOf(hold0, run.holdN) else setup.gripN
+                        worst = maxOf(worst, force / cap)
                         seen++
                     }
                 }

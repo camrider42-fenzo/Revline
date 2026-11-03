@@ -118,7 +118,9 @@ class Pilot(private val setup: RaceDrive.Setup, val skills: Skills, seed: Long) 
             val target = if (spinFor > spinReact && !plan.module) aim * 0.55 else aim
             throttle = (target + (if (aim < 0.99) wobble else 0.0)).coerceIn(0.0, 1.0)
         } else {
-            throttle = (throttle + 8.0 * dt).coerceAtMost(1.0)
+            // In gear the foot reads the tires: a good one feathers to what they hold, a bad one stays flat on it and spins.
+            val hold = 1.0 - Math.pow(skills.throttle, 0.4) * (1.0 - RaceDrive.gripThrottle(setup, run))
+            throttle = if (hold < throttle) (throttle - 10.0 * dt).coerceAtLeast(hold) else (throttle + 8.0 * dt).coerceAtMost(hold)
         }
         if (!released) {
             if (sinceGreen >= reaction) {
