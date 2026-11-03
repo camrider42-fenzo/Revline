@@ -25,7 +25,7 @@ class RaceScreenShotTest {
         val car = Circuits.carOf(DriverBuilds.make(3, Racing.Build.MEDIUM, "race", "close", "lsd", 0.8))
         val r = Circuits.race(Circuits.plan(car, c, d), d, Circuits.parPlan(3, c), 7L)
         rule.mainClock.autoAdvance = false
-        rule.setContent { CircuitRaceBody(r, "p911", false) {} }
+        rule.setContent { CircuitRaceBody(r, "p911", false, "shot", { _, _ -> }) {} }
         rule.mainClock.advanceTimeBy(40_000)
         val v = rule.activity.window.decorView
         val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)

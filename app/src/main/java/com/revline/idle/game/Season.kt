@@ -100,6 +100,24 @@ object Season {
         return Update(closed, "$head $tail" + if (bonus > 0.0) " Season reward ${formatDollars(bonus)}." else " No season reward.")
     }
 
+    /**
+     * A race run again from a lap: the till and the season move by the difference between the old outcome and the new one, as settled
+     * from [base], the state before the first settling. Everything the player has earned or spent since stays.
+     */
+    fun resettle(current: GameState, base: GameState, raceCircuit: Circuits.Circuit, old: Circuits.Outcome, new: Circuits.Outcome): Update {
+        val was = settle(base, raceCircuit, old).state
+        val now = settle(base, raceCircuit, new)
+        val next = now.state
+        val money = (current.money + next.money - was.money).coerceAtLeast(0.0)
+        return Update(
+            current.copy(
+                money = money, seasonRound = next.seasonRound, seasonPoints = next.seasonPoints, seasonWins = next.seasonWins,
+                seasonNo = next.seasonNo, seasonHistory = next.seasonHistory,
+            ),
+            now.note,
+        )
+    }
+
     private const val HISTORY = 12
 
     /** Titles won, from the history. */

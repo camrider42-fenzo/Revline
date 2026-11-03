@@ -62,6 +62,7 @@ fun RaceScreen(
     onHire: (String) -> Unit = {},
     onPick: (String) -> Unit = {},
     onCircuit: (String, String, Circuits.Orders) -> Unit = { _, _, _ -> },
+    onRevise: (Circuits.Orders, Int) -> Unit = { _, _ -> },
 ) {
     val state = ui.game
     val car = Racing.car(state)
@@ -144,7 +145,7 @@ fun RaceScreen(
         )
         LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
 
-        CircuitSection(ui, car, onCircuit)
+        CircuitSection(ui, car, onCircuit, onRevise)
 
         DriverRoster(state, forecast, onHire)
 
@@ -544,7 +545,7 @@ private fun aspectLabel(a: Circuits.Aspect) = when (a) {
 }
 
 @Composable
-private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String, Circuits.Orders) -> Unit) {
+private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String, Circuits.Orders) -> Unit, onRevise: (Circuits.Orders, Int) -> Unit = { _, _ -> }) {
     val state = ui.game
     var circuitId by rememberSaveable { mutableStateOf(Season.next(state).id) }
     val circuit = Circuits.all.firstOrNull { it.id == circuitId } ?: Circuits.all.first()
@@ -803,7 +804,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
             if (r.log.rows.isNotEmpty()) {
                 LineButton("Watch the race", true, { watching = true }, Modifier.padding(top = 4.dp))
                 remember(r) { Replay.build(r) }?.let { BestLapTraces(it, Modifier.padding(vertical = 4.dp)) }
-                if (watching) CircuitRaceScreen(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID") { watching = false }
+                if (watching) CircuitRaceScreen(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID", session = o.run?.seed, onRevise = onRevise) { watching = false }
             }
             Text(
                 "Laps " + r.lapTimes.joinToString("  ") { Circuits.clock(it) },

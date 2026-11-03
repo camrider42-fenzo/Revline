@@ -736,7 +736,33 @@ object Circuits {
         val weather: Weather = Weather.DRY,
         /** What the replay needs to draw each car's speed along the lap; null on a result built by hand. */
         val pacing: CircuitPace.Pacing? = null,
+        /** Every car's laps, kept so the race can be run again from a lap with the rivals left as they were. Empty on a result built by hand. */
+        val runs: List<RaceLog.CarRun> = emptyList(),
+        /** The log's extra events: the player's own, and the rivals'. */
+        val notes: List<RaceLog.Event> = emptyList(),
+        val rivalNotes: List<RaceLog.Event> = emptyList(),
+        /** What the sim models of the player's tires and engine, lap by lap. Empty on a result built by hand. */
+        val conditions: List<Cond> = emptyList(),
     )
+
+    /**
+     * The player's car on one lap, as the plan has it. Grip is the share of a new tire's grip left ([gripStart] at the line,
+     * [gripEnd] at the next one), [age] the laps on the set including this one, [power] the engine's share of its power after
+     * heat and wear, and [risk] the chance the engine lets go on this lap. The sim has no fuel and no track temperature.
+     */
+    data class Cond(val lap: Int, val tire: Tires.Compound, val age: Int, val gripStart: Double, val gripEnd: Double, val power: Double, val risk: Double)
+
+    private fun conditionsOf(plan: Plan): List<Cond> {
+        val out = ArrayList<Cond>()
+        var last = 0
+        for (k in 1..plan.circuit.laps) {
+            val i = k - 1
+            val start = if (k == 1 || (k - 1) in plan.pits) 1.0 else plan.endGrip.getOrElse(i - 1) { 1.0 }
+            out.add(Cond(k, plan.compounds.getOrElse(i) { Tires.Compound.MEDIUM }, k - last, start, plan.endGrip.getOrElse(i) { 1.0 }, plan.powers.getOrElse(i) { 1.0 }, plan.failure.getOrElse(i) { 0.0 }))
+            if (k in plan.pits) last = k
+        }
+        return out
+    }
 
     /** One car's qualifying lap. [slot] is its place on the grid, 1 on pole. */
     data class QualiRow(val name: String, val team: String, val time: Double, val slot: Int, val you: Boolean)
@@ -974,7 +1000,100 @@ object Circuits {
                 rivalPacing,
             )
         }
-        return Result(circuit, myName, place, grid.size, total, best, times, incidents, retired, engine, order, log, qualifying, plan.orders, plan.weather, pacing)
+        return Result(
+            circuit, myName, place, grid.size, total, best, times, incidents, retired, engine, order, log, qualifying, plan.orders, plan.weather, pacing,
+            runs, notes.toList(), rivalNotes.toList(), conditionsOf(plan),
+        )
+    }
+
+    // ---- Pit calls mid-race -------------------------------------------------------------------------------------------
+
+    /** What a race was run from, kept so it can be run again from a lap: the car, the driver, the sky, the state at the lights and the seed. */
+    class Run(val car: Car, val driver: Drivers.Driver, val weather: Weather, val start: GameState, val seed: Long)
+
+    private fun wholeLaps(run: RaceLog.CarRun): List<Double> = if (run.out) run.times.dropLast(1) else run.times
+
+    private fun lapOfIncident(text: String): Int = text.removePrefix("Lap ").substringBefore(':').trim().toIntOrNull() ?: 0
+
+    /**
+     * Why the player may not change [current] to [orders] from lap [fromLap] (the lap in progress), or null if it is a legal call.
+     * Past stops and the tires already on are fixed, nothing changes once the flag is down or the car is out, the pace stays as
+     * it was, and the new plan must obey the compound rule.
+     */
+    fun reviseCheck(current: Result, orders: Orders, fromLap: Int): String? {
+        val laps = current.circuit.laps
+        val mine = current.runs.firstOrNull { it.you } ?: return "This race cannot be changed."
+        if (fromLap > laps) return "The flag is down. Nothing can change."
+        if (fromLap < 1) return "The lights are not out yet."
+        if (mine.out && mine.outOnLap <= fromLap) return "Your car is out."
+        if (fromLap >= laps) return "Last lap: there are no stops left to call."
+        if (orders.pace != current.orders.pace) return "The pace is set at the start."
+        val old = current.orders.fit
+        val fit = orders.fit
+        val breach = Tires.breach(fit, laps, current.weather)
+        if (breach != null) return breach
+        if (old.start != fit.start) return "The start tire is already on."
+        val before = fromLap - 1
+        if (Tires.stopsOf(old, laps).filter { it <= before } != Tires.stopsOf(fit, laps).filter { it <= before }) return "A stop already made cannot change."
+        if (Tires.stopsOf(fit, laps).any { it < fromLap && it !in Tires.stopsOf(old, laps) }) return "A stop cannot be called in the past."
+        val was = Tires.trace(old, laps) { 1.0 }.compounds.take(before)
+        val now = Tires.trace(fit, laps) { 1.0 }.compounds.take(before)
+        if (was != now) return "The tires already fitted cannot change."
+        return null
+    }
+
+    /**
+     * The orders for "box this lap": the next planned stop moved to [lap], else a stop added there, on the tire the plan calls for next
+     * (or, with no stop planned yet, the other compound). Null when the car has already made its two stops or there is no lap left to
+     * stop after. The result is not checked against the rule: [reviseCheck] does that.
+     */
+    fun boxNow(current: Orders, lap: Int, laps: Int, weather: Weather): Orders? {
+        if (lap >= laps) return null
+        val fit = current.fit
+        val stops = Tires.stopsOf(fit, laps)
+        val ahead = stops.filter { it >= lap }
+        val made = stops.size - ahead.size
+        if (ahead.isNotEmpty()) {
+            val moved = stops.toMutableList().also { it[made] = lap }
+            return current.copy(stop = moved[0], stop2 = moved.getOrElse(1) { 0 })
+        }
+        if (made >= 2) return null
+        val on = Tires.trace(fit, laps) { 1.0 }.compounds.getOrElse(lap - 1) { fit.finish }
+        val pool = if (weather == Weather.DRY) Tires.dry else Tires.Compound.entries
+        val next = if (weather == Weather.WET) on else pool.firstOrNull { it != on && it != Tires.Compound.SOFT } ?: pool.first { it != on }
+        return if (made == 0) current.copy(stop = lap, stop2 = 0, finish = next, middle = next)
+        else current.copy(stop2 = lap, middle = fit.finish, finish = next)
+    }
+
+    /**
+     * Runs the player's car again from lap [fromLap] on [orders]: same seed, same car, same sky. Every lap before it, the qualifying and
+     * every rival come through as they were, so the race already shown stands. Null if [reviseCheck] refuses the call.
+     */
+    fun revise(run: Run, current: Result, orders: Orders, fromLap: Int): Result? {
+        if (reviseCheck(current, orders, fromLap) != null) return null
+        val circuit = current.circuit
+        val next = race(plan(run.car, circuit, run.driver, orders, run.weather), run.driver, parPlan(run.start.prestiges, circuit, run.weather), run.seed)
+        val old = current.runs.first { it.you }
+        val mine = next.runs.first { it.you }
+        // The laps behind are the same laps: the dice for them were drawn before any of the changes mattered.
+        val kept = wholeLaps(old).take(fromLap - 1)
+        if (wholeLaps(mine).take(fromLap - 1) != kept) return null
+        val runs = current.runs.filter { !it.you } + mine
+        val grid = (current.grid.filter { !it.you } + next.grid.first { it.you }).sortedWith(compareBy<Finisher> { it.out }.thenBy { it.time })
+        val log = RaceLog.build(runs, circuit.laps, next.notes + current.rivalNotes)
+        val pacing = next.pacing?.let { p -> current.pacing?.let { c -> p.copy(rivals = c.rivals) } ?: p }
+        return next.copy(
+            position = grid.indexOfFirst { it.you } + 1, field = grid.size, grid = grid, log = log, qualifying = current.qualifying,
+            pacing = pacing, runs = runs, rivalNotes = current.rivalNotes,
+        )
+    }
+
+    /** The outcome again for a revised [result]: the prize, the rebuild and the note worked out afresh from the till at the lights. */
+    fun reprice(old: Outcome, result: Result): Outcome {
+        val run = old.run ?: return old
+        val prize = prize(run.start, result.position, result.retired != null)
+        val repair = if (result.engineFailed) repair(run.start) else 0.0
+        return old.copy(result = result, prize = prize, repair = repair, note = note(result, prize, repair, old.fee, old.entry))
     }
 
     private fun fmt2(x: Double) = String.format(Locale.US, "%.2f", x)
@@ -1082,14 +1201,14 @@ object Circuits {
         return Entry.Paid(state.copy(money = state.money - entry - fee, circuitRaces = state.circuitRaces + 1), driver, fee, entry)
     }
 
-    data class Outcome(val result: Result, val prize: Double, val repair: Double, val fee: Double, val entry: Double, val note: String, val season: String = "")
+    data class Outcome(val result: Result, val prize: Double, val repair: Double, val fee: Double, val entry: Double, val note: String, val season: String = "", val run: Run? = null)
 
     /** Runs the race for a paid entry and works out what comes back. [state] is the car and the field's level, as at the start. */
     fun finish(state: GameState, car: Car, circuit: Circuit, driver: Drivers.Driver, fee: Double, entry: Double, seed: Long, orders: Orders = Orders(), weather: Weather = Weather.DRY): Outcome {
         val result = race(plan(car, circuit, driver, orders, weather), driver, parPlan(state.prestiges, circuit, weather), seed)
         val prize = prize(state, result.position, result.retired != null)
         val repair = if (result.engineFailed) repair(state) else 0.0
-        return Outcome(result, prize, repair, fee, entry, note(result, prize, repair, fee, entry))
+        return Outcome(result, prize, repair, fee, entry, note(result, prize, repair, fee, entry), run = Run(car, driver, weather, state, seed))
     }
 
     fun note(r: Result, prize: Double, repair: Double, fee: Double, entry: Double): String {

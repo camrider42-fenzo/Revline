@@ -59,6 +59,8 @@ data class UiModel(
     val limiter: Boolean = false,
     /** The last circuit race, shown on the race screen until the next one starts. */
     val circuitOutcome: Circuits.Outcome? = null,
+    /** The state the last circuit race was settled onto, so a pit call mid-race can settle the new result in its place. */
+    val circuitBase: GameState? = null,
     /** True while a circuit race is being simulated. */
     val circuitBusy: Boolean = false,
 )
@@ -317,11 +319,32 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed, orders, weather)
                     }
                     // The till has moved on since the lights went green: pay onto what is there now.
-                    val settled = Season.settle(ui.game, circuit, outcome)
-                    publish(ui.copy(game = settled.state, circuitBusy = false, circuitOutcome = outcome.copy(season = settled.note)))
+                    val base = ui.game
+                    val settled = Season.settle(base, circuit, outcome)
+                    publish(ui.copy(game = settled.state, circuitBusy = false, circuitOutcome = outcome.copy(season = settled.note), circuitBase = base))
                     save()
                 }
             }
+        }
+    }
+
+    /**
+     * A pit call from the race screen: runs the race again from [fromLap] on [orders] (same seed, same car, same sky), shows the
+     * new result and settles it in place of the old one. A call the rules refuse changes nothing.
+     */
+    fun reviseCircuit(orders: Circuits.Orders, fromLap: Int) {
+        val old = ui.circuitOutcome ?: return
+        val base = ui.circuitBase ?: return
+        val run = old.run ?: return
+        if (Circuits.reviseCheck(old.result, orders, fromLap) != null) return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) { Circuits.revise(run, old.result, orders, fromLap) } ?: return@launch
+            // The outcome may have moved on while the race ran: only replace the one the call was made on.
+            if (ui.circuitOutcome !== old) return@launch
+            val next = Circuits.reprice(old, result)
+            val settled = Season.resettle(ui.game, base, result.circuit, old, next)
+            publish(ui.copy(game = settled.state, circuitOutcome = next.copy(season = settled.note)))
+            save()
         }
     }
 

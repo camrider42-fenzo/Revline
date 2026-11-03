@@ -27,15 +27,19 @@ import com.revline.idle.game.Circuits
  * best-lap speed trace. The map lives only here; the race screen under it never draws one.
  */
 @Composable
-internal fun CircuitRaceScreen(result: Circuits.Result, yourId: String, yourMid: Boolean, onClose: () -> Unit) {
+internal fun CircuitRaceScreen(
+    result: Circuits.Result, yourId: String, yourMid: Boolean, session: Any? = null, onRevise: ((Circuits.Orders, Int) -> Unit)? = null, onClose: () -> Unit,
+) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        CircuitRaceBody(result, yourId, yourMid, onClose)
+        CircuitRaceBody(result, yourId, yourMid, session, onRevise, onClose)
     }
 }
 
 /** The screen's contents, filling whatever it is given. */
 @Composable
-internal fun CircuitRaceBody(result: Circuits.Result, yourId: String, yourMid: Boolean, onClose: () -> Unit) {
+internal fun CircuitRaceBody(
+    result: Circuits.Result, yourId: String, yourMid: Boolean, session: Any? = null, onRevise: ((Circuits.Orders, Int) -> Unit)? = null, onClose: () -> Unit,
+) {
     run {
         // Wide or near-square (a landscape phone, the unfolded Fold) puts the map beside the dials; a tall narrow screen stacks them.
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().padding(horizontal = 12.dp, vertical = 16.dp)) {
@@ -45,10 +49,10 @@ internal fun CircuitRaceBody(result: Circuits.Result, yourId: String, yourMid: B
                     Text(result.circuit.name.uppercase(java.util.Locale.US), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
                     LineButton("Close", true, onClose)
                 }
-            }) { m ->
+            }, endContent = { m ->
                 val replay = remember(result) { Replay.build(result) }
                 if (replay != null) BestLapTraces(replay, m, fit = true)
-            }
+            }, session = session, onRevise = onRevise)
         }
     }
 }

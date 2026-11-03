@@ -361,32 +361,41 @@ internal fun CircuitReplayView(
     header: @Composable () -> Unit = {},
     /** What replaces the live trace once the race is over; given a modifier that fits it to its slot. */
     endContent: @Composable (Modifier) -> Unit = {},
+    /** Identifies the race across pit calls: the film keeps its clock while the result under it is run again from a lap. */
+    session: Any? = null,
+    /** A pit call from the strategy sheet: the new orders and the lap they start on. Null hides the sheet. */
+    onRevise: ((Circuits.Orders, Int) -> Unit)? = null,
 ) {
     val replay = remember(result) { Replay.build(result) } ?: return
+    val replayNow by rememberUpdatedState(replay)
+    val key = session ?: result
     val scenes = remember { CircuitSceneHolder() }
     val lanes = remember(replay) { LaneKeeper(replay) }
-    var clock by remember(result) { mutableFloatStateOf(-1.5f) }
-    var run by remember(result) { mutableIntStateOf(0) }
-    var finished by remember(result) { mutableStateOf(false) }
-    var paused by remember(result) { mutableStateOf(false) }
+    var clock by remember(key) { mutableFloatStateOf(-1.5f) }
+    var run by remember(key) { mutableIntStateOf(0) }
+    var finished by remember(key) { mutableStateOf(false) }
+    var paused by remember(key) { mutableStateOf(false) }
+    // The lap the strategy sheet was opened on, 0 while it is shut.
+    var sheetLap by remember(key) { mutableIntStateOf(0) }
+    var resumeAfter by remember(key) { mutableStateOf(false) }
     // The chosen speed and the close-up survive leaving the screen and rotating.
     var speedIndex by rememberSaveable { mutableIntStateOf(ReplaySpeed.DEFAULT) }
     var zoomed by rememberSaveable { mutableStateOf(false) }
     val speedNow by rememberUpdatedState(speedIndex)
     val pausedNow by rememberUpdatedState(paused)
-    LaunchedEffect(result, run) {
+    LaunchedEffect(key, run) {
         clock = -1.5f
         finished = false
         paused = false
         var last = 0L
-        while (isActive && clock * replay.speed < replay.duration) {
+        while (isActive && clock * replayNow.speed < replayNow.duration) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.05f)
                 last = now
-                clock = ReplaySpeed.advance(clock, dt, !pausedNow, ReplaySpeed.multiplier(speedNow, replay))
+                clock = ReplaySpeed.advance(clock, dt, !pausedNow, ReplaySpeed.multiplier(speedNow, replayNow))
             }
         }
-        clock = ReplaySpeed.endClock(replay)
+        clock = ReplaySpeed.endClock(replayNow)
         finished = true
     }
     val t = max(0.0, clock * replay.speed)
@@ -435,7 +444,13 @@ internal fun CircuitReplayView(
         val again: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Replay", true, { run++ }) }
         val skip: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Skip to the end", !finished, { clock = ReplaySpeed.endClock(replay) }) }
         val follow: @Composable () -> Unit = { com.revline.idle.ui.LineButton(if (zoomed) "Whole track" else "Follow", true, { zoomed = !zoomed }) }
-        FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { pause(); again(); skip(); follow() }
+        val pit: @Composable () -> Unit = {
+            com.revline.idle.ui.LineButton("Pit strategy", onRevise != null && !finished, { resumeAfter = !paused; paused = true; sheetLap = lap })
+        }
+        FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { pause(); again(); skip(); follow(); pit() }
+        if (sheetLap > 0 && onRevise != null) {
+            StrategySheet(result, sheetLap, { orders -> onRevise(orders, sheetLap) }) { sheetLap = 0; if (resumeAfter) paused = false }
+        }
     }
     // The speed chips sit right under the header so they are always on screen, whatever the bars and insets do to the bottom edge.
     val chips: @Composable () -> Unit = {
@@ -443,6 +458,8 @@ internal fun CircuitReplayView(
             for ((i, label) in ReplaySpeed.labels.withIndex()) SpeedChip(label, i == speedIndex) { speedIndex = i }
         }
     }
+    // What the sim models of the track and the car on the lap in progress, with the sky for the laps to come.
+    val conditions: @Composable () -> Unit = { CircuitConditions(result, lap, youLaps - (lap - 1)) }
     // Nothing scrolls: every part has a share of the height (or the width) and keeps its own proportions inside it. At the flag
     // the live trace gives way to the best-lap chart, which takes a bigger share, and the map gives up some.
     // Top down: header, speed chips, dials, trace, then the status and buttons right after, with no weighted spacers. The dials and
@@ -458,6 +475,7 @@ internal fun CircuitReplayView(
                 Column(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp)) {
                     header()
                     chips()
+                    conditions()
                     Box(Modifier.weight(1.1f, fill = false).fillMaxWidth(), contentAlignment = slot) { dials() }
                     Box(Modifier.weight(if (finished) 2.1f else 1f, fill = false).fillMaxWidth(), contentAlignment = slot) { trace() }
                     controls()
@@ -468,6 +486,7 @@ internal fun CircuitReplayView(
         Column(modifier.fillMaxSize()) {
             header()
             chips()
+            conditions()
             Box(Modifier.weight(if (finished) 1.5f else 2.4f).fillMaxWidth()) { map() }
             Box(Modifier.weight(1f, fill = false).fillMaxWidth(), contentAlignment = slot) { dials() }
             Box(Modifier.weight(if (finished) 1.9f else 0.9f, fill = false).fillMaxWidth(), contentAlignment = slot) { trace() }

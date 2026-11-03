@@ -157,6 +157,7 @@ fun RevlineApp(vm: GameViewModel) {
                             vm::hireDriver,
                             vm::pickDriver,
                             vm::runCircuit,
+                            vm::reviseCircuit,
                         )
                         Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
                     }
