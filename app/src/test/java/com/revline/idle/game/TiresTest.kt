@@ -29,11 +29,34 @@ class TiresTest {
         val early = Tires.condition(0.0) - Tires.condition(0.3)
         val late = Tires.condition(0.6) - Tires.condition(0.9)
         assertTrue("early $early late $late", late > 2.0 * early)
-        // It never goes to nothing.
-        assertEquals(Tires.FLOOR, Tires.condition(5.0), 1e-12)
+        // The wear keeps going below the grip floor, to nothing.
+        assertEquals(0.0, Tires.condition(5.0), 1e-12)
+        assertTrue(Tires.condition(1.1) < Tires.FLOOR)
         assertTrue(Tires.condition(0.6) > Tires.FLOOR)
         // A full design life is a heavily worn tire.
         assertTrue(Tires.condition(1.0) < 0.35 + 0.4)
+    }
+
+    @Test fun wearShownFallsBelowThirtyFivePercentButTheGripTheCarFeelsStopsAtTheFloor() {
+        // The old floor sat in the wear itself, so a long stint read 35% for ever.
+        val life = (1..60).map { it * 0.05 }
+        val shown = life.map { Tires.condition(it) }
+        assertTrue(shown.zipWithNext().all { (a, b) -> b <= a })
+        assertTrue(shown.any { it < Tires.FLOOR - 0.05 })
+        assertEquals(0.0, shown.last(), 0.0)
+        // Grip keeps its floor: felt is the same at 35% and at 0%, and falls only down to it.
+        assertEquals(Tires.felt(Tires.FLOOR), Tires.felt(0.0), 1e-12)
+        assertEquals(Tires.felt(Tires.FLOOR), Tires.felt(Tires.condition(5.0)), 1e-12)
+        assertTrue(Tires.felt(0.6) > Tires.felt(Tires.FLOOR))
+        // The strategy sheet reads the wear: a soft tire run the whole race on the roughest circuit ends well under 35%.
+        val c = Circuits.all.maxBy { Tires.severity(it) }
+        val use = Tires.lapUse(c, S, 0.0, 1.0, 1.0)
+        val trace = Tires.trace(Tires.Fit(S, 0, S), c.laps * 2) { use }
+        assertTrue("flag ${Tires.atFlag(trace)}", Tires.atFlag(trace) < 0.2)
+        assertTrue(trace.end.zipWithNext().all { (a, b) -> b <= a })
+        // The lap the race runs on is the same at the floor and past it.
+        val past = Tires.trace(Tires.Fit(S, 0, S), c.laps * 4) { use }
+        assertEquals(Tires.felt(past.mid[c.laps * 3]), Tires.felt(past.mid.last()), 1e-12)
     }
 
     @Test fun aNoStopOnSoftsIsBadlyWornEverywhereAndNeverNearNinetyPercent() {
@@ -100,7 +123,7 @@ class TiresTest {
             val k = car(t.id)
             val best = Circuits.advise(k, c, d).first()
             assertNull("${t.id} ${c.id}", Tires.breach(best.orders.fit, c.laps, Circuits.Weather.DRY))
-            assertTrue(best.gripAtFlag in Tires.FLOOR..1.0)
+            assertTrue(best.gripAtFlag in 0.0..1.0)
         }
         assertEquals("street", GameState().circuitTire)
     }

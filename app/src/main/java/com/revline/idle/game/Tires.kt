@@ -41,20 +41,23 @@ object Tires {
     /** The lap on which a soft tire is at the cliff on this circuit, for the reference car and hands (a whole lap, rounded up). */
     fun softCliffLap(circuit: Circuits.Circuit): Int = kotlin.math.ceil(softLaps(circuit) - 1e-9).toInt()
 
-    /** Wear grip floor: a destroyed tire still holds the road, barely. */
+    /** Grip floor: a destroyed tire still holds the road, barely. It bounds what the car feels ([felt]), not the wear shown. */
     const val FLOOR = 0.35
 
-    /** Share of grip left (1.0 new) after [life] of the tire's life is used: a straight loss, then the cliff. */
+    /**
+     * Share of the tire left (1.0 new) after [life] of the tire's life is used: a straight loss, then the cliff. It keeps
+     * falling past [FLOOR] toward 0, so a long stint reads as the worn-out tire it is. The strategy sheet shows this.
+     */
     fun condition(life: Double): Double {
         val l = max(0.0, life)
-        return max(FLOOR, 1.0 - 0.30 * l - 0.40 * l * l * l)
+        return (1.0 - 0.30 * l - 0.40 * l * l * l).coerceIn(0.0, 1.0)
     }
 
     /** How much of the grip lost to wear the lap time feels: a tire shown at 60% grip costs 0.30 x 40% = 12% of the car's grip. */
     const val WEAR_FELT = 0.30
 
     /** The car's grip multiplier from the tire's condition (1.0 new). */
-    fun felt(condition: Double): Double = 1.0 - WEAR_FELT * (1.0 - condition)
+    fun felt(condition: Double): Double = 1.0 - WEAR_FELT * (1.0 - max(FLOOR, condition))
 
     /** How hard this compound wears under the sky: a wet tire cooks on a dry track, slicks run a little cooler in the wet. */
     fun wearIn(c: Compound, sev: Double): Double =
