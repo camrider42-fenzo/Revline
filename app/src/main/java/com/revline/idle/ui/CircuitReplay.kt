@@ -436,14 +436,17 @@ internal fun CircuitReplayView(
         val skip: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Skip to the end", !finished, { clock = ReplaySpeed.endClock(replay) }) }
         val follow: @Composable () -> Unit = { com.revline.idle.ui.LineButton(if (zoomed) "Whole track" else "Follow", true, { zoomed = !zoomed }) }
         FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { pause(); again(); skip(); follow() }
-        FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    }
+    // The speed chips sit right under the header so they are always on screen, whatever the bars and insets do to the bottom edge.
+    val chips: @Composable () -> Unit = {
+        FlowRow(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             for ((i, label) in ReplaySpeed.labels.withIndex()) SpeedChip(label, i == speedIndex) { speedIndex = i }
         }
     }
     // Nothing scrolls: every part has a share of the height (or the width) and keeps its own proportions inside it. At the flag
     // the live trace gives way to the best-lap chart, which takes a bigger share, and the map gives up some.
-    // The dials and the trace take no more than their share, so when there is room they sit together at their natural size
-    // (centred) rather than stretched apart.
+    // Top down: header, speed chips, dials, trace, then the status and buttons right after, with no weighted spacers. The dials and
+    // the trace take what they need up to their share of the spare height, so the controls are never pushed off the bottom.
     val slot = Alignment.Center
     if (wide) {
         BoxWithConstraints(modifier.fillMaxSize()) {
@@ -454,10 +457,9 @@ internal fun CircuitReplayView(
                 Box(Modifier.width(mapW).fillMaxHeight()) { map() }
                 Column(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp)) {
                     header()
-                    Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.Center) {
-                        Box(Modifier.weight(1.1f, fill = false).fillMaxWidth(), contentAlignment = slot) { dials() }
-                        Box(Modifier.weight(if (finished) 2.1f else 1f, fill = false).fillMaxWidth(), contentAlignment = slot) { trace() }
-                    }
+                    chips()
+                    Box(Modifier.weight(1.1f, fill = false).fillMaxWidth(), contentAlignment = slot) { dials() }
+                    Box(Modifier.weight(if (finished) 2.1f else 1f, fill = false).fillMaxWidth(), contentAlignment = slot) { trace() }
                     controls()
                 }
             }
@@ -465,6 +467,7 @@ internal fun CircuitReplayView(
     } else {
         Column(modifier.fillMaxSize()) {
             header()
+            chips()
             Box(Modifier.weight(if (finished) 1.5f else 2.4f).fillMaxWidth()) { map() }
             Box(Modifier.weight(1f, fill = false).fillMaxWidth(), contentAlignment = slot) { dials() }
             Box(Modifier.weight(if (finished) 1.9f else 0.9f, fill = false).fillMaxWidth(), contentAlignment = slot) { trace() }

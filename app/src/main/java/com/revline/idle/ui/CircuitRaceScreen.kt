@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +38,7 @@ internal fun CircuitRaceScreen(result: Circuits.Result, yourId: String, yourMid:
 internal fun CircuitRaceBody(result: Circuits.Result, yourId: String, yourMid: Boolean, onClose: () -> Unit) {
     run {
         // Wide or near-square (a landscape phone, the unfolded Fold) puts the map beside the dials; a tall narrow screen stacks them.
-        BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 12.dp, vertical = 16.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().padding(horizontal = 12.dp, vertical = 16.dp)) {
             val wide = maxWidth >= maxHeight * 0.75f
             CircuitReplayView(result, yourId, yourMid, Modifier.fillMaxSize(), wide, header = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

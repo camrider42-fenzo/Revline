@@ -20,7 +20,7 @@ class RaceScreenShotTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     @Test fun raceScreen() {
-        val c = Circuits.all.first { it.id == "silverstone" }
+        val c = Circuits.all.first { it.id == "spa" }
         val d = Drivers.byId("colette")!!
         val car = Circuits.carOf(DriverBuilds.make(3, Racing.Build.MEDIUM, "race", "close", "lsd", 0.8))
         val r = Circuits.race(Circuits.plan(car, c, d), d, Circuits.parPlan(3, c), 7L)
