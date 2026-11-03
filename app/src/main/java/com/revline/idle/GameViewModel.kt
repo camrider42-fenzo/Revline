@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -68,6 +69,8 @@ data class UiModel(
 class GameViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = SaveRepository(File(app.filesDir, "revline"))
     private val saveMutex = Mutex()
+    /** Counts resets, so a save or a race that was already under way when the game was wiped cannot bring the old game back. */
+    private var epoch = 0
     var ui by mutableStateOf(blank())
         private set
     private var phase = DynoPhase.IDLE
@@ -314,10 +317,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 publish(ui.copy(game = paid, circuitBusy = true, circuitOutcome = null, raceNote = null))
                 save()
                 val seed = System.nanoTime()
+                val born = epoch
                 viewModelScope.launch {
                     val outcome = withContext(Dispatchers.Default) {
                         Circuits.finish(paid, Circuits.carOf(paid), circuit, entry.driver, entry.fee, entry.entry, seed, orders, weather)
                     }
+                    if (born != epoch) return@launch
                     // The till has moved on since the lights went green: pay onto what is there now.
                     val base = ui.game
                     val settled = Season.settle(base, circuit, outcome)
@@ -376,11 +381,29 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         save()
     }
 
+    /**
+     * Wipes every saved byte and starts a new game in memory, so the app needs no relaunch. The save folder is the only place the app
+     * persists anything (no preferences), and nothing queued before the reset can write the old game back.
+     */
+    fun resetGame() {
+        epoch++
+        runBlocking { saveMutex.withLock { repo.clear() } }
+        phase = DynoPhase.IDLE
+        pullT = 0.0
+        onLimiter = false
+        sinceSave = 0.0
+        val fresh = Logic.newGame()
+        val sheet = Logic.sheet(fresh)
+        rpm = Logic.targetRpm(sheet.params.redlineRpm, fresh.throttle, sheet.params.idleRpm)
+        publish(UiModel(fresh, sheet, rpm, DynoPhase.IDLE, null))
+    }
+
     private fun save() {
         val snapshot = ui.game
+        val born = epoch
         viewModelScope.launch {
             saveMutex.withLock {
-                withContext(Dispatchers.IO) { repo.save(snapshot) }
+                if (born == epoch) withContext(Dispatchers.IO) { repo.save(snapshot) }
             }
         }
     }

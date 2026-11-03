@@ -26,6 +26,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -159,7 +163,7 @@ fun RevlineApp(vm: GameViewModel) {
                             vm::runCircuit,
                             vm::reviseCircuit,
                         )
-                        Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode)
+                        Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode, vm::resetGame)
                     }
                 }
             }
@@ -557,7 +561,7 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
 }
 
 @Composable
-private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Boolean) -> Unit, onDevMode: () -> Unit) {
+private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Boolean) -> Unit, onDevMode: () -> Unit, onReset: () -> Unit) {
     val block = Block.forPrestige(ui.game.prestiges)
     val next = Block.forPrestige(ui.game.prestiges + 1)
     val racing = ui.game.racing
@@ -698,6 +702,50 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
             Text("Free upgrades", color = White, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
             DevSwitch(ui.game.devMode)
         }
+        RestartGame(onReset)
+    }
+}
+
+/** The "Restart game" button and its confirmation: Reset wipes every save, Cancel closes the popup and does nothing. */
+@Composable
+internal fun RestartGame(onReset: () -> Unit) {
+    var asking by remember { mutableStateOf(false) }
+    Text(
+        "Restart game",
+        color = Red,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 13.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp)
+            .border(1.dp, Red)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { asking = true }
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+    )
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            containerColor = Black,
+            title = { Text("Restart game?", color = Red, fontFamily = FontFamily.Monospace) },
+            text = {
+                Text(
+                    "All progress will be deleted: your money, parts, research, rebuilds, racing and season. The game starts again from the beginning. This cannot be undone.",
+                    color = White,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { asking = false; onReset() }) {
+                    Text("Reset", color = Red, fontFamily = FontFamily.Monospace)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { asking = false }) {
+                    Text("Cancel", color = White, fontFamily = FontFamily.Monospace)
+                }
+            },
+        )
     }
 }
 

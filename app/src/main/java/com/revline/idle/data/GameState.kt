@@ -138,6 +138,11 @@ class SaveRepository(private val dir: File) {
         }
     }
 
+    /** Deletes everything the app has saved: the save file, a half-written temp file and anything else in the save folder. */
+    fun clear() {
+        dir.deleteRecursively()
+    }
+
     fun save(state: GameState) {
         dir.mkdirs()
         val tmp = File(dir, "revline_save.json.tmp")
