@@ -66,7 +66,8 @@ class Pilot(private val setup: RaceDrive.Setup, val skills: Skills, seed: Long) 
     private val shiftRpm = DoubleArray(setup.ratios.size) { gear ->
         val best = Drivers.optimalShiftRpm(setup, gear + 1)
         val feel = 1.0 + gauss() * 0.06 * loseD - 0.02 * loseD
-        (best * feel + setup.shiftTrimRpm).coerceIn(setup.redline * 0.5, setup.redline * 1.02)
+        // Never above what the needle reads on the limiter: a shift point past it is never reached and the car never changes up.
+        (best * feel + setup.shiftTrimRpm).coerceIn(setup.redline * 0.5, setup.redline - RevLimiter.HOLD_BELOW - 5.0)
     }
     private val latency get() = (0.02 + 0.30 * loseS) * (1.0 + 0.3 * gauss()).coerceIn(0.5, 1.8)
     private val dipSeconds = 0.03 + 0.28 * loseS

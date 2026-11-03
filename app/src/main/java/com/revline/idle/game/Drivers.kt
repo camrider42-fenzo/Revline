@@ -92,7 +92,7 @@ object Drivers {
         Driver("mina", "Stirling Moss", 1, 66, 40, 34, 40, Specialty.GRIP, 0.035, "Smooth as silk. Soft right foot.", cornering = 62, braking = 48, acceleration = 46, mistakes = 40, care = 55),
         Driver("rusty", "Jack Brabham", 1, 36, 60, 38, 34, Specialty.CLUTCH, 0.045, "Mechanic first. Feels the clutch through his boots.", cornering = 38, braking = 44, acceleration = 50, mistakes = 46, care = 66),
         Driver("pavel", "Niki Lauda", 2, 48, 52, 74, 50, Specialty.GEARS, 0.07, "Exact and unhurried. Rows a box faster than you can say the gear.", cornering = 58, braking = 60, acceleration = 54, mistakes = 28, care = 74),
-        Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 76, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives.", cornering = 70, braking = 62, acceleration = 66, mistakes = 66, care = 36),
+        Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 90, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives.", cornering = 70, braking = 62, acceleration = 66, mistakes = 66, care = 36),
         Driver("tanaka", "James Hunt", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Charming and quick off the line.", cornering = 62, braking = 54, acceleration = 72, mistakes = 64, care = 40),
         Driver("gus", "Jackie Stewart", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Calm, careful and clever. Wins by being tidy.", cornering = 66, braking = 64, acceleration = 58, mistakes = 32, care = 68),
         Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.17, "The Professor. Lives on the bite point.", cornering = 70, braking = 74, acceleration = 62, mistakes = 20, care = 88),
