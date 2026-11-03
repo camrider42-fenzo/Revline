@@ -155,13 +155,16 @@ object Drivers {
      * How the launch is best taken. On throttle alone when the tires can hold a useful push. Fed on the clutch with the
      * throttle pinned when they cannot (the best throttle that does not spin is then too little to leave on).
      */
-    data class LaunchPlan(val throttle: Double, val slip: Boolean, val pedal: Double)
+    data class LaunchPlan(val throttle: Double, val slip: Boolean, val pedal: Double, val module: Boolean = false)
 
     fun launchPlan(setup: RaceDrive.Setup): LaunchPlan {
         val l = RaceDrive.launchThrottle(setup)
-        val bite = setup.idle + l * (setup.redline * 0.74 - setup.idle)
-        val force = RaceDrive.torqueNm(setup, bite) * setup.efficiency * l * setup.ratios[0] * setup.finalDrive / RaceDrive.WHEEL_R
-        val cap = setup.gripN * 0.96
+        // A transbrake or a launch module rations the push itself: the foot goes to the floor and the tune does the rest.
+        if (setup.launchRpm > 0.0) return LaunchPlan(1.0, false, 0.0, module = true)
+        val overall = setup.ratios[0] * setup.finalDrive
+        val force = RaceDrive.launchForce(setup, l, 1.0, overall, RaceDrive.shotAtLaunch(setup, l))
+        val cap = RaceDrive.launchCap(setup)
+        if (setup.spinTrim >= 0.5 && l < 0.99) return LaunchPlan(1.0, false, 0.0, module = true)
         val feed = RaceDrive.clutchForLaunch(setup)
         return if (feed > 0.0 && (force < cap * 0.85 || force > cap * 1.0001)) LaunchPlan(1.0, true, feed) else LaunchPlan(l, false, 0.0)
     }

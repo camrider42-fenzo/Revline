@@ -39,14 +39,14 @@ class Pilot(private val setup: RaceDrive.Setup, val skills: Skills, seed: Long) 
     private val grab = Drivers.grabbiness(setup)
     private val loseT = 1.0 - skills.throttle
     private val loseC = 1.0 - skills.clutch
-    private val loseS = 1.0 - skills.shifting
+    private val loseS = (1.0 - skills.shifting) * (1.0 + 1.5 * setup.notchy)
     private val loseD = 1.0 - skills.dyno
 
     // Launch throttle: the true limit, as this driver reads it, then backed off by his own foot noise.
     private val plan = Drivers.launchPlan(setup)
     private val footNoise = 0.20 * loseT
     private val read = (plan.throttle * (1.0 + gauss() * 0.22 * loseD)).coerceIn(0.12, 1.0)
-    private val aim = if (plan.slip || read >= 0.99) 1.0 else (read * (1.0 - 1.4 * footNoise)).coerceIn(0.1, 1.0)
+    private val aim = if (plan.slip || plan.module || read >= 0.99) 1.0 else (read * (1.0 - 1.4 * footNoise)).coerceIn(0.1, 1.0)
 
     // A launch the tires cannot take on throttle alone is fed on the clutch instead. How much slip, as this driver reads it.
     private var hold = if (plan.slip) {
@@ -59,14 +59,14 @@ class Pilot(private val setup: RaceDrive.Setup, val skills: Skills, seed: Long) 
     // Tree: where the pedal sits. The margin over the bite point is sized to the driver's own wobble.
     private val clutchNoise = (0.008 + 0.075 * loseC * (1.0 + 0.5 * grab))
     private val sitPedal = (RaceDrive.BITE_START + 0.03 + clutchNoise + gauss() * clutchNoise).coerceIn(0.3, 1.0)
-    private val reaction = (0.09 + 0.22 * loseC + gauss() * (0.015 + 0.05 * loseC)).coerceAtLeast(0.07)
-    private val launchRelease = 0.05 + 0.40 * Math.pow(loseC, 1.2) * (1.0 + 0.6 * grab)
+    private val reaction = ((0.09 + 0.22 * loseC + gauss() * (0.015 + 0.05 * loseC)) * (if (setup.launchRpm > 0.0) 0.6 else 1.0)).coerceAtLeast(0.07)
+    private val launchRelease = (0.05 + 0.40 * Math.pow(loseC, 1.2) * (1.0 + 0.6 * grab)) * (if (setup.launchRpm > 0.0) 0.3 else 1.0)
 
     // Shifts.
     private val shiftRpm = DoubleArray(setup.ratios.size) { gear ->
         val best = Drivers.optimalShiftRpm(setup, gear + 1)
         val feel = 1.0 + gauss() * 0.06 * loseD - 0.02 * loseD
-        (best * feel).coerceIn(setup.redline * 0.5, setup.redline * 1.02)
+        (best * feel + setup.shiftTrimRpm).coerceIn(setup.redline * 0.5, setup.redline * 1.02)
     }
     private val latency get() = (0.02 + 0.30 * loseS) * (1.0 + 0.3 * gauss()).coerceIn(0.5, 1.8)
     private val dipSeconds = 0.03 + 0.28 * loseS
@@ -115,7 +115,7 @@ class Pilot(private val setup: RaceDrive.Setup, val skills: Skills, seed: Long) 
         val launching = run.gear == 1 && run.speed < 14.0 && !run.hooked
         if (launching) {
             if (run.spinning) spinFor += dt else spinFor = 0.0
-            val target = if (spinFor > spinReact) aim * 0.55 else aim
+            val target = if (spinFor > spinReact && !plan.module) aim * 0.55 else aim
             throttle = (target + (if (aim < 0.99) wobble else 0.0)).coerceIn(0.0, 1.0)
         } else {
             throttle = (throttle + 8.0 * dt).coerceAtMost(1.0)

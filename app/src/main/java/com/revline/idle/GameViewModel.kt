@@ -17,6 +17,7 @@ import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Circuits
 import com.revline.idle.game.Season
 import com.revline.idle.game.Racing
+import com.revline.idle.game.DragTune
 import com.revline.idle.game.Tuners
 import com.revline.idle.game.Sheet
 import com.revline.idle.model.Block
@@ -223,6 +224,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun perk(id: String) = mutate { Logic.buyPerk(it, id) }
     fun fuel(kind: FuelKind) = mutate { Logic.selectFuel(it, kind) }
     fun nudgeTune(id: String, direction: Int) = mutate { Tuners.nudge(it, id, direction) }
+    fun setDragTune(id: String, value: Double) = mutate { DragTune.set(it, id, value) }
     fun prestige(racing: Boolean) = mutate { Logic.prestige(it, racing) }
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
     fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }

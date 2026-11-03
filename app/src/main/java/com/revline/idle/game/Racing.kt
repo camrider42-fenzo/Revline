@@ -208,7 +208,7 @@ object Racing {
         Study("ctire_sport", "Sport tires", "A circuit tire. Grip in the corners and under the brakes, and it lasts.", 80.0, minPrestige = 1),
         Study("ctire_semi", "Semi-slicks", "A near-slick compound for the track. It wears quicker.", 520.0, "ctire_sport", 3),
         Study("ctire_racing", "Racing slicks", "The softest compound there is. Huge grip for a few laps, then it goes off.", 1800.0, "ctire_semi", 5),
-    ) + Parts.lines.flatMap { line ->
+    ) + Parts.all.flatMap { line ->
         line.levels.mapIndexed { i, level ->
             Study(
                 line.studyId(i + 1),
@@ -328,7 +328,7 @@ object Racing {
             slots = slots,
             drive = drive,
             place = place,
-            kit = Parts.kit(state),
+            kit = if (circuit) Parts.kit(state) else Parts.kit(state) + Parts.stripKit(state),
         )
     }
 
@@ -703,7 +703,9 @@ object Racing {
         "tire" -> tires.find { it.id == id }?.price ?: 0.0
         "ctire" -> (circuitTires.find { it.id == id }?.price ?: 0.0) * CIRCUIT_PRICE_FACTOR
         "final" -> finals.find { it.id == id }?.price ?: 0.0
-        else -> (Parts.line(kind)?.level(id.toIntOrNull() ?: 0)?.price ?: 0.0) * CIRCUIT_PRICE_FACTOR
+        else -> Parts.line(kind)?.let { line ->
+            (line.level(id.toIntOrNull() ?: 0)?.price ?: 0.0) * if (line.strip) 1.0 else CIRCUIT_PRICE_FACTOR
+        } ?: 0.0
     }
 
     private fun partPrice(state: GameState, kind: String, id: String): Double {

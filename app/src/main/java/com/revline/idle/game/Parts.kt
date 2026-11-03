@@ -42,11 +42,30 @@ object Parts {
         val wear: Double = 1.0,
         /** The engine's chance of letting go. Below 1 is better. */
         val hazard: Double = 1.0,
+        // Drag strip only below this line. The circuit never reads them. See [strip].
+        /** Launch control: the share of a spinning launch's lost push that the module gives back, 0..1. */
+        val spinTrim: Double = 0.0,
+        /** 1 with a transbrake: the engine is held at launch rpm and let go on the button. */
+        val preload: Double = 0.0,
+        /** Wheelie bars: extra push, in g, the car takes before the nose comes up. */
+        val liftG: Double = 0.0,
+        /** Flywheel inertia taken off the driveline, in kg m². It spins up faster and bogs on the launch. */
+        val flywheel: Double = 0.0,
+        /** Shift time. Below 1 is quicker, and less forgiving of a sloppy hand. */
+        val shiftMult: Double = 1.0,
+        /** 1 with a line lock: a burnout warms the tires and raises their pressure a little. */
+        val burnout: Double = 0.0,
+        /** Nitrous: the share of torque the shot adds while it flows. */
+        val shot: Double = 0.0,
+        /** Nitrous: seconds of flow in the bottle. */
+        val bottleS: Double = 0.0,
     ) {
         operator fun plus(o: Fx) = Fx(
             shave + o.shave, addKg + o.addKg, dragMult * o.dragMult, cool + o.cool, launch * o.launch,
             lateral * o.lateral, brake * o.brake, traction * o.traction, downforce + o.downforce,
             mistakes * o.mistakes, wear * o.wear, hazard * o.hazard,
+            maxOf(spinTrim, o.spinTrim), maxOf(preload, o.preload), liftG + o.liftG, flywheel + o.flywheel,
+            shiftMult * o.shiftMult, maxOf(burnout, o.burnout), shot + o.shot, maxOf(bottleS, o.bottleS),
         )
     }
 
@@ -83,6 +102,13 @@ object Parts {
         if (dragMult != 1.0) out += "drag ${signed(dragMult)}"
         if (launch != 1.0) out += "launch ${signed(launch)}"
         if (cool > 0.0) out += "a little less fade"
+        if (spinTrim > 0.0) out += "spin trimmed ${Math.round(spinTrim * 100.0)}%"
+        if (preload > 0.0) out += "launch rpm held, set on the Drag tune"
+        if (liftG > 0.0) out += "wheelie limit +${"%.2f".format(java.util.Locale.US, liftG)} g"
+        if (flywheel > 0.0) out += "revs faster, bogs on the launch"
+        if (shiftMult != 1.0) out += "shifts ${signed(shiftMult)} time, less forgiving"
+        if (burnout > 0.0) out += "warm tires, +1 psi hot"
+        if (shot > 0.0) out += "+${Math.round(shot * 100.0)}% torque for ${"%.0f".format(java.util.Locale.US, bottleS)} s"
         return if (out.isEmpty()) "no change" else out.joinToString(", ")
     }
 
@@ -99,7 +125,8 @@ object Parts {
         val dragHint: String get() = fx.dragText()
     }
 
-    class Line(val id: String, val title: String, val blurb: String, val levels: List<Level>) {
+    /** [strip] lines are drag parts: full price, and the circuit never sees them. */
+    class Line(val id: String, val title: String, val blurb: String, val levels: List<Level>, val strip: Boolean = false) {
         /** Level 1 is the first part you buy. Level 0 is what the car came with. */
         fun level(n: Int): Level? = levels.getOrNull(n - 1)
         fun studyId(n: Int) = "kit_${id}_$n"
@@ -163,9 +190,75 @@ object Parts {
         ),
     )
 
-    fun line(id: String): Line? = lines.firstOrNull { it.id == id }
+    /**
+     * Drag parts. They take the same road as the circuit lines (a study, a price, one level fitted, swapped free), cost
+     * their full list price, and only the strip reads what they do. Each effect is a term in [RaceDrive].
+     */
+    val strip: List<Line> = listOf(
+        Line(
+            "launch", "LAUNCH CONTROL", "A module that rations the push so a flat-footed launch does not just light the tires up.",
+            listOf(
+                Level("Two-step limiter", "Holds the revs on the line and trims what the tires cannot take. Crude.", 90.0, 1, 600.0, Fx(spinTrim = 0.35)),
+                Level("Traction-aware module", "Reads wheel speed and pulls timing the moment a tire lets go.", 700.0, 3, 2800.0, Fx(spinTrim = 0.70, addKg = 1.0)),
+                Level("Pro launch module", "A map for each tire and each track. The tires barely smoke.", 3000.0, 5, 7600.0, Fx(spinTrim = 0.95, addKg = 1.0)),
+            ),
+            strip = true,
+        ),
+        Line(
+            "tbrake", "TRANSBRAKE", "The car is held with the engine already on the rev. Let go and the whole hit arrives at once.",
+            listOf(
+                Level("Transbrake", "Holds the box in first and the car on the line. Set the launch rpm on the Drag tune.", 1100.0, 3, 3800.0, Fx(preload = 1.0, addKg = 6.0)),
+            ),
+            strip = true,
+        ),
+        Line(
+            "wbars", "WHEELIE BARS", "Past a certain push the nose comes up and the push is wasted. Bars catch it.",
+            listOf(
+                Level("Wheelie bars", "Two tubes and two wheels behind the axle.", 450.0, 3, 1500.0, Fx(liftG = 0.35, addKg = 6.0, dragMult = 1.01)),
+                Level("Adjustable long bars", "Longer, with a spring in each wheel. The nose stays down on a big launch.", 1800.0, 5, 4600.0, Fx(liftG = 0.70, addKg = 9.0, dragMult = 1.015)),
+            ),
+            strip = true,
+        ),
+        Line(
+            "flywheel", "LIGHT FLYWHEEL", "Less metal to spin. The engine revs freely and every gear pulls harder, but the launch has less swing.",
+            listOf(
+                Level("Lightened flywheel", "Steel, with the rim skimmed.", 120.0, 1, 800.0, Fx(flywheel = 0.04, addKg = -3.0)),
+                Level("Aluminium flywheel", "Half the inertia. Easy to stall, quick to rev.", 650.0, 3, 2400.0, Fx(flywheel = 0.07, addKg = -6.0)),
+            ),
+            strip = true,
+        ),
+        Line(
+            "shifter", "SHORT SHIFTER", "A short throw, and a light that tells you when. Quick, and unforgiving of a slow hand.",
+            listOf(
+                Level("Short-throw shifter and shift light", "Less throw, a notchy gate, and a light you can set on the Drag tune.", 80.0, 1, 500.0, Fx(shiftMult = 0.88)),
+                Level("Air-shifted quick-shift", "An air ram on the lever. The shift is a snap.", 800.0, 4, 3600.0, Fx(shiftMult = 0.75, addKg = 3.0)),
+            ),
+            strip = true,
+        ),
+        Line(
+            "linelock", "LINE LOCK", "Locks the front brakes so the rears can smoke a burnout and heat the tires.",
+            listOf(
+                Level("Line lock", "A solenoid on the front brake line. Hot tires grip. It also warms the air in them.", 300.0, 2, 900.0, Fx(burnout = 1.0, addKg = 1.0)),
+            ),
+            strip = true,
+        ),
+        Line(
+            "nos", "DRAG NITROUS KIT", "A bottle and a solenoid on the strip car. Open it where the tires can take it. It runs dry. Apart from the dyno's nitrous.",
+            listOf(
+                Level("50 shot", "A small jet and a seven second bottle.", 1500.0, 3, 5200.0, Fx(shot = 0.12, bottleS = 7.0, addKg = 9.0)),
+                Level("100 shot", "A bigger jet. It burns the bottle sooner.", 4000.0, 5, 12500.0, Fx(shot = 0.22, bottleS = 6.0, addKg = 10.0)),
+                Level("150 shot", "A big plate and a short bottle. It has to go on late.", 9000.0, 6, 28000.0, Fx(shot = 0.32, bottleS = 5.0, addKg = 12.0)),
+            ),
+            strip = true,
+        ),
+    )
 
-    fun isLine(id: String): Boolean = lines.any { it.id == id }
+    /** Circuit lines, then drag lines. */
+    val all: List<Line> = lines + strip
+
+    fun line(id: String): Line? = all.firstOrNull { it.id == id }
+
+    fun isLine(id: String): Boolean = all.any { it.id == id }
 
     fun level(state: GameState, line: String): Int = (state.kit[line] ?: 0).coerceAtLeast(0)
 
@@ -175,9 +268,16 @@ object Parts {
         if (fitted == null) acc else acc + fitted.fx
     }
 
+    /** The sum of the drag parts fitted. The strip adds this to [kit]. */
+    fun stripKit(state: GameState): Fx = strip.fold(NONE) { acc, line ->
+        val fitted = line.level(level(state, line.id))
+        if (fitted == null) acc else acc + fitted.fx
+    }
+
     /** The two-line hint a level carries on the parts screen. */
     fun hint(line: Line, level: Int): String {
         val l = line.level(level) ?: return "Stock."
+        if (line.strip) return "drag: ${l.dragHint}"
         return "circuit: ${l.circuitHint}  ·  drag: ${l.dragHint}"
     }
 }

@@ -268,7 +268,7 @@ fun RaceMeet(
                         0.45f,
                     )
                 }
-                val shiftAng = Math.toRadians((start + sweep * 0.91f).toDouble())
+                val shiftAng = Math.toRadians((start + sweep * (RaceDrive.shiftPoint(setup) / setup.redline).toFloat()).toDouble())
                 glowLine(
                     Lime,
                     Offset(c.x + (cos(shiftAng) * r * 0.84).toFloat(), c.y + (sin(shiftAng) * r * 0.84).toFloat()),

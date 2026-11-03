@@ -9,8 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -18,12 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
+import com.revline.idle.game.DragTune
 import com.revline.idle.game.Tuners
 import com.revline.idle.model.EngineSim
 import java.util.Locale
 
 @Composable
-fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit) {
+fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit, onDrag: (String, Double) -> Unit = { _, _ -> }) {
+    var page by remember { mutableStateOf("ENGINE") }
     val stats = ui.sheet.stats
     val params = ui.sheet.params
     Column(
@@ -34,6 +42,15 @@ fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("TUNE", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("ENGINE", "DRAG").forEach { tab ->
+                LineButton(tab, page != tab, { page = tab })
+            }
+        }
+        if (page == "DRAG") {
+            DragTuning(ui, onDrag)
+            return@Column
+        }
         Text(
             "Screws stay locked until the part is on the engine. More of that part, and the parts that refine it, make the clicks smaller.",
             color = White,
@@ -57,6 +74,77 @@ fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit) {
         Tuners.all.forEach { screw ->
             ScrewRow(ui, screw.id, onNudge)
         }
+    }
+}
+
+@Composable
+private fun DragTuning(ui: UiModel, onDrag: (String, Double) -> Unit) {
+    val forecast = remember(ui.game) { DragTune.forecast(ui.game) }
+    Text(
+        "The strip car's own knobs. Every one is a trade: what it gives on the launch it takes at the top, or the other way round. " +
+            "Knobs need their part on the car. The Parts tab has the drag parts.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    Text(
+        String.format(
+            Locale.US, "Clean pass: 60 ft %.2f s   ET %.2f s   trap %.0f mph",
+            forecast.sixtyFt, forecast.time, forecast.trapMps * 2.237,
+        ),
+        color = Lime,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    DragTune.all.forEach { knob -> DragRow(ui, knob, onDrag) }
+}
+
+@Composable
+private fun DragRow(ui: UiModel, knob: DragTune.Knob, onDrag: (String, Double) -> Unit) {
+    val open = DragTune.unlocked(ui.game, knob.id)
+    Column(Modifier.fillMaxWidth().border(1.dp, if (open) Lime else Olive).padding(8.dp)) {
+        Text(knob.name, color = White, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+        Text(
+            knob.detail,
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (!open) {
+            Text(
+                knob.lock,
+                color = Amber,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            return
+        }
+        val now = DragTune.value(ui.game, knob.id)
+        Row(
+            Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LineButton("−", now > knob.min, { onDrag(knob.id, now - knob.step) })
+            Text(
+                DragTune.format(knob, now),
+                color = Lime,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 16.sp,
+            )
+            LineButton("+", now < knob.max, { onDrag(knob.id, now + knob.step) })
+        }
+        Slider(
+            value = now.toFloat(),
+            onValueChange = { onDrag(knob.id, it.toDouble()) },
+            valueRange = knob.min.toFloat()..knob.max.toFloat(),
+            steps = (((knob.max - knob.min) / knob.step).toInt() - 1).coerceAtLeast(0),
+            colors = SliderDefaults.colors(thumbColor = Lime, activeTrackColor = Lime, inactiveTrackColor = Olive),
+        )
+        Text("◀ ${knob.low}", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+        Text("▶ ${knob.high}", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
     }
 }
 

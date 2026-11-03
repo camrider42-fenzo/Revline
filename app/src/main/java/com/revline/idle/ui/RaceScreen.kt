@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.UiModel
+import com.revline.idle.data.GameState
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.Parts
 import com.revline.idle.game.Racing
@@ -321,33 +322,15 @@ fun RaceScreen(
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
-        Parts.lines.forEach { line ->
-            val now = Parts.level(state, line.id)
-            Text(line.title, color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
-            Text(line.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-            ChipRow(
-                listOf("0" to "Stock") + line.levels.mapIndexed { i, lv -> "${i + 1}" to Racing.gate(state, line.id, "${i + 1}", lv.name).label },
-                now.toString(),
-            ) { id ->
-                val gate = Racing.gate(state, line.id, id, line.level(id.toInt())?.name ?: "Stock")
-                if (gate.study != null) onStudy(gate.study) else onPart(line.id, id)
-            }
-            Text(
-                if (now == 0) "Stock." else "Fitted: ${line.level(now)?.name}. ${Parts.hint(line, now)}",
-                color = Cyan,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-            line.level(now + 1)?.let { next ->
-                Text(
-                    "Next, ${next.name}: ${Parts.hint(line, now + 1)}",
-                    color = White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                )
-            }
-        }
+        Parts.lines.forEach { line -> KitLine(state, line, onStudy, onPart) }
+        Text("DRAG PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "Launch control, a transbrake, wheelie bars, a light flywheel, a short shifter, a line lock and a nitrous kit. They work on the strip only, at full price. Several open a knob on the Tune page's Drag tab.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        Parts.strip.forEach { line -> KitLine(state, line, onStudy, onPart) }
         Text("LAYOUT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         if (body.places.size == 1) {
             Text(
@@ -401,6 +384,35 @@ private fun ChassisRow(title: String, detail: String, on: Boolean, enabled: Bool
         Text(title, color = if (on) Lime else White, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         Text(detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
         LineButton(action, enabled && action != "Fitted ${3}/3", click, Modifier.padding(top = 6.dp))
+    }
+}
+
+@Composable
+private fun KitLine(state: GameState, line: Parts.Line, onStudy: (String) -> Unit, onPart: (String, String) -> Unit) {
+    val now = Parts.level(state, line.id)
+    Text(line.title, color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+    Text(line.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+    ChipRow(
+        listOf("0" to "Stock") + line.levels.mapIndexed { i, lv -> "${i + 1}" to Racing.gate(state, line.id, "${i + 1}", lv.name).label },
+        now.toString(),
+    ) { id ->
+        val gate = Racing.gate(state, line.id, id, line.level(id.toInt())?.name ?: "Stock")
+        if (gate.study != null) onStudy(gate.study) else onPart(line.id, id)
+    }
+    Text(
+        if (now == 0) "Stock." else "Fitted: ${line.level(now)?.name}. ${Parts.hint(line, now)}",
+        color = Cyan,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+    line.level(now + 1)?.let { next ->
+        Text(
+            "Next, ${next.name}: ${Parts.hint(line, now + 1)}",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+        )
     }
 }
 

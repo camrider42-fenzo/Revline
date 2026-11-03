@@ -52,6 +52,25 @@ object RaceDrive {
         val distanceM: Double = FINISH_M,
         /** Sets how fast the engine can spin up. Big blocks have more to turn. */
         val displacementCc: Double = 1000.0,
+        // Drag strip terms below. Each is neutral at its default, so a car without drag parts or a tune is unchanged.
+        /** Launch control: share of a spinning launch's lost push given back, 0..1. */
+        val spinTrim: Double = 0.0,
+        /** Transbrake: the rpm the engine is held at on the line. 0 means the throttle sets it. */
+        val launchRpm: Double = 0.0,
+        /** The push, in g, a car takes in first and second before the nose comes up. Default is never. */
+        val liftG: Double = 99.0,
+        /** Flywheel inertia taken off the driveline, kg m². */
+        val flywheelKgm2: Double = 0.0,
+        /** Rolling drag from the tires at any speed, in newtons. Negative is a lower pressure's extra. */
+        val rollN: Double = 0.0,
+        /** Redline share trimmed off (or added to) the shift point, in rpm. */
+        val shiftTrimRpm: Double = 0.0,
+        /** How unforgiving the short-shifter is of a sloppy hand, 0..1. */
+        val notchy: Double = 0.0,
+        /** Nitrous: share of torque while it flows, where it opens (m), and seconds of flow in the bottle. */
+        val shotFrac: Double = 0.0,
+        val shotAtM: Double = 60.0,
+        val bottleS: Double = 0.0,
     )
 
     data class Run(
@@ -70,25 +89,30 @@ object RaceDrive {
         var clock: Double = 0.0,
         /** Rolled before green. The race is lost. */
         var jumped: Boolean = false,
+        /** Seconds of nitrous used. */
+        var nitrousS: Double = 0.0,
     )
 
     fun setup(state: GameState): Setup = setup(state, Logic.sheet(state))
 
     /** [circuit] fits the circuit tire and leaves out the launch grip a stiffer car earns on the strip. */
-    fun setup(state: GameState, sheet: Sheet, circuit: Boolean = false): Setup =
-        setupFor(
+    fun setup(state: GameState, sheet: Sheet, circuit: Boolean = false): Setup {
+        val rig = if (circuit) DragTune.Rig() else DragTune.rig(state)
+        return setupFor(
             body = Racing.car(state, circuit),
             peakHp = sheet.stats.peakHorsepower,
             peakTqLbFt = sheet.stats.peakTorqueLbFt,
             redline = sheet.params.redlineRpm,
             idle = sheet.params.idleRpm,
-            finalDrive = Racing.finalRatio(state.finalDrive),
+            finalDrive = Racing.finalRatio(state.finalDrive) + rig.finalTrim,
             distanceM = Racing.lengthOf(state.raceLength).meters,
             displacementCc = Block.forPrestige(state.prestiges).let {
                 EngineSim.displacementCc(it.boreMm, it.strokeMm, it.cylinders)
             },
             circuit = circuit,
+            rig = rig,
         )
+    }
 
     /**
      * The one place a car becomes a strip [Setup]: weight, drivetrain losses, the tire's grip on this axle and balance,
@@ -105,6 +129,7 @@ object RaceDrive {
         distanceM: Double,
         displacementCc: Double,
         circuit: Boolean = false,
+        rig: DragTune.Rig = DragTune.Rig(),
     ): Setup {
         val box = body.spec.gearbox
         val axle = body.spec.axle
@@ -123,31 +148,130 @@ object RaceDrive {
             Racing.Drive.AWD -> 1.08
         }
         val kit = body.spec.kit
-        val grip = body.spec.tire.mu * axle.grip * balance * body.massKg * 9.81 * (if (circuit) 1.0 else kit.launch)
-        val drag = body.spec.chassis.cd * body.spec.chassis.area * (1.0 + 0.018 * body.spec.slots) * body.spec.tire.drag * kit.dragMult
-        return Setup(
-            peakHp = peakHp.coerceAtLeast(8.0),
+        // The strip's own terms. The circuit uses none of them: its Setup stays what it was.
+        val warmth = if (circuit) 0.0 else DragTune.warmth(body.spec.tire.id)
+        val pressure = rig.psi + (if (warmth > 0.0) kit.burnout else 0.0)
+        val warm = kit.burnout * warmth
+        val stripGrip = if (circuit) 1.0 else {
+            (1.0 - 0.018 * pressure) * (1.0 + 0.05 * warm) * (1.0 - 0.012 * rig.front) *
+                (1.0 - 0.010 * rig.rear) * (1.0 + 0.0008 * rig.heightMm)
+        }
+        val stripDrag = if (circuit) 1.0 else 1.0 + 0.0012 * rig.heightMm
+        val squat = if (circuit) 1.0 else 1.0 - 0.003 * (-rig.rear).coerceAtLeast(0.0)
+        val grip = body.spec.tire.mu * axle.grip * balance * body.massKg * 9.81 * (if (circuit) 1.0 else kit.launch) * stripGrip
+        val drag = body.spec.chassis.cd * body.spec.chassis.area * (1.0 + 0.018 * body.spec.slots) * body.spec.tire.drag * kit.dragMult * stripDrag
+        val hp = peakHp.coerceAtLeast(8.0)
+        val lift = if (circuit) 99.0 else DragTune.baseLift(body) + kit.liftG + 0.04 * rig.front - 0.004 * rig.heightMm
+        val red = redline.coerceAtLeast(3000.0)
+        val base = Setup(
+            peakHp = hp,
             peakTqLbFt = peakTqLbFt.coerceAtLeast(8.0),
-            redline = redline.coerceAtLeast(3000.0),
+            redline = red,
             idle = idle.coerceIn(600.0, 1800.0),
             massKg = body.massKg,
             ratios = box.ratios,
             finalDrive = finalDrive,
-            efficiency = eff,
+            efficiency = eff * squat,
             gripN = grip,
             drag = drag,
-            shiftSeconds = box.shift,
+            shiftSeconds = box.shift * kit.shiftMult,
             distanceM = distanceM,
             displacementCc = displacementCc,
+            spinTrim = kit.spinTrim,
+            liftG = lift,
+            flywheelKgm2 = kit.flywheel,
+            rollN = if (circuit) 0.0 else body.massKg * 9.81 * 0.014 * (-0.30 * pressure),
+            shiftTrimRpm = if (circuit) 0.0 else rig.shiftTrimRpm,
+            notchy = (1.0 - kit.shiftMult).coerceAtLeast(0.0),
+            shotFrac = if (circuit) 0.0 else kit.shot,
+            shotAtM = rig.nosAtM,
+            bottleS = kit.bottleS,
         )
+        if (kit.preload <= 0.0 || circuit) return base
+        // A transbrake holds the engine at a launch rpm. The tune moves it off the rpm that just fits the tires.
+        val held = (holdRpm(base) + rig.launchRpmOffset).coerceIn(0.45 * red, 0.99 * red)
+        return base.copy(launchRpm = held)
     }
+
+    /** The rpm a transbrake can hold that pushes hardest without asking more of the tires than they hold. */
+    fun holdRpm(setup: Setup): Double {
+        val overall = setup.ratios[0] * setup.finalDrive
+        val shot = shotAtLaunch(setup, 1.0)
+        var best = setup.redline * 0.45
+        var bestForce = 0.0
+        var rpm = setup.redline * 0.45
+        while (rpm <= setup.redline * 0.99) {
+            val force = launchForce(setup.copy(launchRpm = rpm), 1.0, 1.0, overall, shot)
+            if (force <= setup.gripN * LAUNCH_CAP && force > bestForce) {
+                bestForce = force
+                best = rpm
+            }
+            rpm += setup.redline * 0.01
+        }
+        return best
+    }
+
+    private const val LAUNCH_CAP = 0.96
+
+    /** The rpm the engine is at for the launch: held with a transbrake, otherwise wound up by the throttle. */
+    private fun launchRpmFor(setup: Setup, th: Double): Double =
+        if (setup.launchRpm > 0.0) setup.launchRpm else setup.idle + th * (setup.redline * 0.74 - setup.idle)
+
+    /**
+     * The push at the wheels at the bite, in newtons: what the tires are asked for on a launch. A transbrake hits
+     * harder the higher its rpm (the engine is already spun up). A light flywheel bogs a little. The shot adds torque.
+     */
+    fun launchForce(setup: Setup, th: Double, engagement: Double, overall: Double, shotOn: Boolean): Double {
+        val rpm = launchRpmFor(setup, th)
+        val hit = if (setup.launchRpm > 0.0) (rpm / (setup.redline * 0.74)).pow(1.5) else 1.0
+        val bog = (1.0 - 1.5 * setup.flywheelKgm2).coerceAtLeast(0.5)
+        val shot = if (shotOn) 1.0 + setup.shotFrac else 1.0
+        return torqueNm(setup, rpm) * setup.efficiency * th * engagement * overall / WHEEL_R * hit * bog * shot
+    }
+
+    /** The shot is open on the strip: past its point, with flow left in the bottle, and the throttle most of the way down. */
+    fun shotActive(setup: Setup, run: Run, th: Double): Boolean =
+        setup.shotFrac > 0.0 && th > 0.5 && run.distance >= setup.shotAtM && run.nitrousS < setup.bottleS
+
+    internal fun shotAtLaunch(setup: Setup, th: Double): Boolean =
+        setup.shotFrac > 0.0 && th > 0.5 && setup.shotAtM <= 0.5
+
+    /**
+     * The shot's push, on top of [dry]. In first and second the tires can only take so much more than they hold,
+     * so a shot opened there on a car that already has more push than grip adds nothing. It pays in the gears
+     * the tires can take it.
+     */
+    private fun withShot(setup: Setup, run: Run, dry: Double): Double {
+        val full = dry * (1.0 + setup.shotFrac)
+        if (run.gear > 2) return full
+        return maxOf(dry, minOf(full, setup.gripN * SHOT_TRACTION))
+    }
+
+    private const val SHOT_TRACTION = 1.3
+
+    /** Mass the push has to move: the car, less the flywheel's inertia as seen at the wheels (it matters most in the low gears). */
+    private fun effMass(setup: Setup, overall: Double): Double =
+        (setup.massKg - setup.flywheelKgm2 * (overall / WHEEL_R).pow(2.0)).coerceAtLeast(setup.massKg * 0.85)
+
+    /**
+     * The nose comes up past [Setup.liftG]. Most of the push over the limit is wasted. Only the low gears are
+     * short enough to do it.
+     */
+    private fun lifted(setup: Setup, run: Run, accel: Double): Double {
+        val limit = setup.liftG * 9.81
+        return if (run.gear <= 2 && accel > limit) limit + (accel - limit) * 0.25 else accel
+    }
+
+    /** Where the pilot shifts: just under the redline, moved by the tune. */
+    fun shiftPoint(setup: Setup): Double =
+        (setup.redline * 0.91 + setup.shiftTrimRpm).coerceIn(setup.redline * 0.55, setup.redline * 0.985)
 
     /**
      * Share of the gap to the throttle's rpm the engine closes each second with the clutch open.
      * A 50cc single winds up almost at once. A 6.5L V12 has a lot more crank and flywheel to move.
      */
     fun revRate(setup: Setup): Double =
-        (4.6 * (1000.0 / setup.displacementCc.coerceAtLeast(40.0)).pow(0.22)).coerceIn(2.4, 9.0)
+        (4.6 * (1000.0 / setup.displacementCc.coerceAtLeast(40.0)).pow(0.22) * (1.0 + 5.0 * setup.flywheelKgm2)).coerceIn(2.4, 12.0)
 
     /** How much of the engine the clutch passes at this pedal travel. 0 open, 1 locked. Smooth through the bite band. */
     fun engagement(pedal: Double): Double {
@@ -175,8 +299,10 @@ object RaceDrive {
     fun stage(setup: Setup, run: Run, throttle: Double, dt: Double, clutch: Double): Boolean {
         if (run.jumped) return true
         val clock = run.time
+        val bottle = run.nitrousS
         drive(setup, run, throttle, false, dt, clutch)
         run.time = clock
+        run.nitrousS = bottle
         if (run.distance > JUMP_M) run.jumped = true
         return run.jumped
     }
@@ -239,15 +365,21 @@ object RaceDrive {
         val roadRpm = roadRpm(run.speed, overall)
         val launching = run.gear == 1 && run.speed < 14.0 && !run.hooked
         if (launching) {
-            val biteRpm = setup.idle + th * (setup.redline * 0.74 - setup.idle)
-            val requested = torqueNm(setup, biteRpm) * setup.efficiency * th * engagement * overall / WHEEL_R
+            val shotOn = shotActive(setup, run, th)
+            if (shotOn) run.nitrousS += stepDt
+            val biteRpm = launchRpmFor(setup, th)
+            val requested = launchForce(setup, th, engagement, overall, shotOn)
             if (requested > setup.gripN && th > 0.05) {
                 run.spinning = true
-                val target = slipAmount(requested, setup.gripN)
+                val trim = setup.spinTrim.coerceIn(0.0, 1.0)
+                val target = slipAmount(requested, setup.gripN) * (1.0 - 0.85 * trim)
                 run.slip += (target - run.slip) * (stepDt * 12.0).coerceAtMost(1.0)
                 val flare = setup.idle + th * (setup.redline - setup.idle)
                 run.rpm += (flare - run.rpm) * stepDt * 4.5
-                val accel = (setup.gripN * 0.22 - dragForce(setup, run.speed)) / setup.massKg
+                val floor = setup.gripN * 0.22
+                val held = minOf(requested, setup.gripN * 1.03)
+                val force = floor + trim * (held - floor)
+                val accel = lifted(setup, run, (force - dragForce(setup, run.speed)) / effMass(setup, overall))
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
             } else {
                 run.spinning = false
@@ -255,7 +387,7 @@ object RaceDrive {
                 val flare = setup.idle + th * (setup.redline - setup.idle)
                 val target = if (engagement >= 0.92) locked else roadRpm * engagement + flare * (1.0 - engagement)
                 run.rpm += (target - run.rpm) * stepDt * 4.0
-                val accel = (requested - dragForce(setup, run.speed)) / setup.massKg
+                val accel = lifted(setup, run, (requested - dragForce(setup, run.speed)) / effMass(setup, overall))
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
                 if (run.speed > 4.0 && roadRpm > setup.idle * 1.2) run.hooked = true
             }
@@ -272,9 +404,12 @@ object RaceDrive {
                 run.speed = (run.speed - dragA * stepDt).coerceAtLeast(0.0)
             } else {
                 run.limiter = false
-                var tq = torqueNm(setup, roadRpm.coerceAtMost(setup.redline)) * setup.efficiency
-                val force = tq * engagement * overall / WHEEL_R
-                val accel = (force - dragForce(setup, run.speed)) / setup.massKg
+                val shotOn = shotActive(setup, run, th)
+                if (shotOn) run.nitrousS += stepDt
+                val tq = torqueNm(setup, roadRpm.coerceAtMost(setup.redline)) * setup.efficiency
+                val dry = tq * engagement * overall / WHEEL_R
+                val force = if (shotOn) withShot(setup, run, dry) else dry
+                val accel = lifted(setup, run, (force - dragForce(setup, run.speed)) / effMass(setup, overall))
                 run.speed = (run.speed + accel * stepDt).coerceAtLeast(0.0)
                 val road = roadRpm(run.speed, overall).coerceAtLeast(setup.idle * 0.8)
                 run.rpm = if (engagement >= 0.92) {
@@ -290,8 +425,8 @@ object RaceDrive {
 
     /** Pedal travel (inside the bite band) that lets full throttle leave without breaking the tires. 0 means the tires already hold it. */
     fun clutchForLaunch(setup: Setup): Double {
-        val bite = setup.idle + (setup.redline * 0.74 - setup.idle)
-        val full = torqueNm(setup, bite) * setup.efficiency * setup.ratios[0] * setup.finalDrive / WHEEL_R
+        val full = launchForce(setup, 1.0, 1.0, setup.ratios[0] * setup.finalDrive, shotAtLaunch(setup, 1.0))
+        if (setup.spinTrim >= 0.5 || setup.launchRpm > 0.0) return 0.0
         if (full <= setup.gripN * 0.96) return 0.0
         val engagement = (setup.gripN * 0.96 / full).coerceIn(0.2, 0.92)
         return pedalFor(engagement)
@@ -304,27 +439,53 @@ object RaceDrive {
     }
 
     /** A driver who feathers the launch and shifts just under the limiter. */
-    fun driveWell(setup: Setup): Run {
+    fun driveWell(setup: Setup, mark: ((Run) -> Unit)? = null): Run {
         val run = fresh(setup)
         var guard = 0
         val cap = (90.0 * setup.distanceM / FINISH_M).coerceIn(40.0, 160.0)
         while (run.distance < setup.distanceM && run.time < cap && guard < 20_000) {
             guard++
             val launch = if (run.gear == 1 && run.speed < 14.0 && !run.hooked) launchThrottle(setup) else 1.0
-            val up = run.shiftLeft <= 0.0 && run.gear < setup.ratios.size && run.rpm > setup.redline * 0.91 && run.hooked
+            val up = run.shiftLeft <= 0.0 && run.gear < setup.ratios.size && run.rpm > shiftPoint(setup) && run.hooked
             step(setup, run, launch, up, 1.0 / 60.0)
+            if (mark != null) mark(run)
         }
         return run
     }
 
+    /** One clean pass: 60 ft, the time, and the trap speed. What the Drag tune page shows and the tests compare. */
+    data class Clean(val sixtyFt: Double, val time: Double, val trapMps: Double, val reached: Boolean)
+
+    fun clean(setup: Setup): Clean {
+        var sixty = 0.0
+        var seen = false
+        var lastD = 0.0
+        var lastT = 0.0
+        val run = driveWell(setup) { r ->
+            if (!seen && r.distance >= 18.288) {
+                seen = true
+                val span = (r.distance - lastD).coerceAtLeast(1e-9)
+                sixty = lastT + (r.time - lastT) * ((18.288 - lastD) / span)
+            }
+            lastD = r.distance
+            lastT = r.time
+        }
+        return Clean(sixty, run.time, run.speed, run.distance >= setup.distanceM)
+    }
+
+    /** What a launch module lets the throttle ask of the tires: a share more than the tires hold without it. */
+    fun launchCap(setup: Setup): Double = setup.gripN * (LAUNCH_CAP + 0.035 * setup.spinTrim.coerceIn(0.0, 1.0))
+
+    /** A transbrake is let go on the button: no feathering, the launch rpm is the tune. */
     fun launchThrottle(setup: Setup): Double {
+        if (setup.launchRpm > 0.0) return 1.0
         var best = 0.25
         var bestForce = 0.0
         var probe = 0.12
+        val cap = launchCap(setup)
         while (probe <= 1.0) {
-            val bite = setup.idle + probe * (setup.redline * 0.74 - setup.idle)
-            val requested = torqueNm(setup, bite) * setup.efficiency * probe * setup.ratios[0] * setup.finalDrive / WHEEL_R
-            if (requested <= setup.gripN * 0.96 && requested > bestForce) {
+            val requested = launchForce(setup, probe, 1.0, setup.ratios[0] * setup.finalDrive, shotAtLaunch(setup, probe))
+            if (requested <= cap && requested > bestForce) {
                 bestForce = requested
                 best = probe
             }
@@ -356,7 +517,7 @@ object RaceDrive {
         speed / WHEEL_R * overall * 9.5493
 
     internal fun dragForce(setup: Setup, speed: Double): Double =
-        0.5 * 1.22 * setup.drag * speed * speed
+        (0.5 * 1.22 * setup.drag * speed * speed + setup.rollN).coerceAtLeast(0.0)
 
     /** lb-ft curve that peaks mid-range and will not make more horsepower than the engine has. */
     fun torqueNm(setup: Setup, rpm: Double): Double {
