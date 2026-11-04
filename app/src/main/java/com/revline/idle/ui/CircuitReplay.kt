@@ -46,6 +46,7 @@ import com.revline.idle.game.Rivals
 import kotlinx.coroutines.isActive
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 
@@ -259,17 +260,18 @@ internal object ReplayLook {
 }
 
 /**
- * Puts the cars on the track and keeps each in its lane. A car starts in its grid lane and stays in it; it only changes lane
- * when it comes up level with a car in the same lane, and then it is the one behind that moves over. A car in a bunch keeps its
- * full lane until the road has been clear for a while, then drifts back toward the middle slowly. Every move is a glide, never
- * a jump. It remembers the last frame, so feed it the clock forward; going back or skipping ahead starts it afresh.
+ * Puts the cars on the track. Every car drives the racing line ([CircuitGeo.racingLat]). Only while it runs alongside another
+ * car (overlapping along the track) does it move a lane to one side, and once the road is clear it eases back onto the line.
+ * The pair split the road the way their grid slots point, and keep that split until they are clear, so nobody swaps sides
+ * mid-pass. Every move is a first-order glide, never a jump. It remembers the last frame, so feed it the clock forward;
+ * going back or skipping ahead starts it afresh.
  */
 internal class LaneKeeper(private val replay: Replay) {
     private val n = replay.all.size
-    private val lane = IntArray(n)
-    /** Sideways place in lanes: 1 is a full lane to the right, -1 to the left, 0 the middle. */
+    /** The side a car is holding: 1 right, -1 left, 0 on the racing line. */
+    private val side = IntArray(n)
+    /** How far toward its side it is, in lanes, -1..1. */
     private val off = FloatArray(n)
-    private val bunched = BooleanArray(n)
     private var last = Double.NaN
 
     fun cars(geo: CircuitGeo, t: Double, yourId: String, yourMid: Boolean): List<CircuitCar> {
@@ -284,30 +286,35 @@ internal class LaneKeeper(private val replay: Replay) {
             return min(d, len - d) / geo.carUnits
         }
         val fresh = last.isNaN() || t < last || t - last > 3.0
-        val settle = fresh && t > 1.0
-        if (fresh) for (i in 0 until n) { lane[i] = grid[i]; off[i] = grid[i].toFloat(); bunched[i] = false }
+        if (fresh) for (i in 0 until n) { side[i] = 0; off[i] = 0f }
         val dt = if (fresh) 0f else (t - last).toFloat()
         last = t
-        // The car behind moves over when it comes level with a car in its lane.
-        val placed = ArrayList<Int>()
-        for (i in (0 until n).sortedWith(compareByDescending<Int> { base[it] }.thenBy { it })) {
-            for (j in placed) if (apart(i, j) < CONFLICT && lane[i] == lane[j]) lane[i] = -lane[j]
-            placed.add(i)
-        }
+        // Clear road first: a car with nobody near goes back to the line.
         for (i in 0 until n) {
             var near = Float.MAX_VALUE
             for (j in 0 until n) if (j != i) near = min(near, apart(i, j))
-            // Hysteresis: a car counts as bunched from close in and as clear only from well out.
-            if (near < JOIN) bunched[i] = true else if (near > LEAVE) bunched[i] = false
-            val target = lane[i] * (if (bunched[i]) 1f else 0.35f)
-            if (settle) { off[i] = target; continue }
-            val inward = off[i] * target > 0f && abs(target) < abs(off[i])
-            val step = (if (inward) DRIFT else SWING) * dt
-            off[i] += (target - off[i]).coerceIn(-step, step)
+            if (near > CLEAR) side[i] = 0
         }
+        // Then the leaders pick first, and a car alongside one already off the line takes the other side.
+        val order = (0 until n).sortedWith(compareByDescending<Int> { base[it] }.thenBy { it })
+        for (i in order) for (j in order) {
+            if (j == i || apart(i, j) >= ALONGSIDE) continue
+            if (side[i] != 0) continue
+            side[i] = when {
+                side[j] != 0 -> -side[j]
+                grid[i] != grid[j] -> grid[i]
+                base[i] >= base[j] -> grid[i]
+                else -> -grid[i]
+            }
+            if (side[j] == 0) side[j] = -side[i]
+        }
+        val ease = if (fresh) 1f else 1f - exp(-RATE * dt)
+        for (i in 0 until n) off[i] += (side[i] - off[i]) * ease
         return (0 until n).sortedBy { field[it].you }.map { i ->
             val onGrid = max(0f, 1f - base[i] / ramp)
-            val lat = geo.laneOffset * (grid[i] * onGrid + off[i] * (1f - onGrid))
+            val a = abs(off[i]).coerceIn(0f, 1f)
+            val running = geo.racingLat(s[i]) * (1f - a) + geo.laneOffset * off[i]
+            val lat = geo.laneOffset * grid[i] * onGrid + running * (1f - onGrid)
             val car = field[i]
             if (car.you) CircuitCar(yourId, yourMid, ReplayLook.lime, ReplayLook.ink, s[i], lat)
             else ReplayLook.livery(car.name).let { CircuitCar(ReplayLook.rivalId(car.name), false, it, ReplayLook.accent(it), s[i], lat) }
@@ -315,21 +322,19 @@ internal class LaneKeeper(private val replay: Replay) {
     }
 
     private companion object {
-        /** Car lengths: level enough to need separate lanes, close enough to count as a bunch, and far enough to count as clear. */
-        const val CONFLICT = 3f
-        const val JOIN = 2.5f
-        const val LEAVE = 5f
-        /** Lanes per second: a change of lane, and the slow drift back to the middle. */
-        const val SWING = 2.5f
-        const val DRIFT = 0.12f
+        /** Car lengths: overlapping enough to need room, and far enough apart to count as clear again. */
+        const val ALONGSIDE = 1.6f
+        const val CLEAR = 3f
+        /** Per second: how quickly a car moves over and eases back. */
+        const val RATE = 2.5f
     }
 }
 
 /** How fast the film runs and how its clock moves; plain functions so a test can drive them without a screen. */
 internal object ReplaySpeed {
     /** Speed chips: multiples of the real pace, where 1x takes the sim's lap time in real seconds. */
-    val labels = listOf("0.5x", "1x", "2x", "4x", "8x")
-    private val multiples = doubleArrayOf(0.5, 1.0, 2.0, 4.0, 8.0)
+    val labels = listOf("0.5x", "1x", "2x", "4x", "8x", "16x", "32x")
+    private val multiples = doubleArrayOf(0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0)
     const val DEFAULT = 1
 
     /** Film seconds per real second at chip [index]. */

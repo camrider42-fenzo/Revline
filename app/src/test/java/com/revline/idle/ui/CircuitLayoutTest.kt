@@ -341,6 +341,6 @@ class CircuitLayoutTest {
         assertEquals(lap, (replay.you.cum[2] - replay.you.cum[1]) / replay.speed / ReplaySpeed.multiplier(ReplaySpeed.DEFAULT, replay), 1e-9)
         val b = replay.you.bestLap()!!
         assertEquals((1..replay.you.completed).minOf { replay.you.cum[it] - replay.you.cum[it - 1] }, b.second.span, 1e-6)
-        assertEquals(ReplaySpeed.labels.size, 5)
+        assertEquals(ReplaySpeed.labels.size, 7)
     }
 }

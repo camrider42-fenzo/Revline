@@ -72,9 +72,35 @@ internal class CircuitGeo(val w: Float, val h: Float, id: String) {
         return tmp[2]
     }
 
+    /**
+     * The racing line, in pixels right of the middle at each layout sample: toward the inside through a corner by up to
+     * [RACING_OF_ROAD] of the road, eased in and out over a few road widths so it never kinks.
+     */
+    private val racing: FloatArray = run {
+        val n = line.xs.size
+        val raw = FloatArray(n) { (line.curvature(it * line.step) * roadUnits * 4f).coerceIn(-1f, 1f) }
+        fun blur(a: FloatArray, halfUnits: Float): FloatArray {
+            val k = max(1, (halfUnits / line.step).toInt())
+            return FloatArray(n) { i -> var sum = 0f; for (d in -k..k) sum += a[((i + d) % n + n) % n]; sum / (2 * k + 1) }
+        }
+        val smooth = blur(blur(raw, roadUnits * 1.5f), roadUnits * 3f)
+        FloatArray(n) { smooth[it].coerceIn(-1f, 1f) * roadW * RACING_OF_ROAD }
+    }
+
+    /** The racing line's offset from the middle at arc [s], in pixels to the right. */
+    fun racingLat(s: Float): Float {
+        val n = racing.size
+        var f = (s / line.step) % n
+        if (f < 0f) f += n
+        val i = f.toInt().coerceIn(0, n - 1)
+        val t = f - i
+        return racing[i] * (1f - t) + racing[(i + 1) % n] * t
+    }
+
     companion object {
         const val CAR_OF_ROAD = 0.8f
         const val LANE_OF_ROAD = 0.24f
+        const val RACING_OF_ROAD = 0.28f
     }
 }
 
@@ -298,9 +324,15 @@ private fun DrawScope.circuitScenery(geo: CircuitGeo, title: String, subtitle: S
         val b = FloatArray(3)
         line.at(s - 6f, a); line.at(s + 6f, b)
         val turn = abs(CircuitLine.angleDiff(a[2], b[2]))
-        val span = (turn * 7f).coerceIn(3.5f, 9f)
+        // Only the apex and exit, never longer than the bend's own inside arc, and pulled in on a radius too tight for it.
+        var k = 0f
+        var q = s - 6f
+        while (q <= s + 6f) { k = max(k, abs(line.curvature(q))); q += 0.5f }
+        val radius = if (k > 1e-4f) 1f / k else 1e4f
+        val total = min((turn * 7f).coerceIn(3f, 9f), turn * radius).coerceAtLeast(1.5f)
         val kw = w * 0.15f
-        val kerb = path(sd * (w * 0.5f + kw * 0.1f), s - span, s + span)
+        val kerbLat = min(w * 0.5f + kw * 0.1f, radius * geo.u * 0.8f)
+        val kerb = path(sd * kerbLat, s - total * 0.3f, s + total * 0.7f)
         val seg = kw * 1.3f
         drawPath(kerb, Color.White, style = Stroke(kw, cap = StrokeCap.Butt, pathEffect = PathEffect.dashPathEffect(floatArrayOf(seg, seg), 0f)))
         drawPath(kerb, Color(0xFFE02A20), style = Stroke(kw, cap = StrokeCap.Butt, pathEffect = PathEffect.dashPathEffect(floatArrayOf(seg, seg), seg)))
@@ -383,7 +415,8 @@ internal fun DrawScope.drawCircuitScene(scene: CircuitScene, cars: List<CircuitC
         val plan = TopPlan.of(car.look, car.mid)
         val wheelbaseUnits = (plan.frontAxle - plan.rearAxle) / plan.length * geo.carUnits
         val steer = (geo.line.curvature(car.s) * wheelbaseUnits * 1.5f).coerceIn(-0.5f, 0.5f)
-        drawTopCar(car.look, car.mid, car.color, car.accent, geo.point(car.s, car.lat), geo.heading(car.s), geo.carLen, steer)
+        val yaw = kotlin.math.atan2(geo.racingLat(car.s + 0.5f) - geo.racingLat(car.s - 0.5f), geo.u)
+        drawTopCar(car.look, car.mid, car.color, car.accent, geo.point(car.s, car.lat), geo.heading(car.s) + yaw, geo.carLen, steer)
     }
 }
 
@@ -395,9 +428,11 @@ internal object CircuitView {
     /** How much bigger the world is than the window in the close-up, held down so the baked picture stays a sane size. */
     fun zoomFor(w: Float, h: Float): Float = min(MAX_ZOOM, kotlin.math.sqrt(MAX_PIXELS / (w * h))).coerceAtLeast(1f)
 
-    /** Top-left of the window onto a world of [world] size, centered on [focus] and kept inside the world. */
-    fun window(focus: Offset, viewW: Float, viewH: Float, worldW: Float, worldH: Float): Offset =
-        Offset((focus.x - viewW / 2f).coerceIn(0f, max(0f, worldW - viewW)), (focus.y - viewH / 2f).coerceIn(0f, max(0f, worldH - viewH)))
+    /** Top-left of the window, always centered on [focus], so the followed car never jumps when the map edge comes near. */
+    fun window(focus: Offset, viewW: Float, viewH: Float): Offset = Offset(focus.x - viewW / 2f, focus.y - viewH / 2f)
+
+    /** What the close-up follows: your car (the last in [cars]) and nothing else. */
+    fun focus(geo: CircuitGeo, cars: List<CircuitCar>): Offset = cars.last().let { geo.point(it.s, it.lat) }
 }
 
 /** The scene with its cars; in the close-up only the part around your car (the last in [cars]) shows. */
@@ -407,13 +442,8 @@ internal fun DrawScope.drawCircuitView(scene: CircuitScene, cars: List<CircuitCa
         return
     }
     val geo = scene.geo
-    val you = cars.last()
-    val me = geo.point(you.s, you.lat)
-    var focus = me
-    // With a rival close by, the window sits between the two.
-    val other = cars.filter { it !== you }.map { geo.point(it.s, it.lat) }.minByOrNull { hypot(it.x - me.x, it.y - me.y) }
-    if (other != null && hypot(other.x - me.x, other.y - me.y) < min(viewW, viewH) * 0.4f) focus = Offset((me.x + other.x) / 2f, (me.y + other.y) / 2f)
-    val o = CircuitView.window(focus, viewW, viewH, geo.w, geo.h)
+    val o = CircuitView.window(CircuitView.focus(geo, cars), viewW, viewH)
+    drawRect(Color(0xFF0B1811), Offset.Zero, Size(viewW, viewH))
     withTransform({ translate(-o.x, -o.y) }) { drawCircuitScene(scene, cars) }
 }
 

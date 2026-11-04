@@ -9,6 +9,8 @@ import com.revline.idle.economy.DriverBuilds
 import com.revline.idle.game.Drivers
 import com.revline.idle.game.Racing
 import org.junit.Test
+import kotlin.math.max
+import kotlin.math.abs
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -79,6 +81,28 @@ class CircuitTrackShotTest {
                 val scene = bakeCircuitScene(CircuitGeo(size.width * zoom, size.height * zoom, "silverstone"), Density(2.6f * zoom), "SILVERSTONE", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
                 drawCircuitView(scene, ReplayLook.cars(scene.geo, replay, at, "p911", false), size.width, size.height, followYou = true)
             }
+        }
+    }
+
+    @Test fun followHairpin() {
+        val r = race("monaco", 7L)
+        val replay = Replay.build(r)!!
+        val w = 936
+        val h = (w / CircuitLayouts.aspect("monaco")).toInt()
+        val l = CircuitLayouts.of("monaco")
+        var apex = 0f
+        var q = 0f
+        while (q < l.length) { if (abs(l.curvature(q)) > abs(l.curvature(apex))) apex = q; q += 0.5f }
+        // The first moment, after the opening lap, that your car is just into the tightest bend.
+        var at = replay.duration * 0.3
+        while (at < replay.duration && abs((replay.you.progress(at) % 1.0) * l.length - apex) > 1.0) at += 0.05
+        CircuitShots.shoot("follow-hairpin", w, h) {
+            val zoom = CircuitView.zoomFor(size.width, size.height)
+            val scene = bakeCircuitScene(CircuitGeo(size.width * zoom, size.height * zoom, "monaco"), Density(2.6f * zoom), "MONACO", "${r.circuit.lapKm} km  ${r.circuit.corners} corners")
+            val keeper = LaneKeeper(replay)
+            var t = max(0.0, at - 2.0)
+            while (t < at) { keeper.cars(scene.geo, t, "p911", false); t += 1.0 / 30.0 }
+            drawCircuitView(scene, keeper.cars(scene.geo, at, "p911", false), size.width, size.height, followYou = true)
         }
     }
 

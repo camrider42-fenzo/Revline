@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.88.2). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.89.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -110,6 +110,8 @@ DRAG PARTS (1.84.0) sit under a DRAG PARTS heading on the race screen's parts li
 The TUNE tab has an ENGINE page and a new DRAG page with a clean-pass forecast. Each knob has a slider, - and + buttons and a note on what it gives and costs: tire pressure (launch grip against rolling drag), final drive (pull against trap speed), front and rear stiffness (rear grip against nose lift and squat), ride height (grip against drag), and, once their part is fitted, launch rpm (transbrake), shift rpm (short shifter) and nitrous point. The settings are saved with the game (old saves open on the defaults) and are not reset by a rebuild.
 
 SHIFT POINT NEVER REACHED (1.86.0): with a Short shifter and the Shift rpm knob turned up, the driver could aim at a shift rpm above the highest the needle reads on the limiter (redline minus 20) and never change up. The driver now never aims above that, so every setting of the knob shifts through the gears. Drivers who used to stick on the limiter now shift, which lifts every driver and every human a few points of win rate on the revvy builds. Ines (Rev hound) lost the mid-ladder sleeper builds she used to win only because the others stuck, so her dyno knowledge goes from 76 to 90 to keep her the right hire somewhere.
+
+RACING LINE (1.89.0): circuit cars drive a smoothed racing line (inside at the apex) and only step a lane aside while alongside another car, then ease back; sides lock until clear, so nothing wiggles. Follow mode centers on your car only. 16x and 32x replay chips. Kerbs cover only the apex and exit and pull in on tight hairpins.
 
 PAR FIT (1.88.2): the field par clamp now measures the same lap the circuit screen and the race use (your driver and orders), so the shown fit is always within ±10.0%.
 
