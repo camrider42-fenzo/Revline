@@ -51,4 +51,15 @@ class ParClampTest {
     @Test fun aCarAtParIsLeftAlone() {
         for (c in Circuits.all) assertEquals(Circuits.parPlan(4, c).mean, Circuits.fieldPar(Circuits.parCar(4), 4, c).mean, 1e-9)
     }
+
+    @Test fun theDisplayedFitIsWithinTenPercentForExtremeBuilds() {
+        val weak = Circuits.carOf(GameState(prestiges = 0))
+        val strong = Circuits.carOf(DriverBuilds.orientations(6).first().state)
+        for (c in Circuits.all) for (car in listOf(weak, strong)) for (p in listOf(0, 6)) for (d in Drivers.roster + Drivers.you) {
+            val fit = Circuits.fitPercent(car, c, p, d)
+            assertTrue("${c.id} p$p ${d.id} $fit", fit in -10.0 - 1e-6..10.0 + 1e-6)
+            val shown = Circuits.fitText(fit).substringAfter(": ").substringBefore("%").toDouble()
+            assertTrue("${c.id} shown $shown", shown in -10.0..10.0)
+        }
+    }
 }

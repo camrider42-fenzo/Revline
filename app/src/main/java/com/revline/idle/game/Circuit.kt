@@ -1084,7 +1084,8 @@ object Circuits {
     fun revise(run: Run, current: Result, orders: Orders, fromLap: Int): Result? {
         if (reviseCheck(current, orders, fromLap) != null) return null
         val circuit = current.circuit
-        val next = race(plan(run.car, circuit, run.driver, orders, run.weather), run.driver, fieldPar(run.car, run.start.prestiges, circuit, run.weather), run.seed)
+        val mineNext = plan(run.car, circuit, run.driver, orders, run.weather)
+        val next = race(mineNext, run.driver, fieldPar(run.car, run.start.prestiges, circuit, run.weather, mineNext.mean), run.seed)
         val old = current.runs.first { it.you }
         val mine = next.runs.first { it.you }
         // The laps behind are the same laps: the dice for them were drawn before any of the changes mattered.
@@ -1169,9 +1170,11 @@ object Circuits {
      * The par car as the field races it: the block's par plan with its pace held within [PAR_BAND] of the player's car
      * on this circuit, measured by the mean planned lap with the neutral driver and the par car's own orders.
      */
-    fun fieldPar(car: Car, prestiges: Int, circuit: Circuit, weather: Weather = Weather.DRY): Plan {
+    fun fieldPar(
+        car: Car, prestiges: Int, circuit: Circuit, weather: Weather = Weather.DRY,
+        mine: Double = plan(car, circuit, Drivers.you, parOrders(weather), weather, measure = true).mean,
+    ): Plan {
         val par = parPlan(prestiges, circuit, weather)
-        val mine = plan(car, circuit, Drivers.you, parOrders(weather), weather, measure = true).mean
         val f = parScale(par.mean, mine)
         return if (f == 1.0) par else par.scaled(f)
     }
@@ -1245,7 +1248,8 @@ object Circuits {
 
     /** Runs the race for a paid entry and works out what comes back. [state] is the car and the field's level, as at the start. */
     fun finish(state: GameState, car: Car, circuit: Circuit, driver: Drivers.Driver, fee: Double, entry: Double, seed: Long, orders: Orders = Orders(), weather: Weather = Weather.DRY): Outcome {
-        val result = race(plan(car, circuit, driver, orders, weather), driver, fieldPar(car, state.prestiges, circuit, weather), seed)
+        val minePlan = plan(car, circuit, driver, orders, weather)
+        val result = race(minePlan, driver, fieldPar(car, state.prestiges, circuit, weather, minePlan.mean), seed)
         val prize = prize(state, result.position, result.retired != null)
         val repair = if (result.engineFailed) repair(state) else 0.0
         return Outcome(result, prize, repair, fee, entry, note(result, prize, repair, fee, entry), run = Run(car, driver, weather, state, seed))
@@ -1312,7 +1316,7 @@ object Circuits {
     /** Your lap against the field's par car, in percent of a lap. Positive is quicker. Mid-stat hands both sides. */
     fun fitPercent(car: Car, circuit: Circuit, prestiges: Int, driver: Drivers.Driver): Double {
         val mine = plan(car, circuit, driver).mean
-        val par = fieldPar(car, prestiges, circuit).mean
+        val par = fieldPar(car, prestiges, circuit, mine = mine).mean
         return (par - mine) / par * 100.0
     }
 
