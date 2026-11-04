@@ -3,6 +3,7 @@ package com.revline.idle.model
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 import kotlinx.serialization.Serializable
 
@@ -438,6 +439,12 @@ object EngineSim {
         return (runner - meth * 3.2).coerceIn(0.0, 42.0)
     }
 
+    /**
+     * The ECU backs the boost off until the knock it cannot pull timing for is gone, as a real
+     * boost-by-knock limiter does. Unsupported boost (low octane, no intercooler) is therefore
+     * limited toward the naturally aspirated figure, and never turns into detonation that costs
+     * more power than the extra air adds.
+     */
     private fun once(
         params: EngineParams,
         rpm: Double,
@@ -445,8 +452,34 @@ object EngineSim {
         extraChargeC: Double,
         plate: Boolean,
     ): OperatingPoint {
+        val full = onceAt(params, rpm, load, extraChargeC, plate, Double.MAX_VALUE)
+        if (!plate || full.boostPsi < 0.3 || full.unresolvedKnock <= 0.0) return full
+        var best = onceAt(params, rpm, load, extraChargeC, plate, 0.0)
+        var lo = 0.0
+        var hi = full.boostPsi
+        repeat(6) {
+            val mid = (lo + hi) / 2.0
+            val r = onceAt(params, rpm, load, extraChargeC, plate, mid)
+            if (r.unresolvedKnock <= 0.0) {
+                lo = mid
+                best = r
+            } else {
+                hi = mid
+            }
+        }
+        return if (best.horsepower >= full.horsepower) best else full
+    }
+
+    private fun onceAt(
+        params: EngineParams,
+        rpm: Double,
+        load: Double,
+        extraChargeC: Double,
+        plate: Boolean,
+        boostCap: Double,
+    ): OperatingPoint {
         val open = if (plate) load.coerceIn(0.12, 1.0) else 1.0
-        val boost = if (plate) boostAt(params, rpm) * open.pow(1.08) else 0.0
+        val boost = if (plate) min(boostAt(params, rpm) * open.pow(1.08), boostCap) else 0.0
         val ve = volumetricEfficiency(params, rpm)
         val t1 = AMBIENT_K + params.underhoodDeltaC
         val manifoldPsi = ATM_PSI * (0.30 + 0.70 * open)
