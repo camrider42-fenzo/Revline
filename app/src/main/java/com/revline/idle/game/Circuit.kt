@@ -497,6 +497,12 @@ object Circuits {
         val car: Car? = null,
         val powers: List<Double> = emptyList(),
     ) {
+        /** The same plan with every lap time [f] times as long: the shape stays, the pace moves. */
+        fun scaled(f: Double): Plan = Plan(
+            circuit, laps.map { it.copy(time = it.time * f) }, failure, hands, mistakes, pits, grip, orders, weather,
+            fresh * f, endGrip, compounds, raw.map { it * f }, gripMult, freshMult, elasticity, carWear, wetTire, car, powers,
+        )
+
         val mean: Double get() = laps.map { it.time }.average()
         val fullThrottle: Double get() = laps.map { it.fullThrottle }.average()
         val top: Double get() = laps.maxOf { it.topKph }
@@ -1078,7 +1084,7 @@ object Circuits {
     fun revise(run: Run, current: Result, orders: Orders, fromLap: Int): Result? {
         if (reviseCheck(current, orders, fromLap) != null) return null
         val circuit = current.circuit
-        val next = race(plan(run.car, circuit, run.driver, orders, run.weather), run.driver, parPlan(run.start.prestiges, circuit, run.weather), run.seed)
+        val next = race(plan(run.car, circuit, run.driver, orders, run.weather), run.driver, fieldPar(run.car, run.start.prestiges, circuit, run.weather), run.seed)
         val old = current.runs.first { it.you }
         val mine = next.runs.first { it.you }
         // The laps behind are the same laps: the dice for them were drawn before any of the changes mattered.
@@ -1139,8 +1145,36 @@ object Circuits {
 
     fun parPlan(prestiges: Int, circuit: Circuit, weather: Weather = Weather.DRY): Plan =
         parPlans.getOrPut("${prestiges.coerceIn(0, Block.entries.lastIndex)}:${circuit.id}:${weather.name}") {
-            plan(parCar(prestiges), circuit, Drivers.you, if (weather == Weather.WET) Orders(Tires.Compound.WET, 0, Tires.Compound.WET) else Orders(), weather, measure = true)
+            plan(parCar(prestiges), circuit, Drivers.you, parOrders(weather), weather, measure = true)
         }
+
+    /** The field's par car is never more than this far from the player's car, in speed over the planned lap. */
+    const val PAR_BAND = 0.10
+
+    private fun parOrders(weather: Weather) =
+        if (weather == Weather.WET) Orders(Tires.Compound.WET, 0, Tires.Compound.WET) else Orders()
+
+    /**
+     * The factor on the par car's lap times that keeps its speed within [PAR_BAND] of the player's. [mine] and [par] are
+     * mean planned laps in seconds. A weak car gets a field no more than 10% quicker, a strong one a field no more than
+     * 10% slower.
+     */
+    fun parScale(par: Double, mine: Double): Double {
+        if (!(par > 0.0) || !(mine > 0.0)) return 1.0
+        val speed = (mine / par).coerceIn(1.0 - PAR_BAND, 1.0 + PAR_BAND)
+        return mine / speed / par
+    }
+
+    /**
+     * The par car as the field races it: the block's par plan with its pace held within [PAR_BAND] of the player's car
+     * on this circuit, measured by the mean planned lap with the neutral driver and the par car's own orders.
+     */
+    fun fieldPar(car: Car, prestiges: Int, circuit: Circuit, weather: Weather = Weather.DRY): Plan {
+        val par = parPlan(prestiges, circuit, weather)
+        val mine = plan(car, circuit, Drivers.you, parOrders(weather), weather, measure = true).mean
+        val f = parScale(par.mean, mine)
+        return if (f == 1.0) par else par.scaled(f)
+    }
 
     // ---- Money ---------------------------------------------------------------------------------------------------
 
@@ -1211,7 +1245,7 @@ object Circuits {
 
     /** Runs the race for a paid entry and works out what comes back. [state] is the car and the field's level, as at the start. */
     fun finish(state: GameState, car: Car, circuit: Circuit, driver: Drivers.Driver, fee: Double, entry: Double, seed: Long, orders: Orders = Orders(), weather: Weather = Weather.DRY): Outcome {
-        val result = race(plan(car, circuit, driver, orders, weather), driver, parPlan(state.prestiges, circuit, weather), seed)
+        val result = race(plan(car, circuit, driver, orders, weather), driver, fieldPar(car, state.prestiges, circuit, weather), seed)
         val prize = prize(state, result.position, result.retired != null)
         val repair = if (result.engineFailed) repair(state) else 0.0
         return Outcome(result, prize, repair, fee, entry, note(result, prize, repair, fee, entry), run = Run(car, driver, weather, state, seed))
@@ -1278,7 +1312,7 @@ object Circuits {
     /** Your lap against the field's par car, in percent of a lap. Positive is quicker. Mid-stat hands both sides. */
     fun fitPercent(car: Car, circuit: Circuit, prestiges: Int, driver: Drivers.Driver): Double {
         val mine = plan(car, circuit, driver).mean
-        val par = parPlan(prestiges, circuit).mean
+        val par = fieldPar(car, prestiges, circuit).mean
         return (par - mine) / par * 100.0
     }
 

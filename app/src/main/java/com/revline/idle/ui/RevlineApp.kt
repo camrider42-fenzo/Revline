@@ -54,6 +54,7 @@ import com.revline.idle.economy.Prestige
 import com.revline.idle.economy.formatCompact
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.model.Block
+import kotlin.math.pow
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Perks
 import com.revline.idle.game.ResearchStatus
@@ -643,10 +644,20 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
             { onPrestige(false) },
             Modifier.fillMaxWidth(),
         )
+        val raceCost = Logic.raceRebuildCost(ui.game)
+        val raceOk = Logic.canRaceRebuild(ui.game)
+        Text(
+            "Race rebuild costs ${formatCompact(raceCost)} RP" + (if (ui.game.raceStreak > 0) " (x${String.format(Locale.US, "%.2f", Logic.RACE_RP_STACK.pow(ui.game.raceStreak))} for ${ui.game.raceStreak} in a row)" else "") +
+                ". You have ${formatCompact(ui.game.researchPoints)}." + (if (raceOk) "" else " Not enough research yet."),
+            color = if (raceOk) Red else Amber,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         if (gain > 0) {
             LineButton(
-                if (onLast) "Race rebuild" else "Race rebuild into a ${next.title}",
-                true,
+                (if (onLast) "Race rebuild" else "Race rebuild into a ${next.title}") + " · ${formatCompact(raceCost)} RP",
+                raceOk,
                 { onPrestige(true) },
                 Modifier.fillMaxWidth().padding(top = 8.dp),
             )

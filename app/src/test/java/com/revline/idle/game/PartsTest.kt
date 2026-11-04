@@ -41,7 +41,7 @@ class PartsTest {
         assertEquals("rebuild 1", Racing.gate(s, "suspension", "1", "Stiff springs").label.substringAfter("· "))
         assertNotNull(Racing.partBlocked(s, "suspension", "1"))
         s = s.copy(prestiges = 1)
-        assertEquals("80 RP".replace("80", "60"), Racing.gate(s, "suspension", "1", "Stiff springs").label.substringAfter("· "))
+        assertEquals("80 RP", Racing.gate(s, "suspension", "1", "Stiff springs").label.substringAfter("· "))
         s = Racing.study(s, line.studyId(1))
         assertTrue(s.researchPoints < 1e6)
         assertTrue(Racing.gate(s, "suspension", "1", "Stiff springs").label.contains("$"))

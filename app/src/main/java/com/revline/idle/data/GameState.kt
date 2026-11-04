@@ -17,6 +17,8 @@ data class GameState(
     val prestiges: Int = 0,
     /** This long-block is the race spec: higher redline, higher sheet power, lower sheet mpg. */
     val racing: Boolean = false,
+    /** Race rebuilds in a row. Each one makes the next cost more research. A street rebuild resets it. */
+    val raceStreak: Int = 0,
     /** Fitted chassis. "mule" is the bedstead you start on. */
     val chassis: String = "mule",
     val chassisLevel: Map<String, Int> = emptyMap(),

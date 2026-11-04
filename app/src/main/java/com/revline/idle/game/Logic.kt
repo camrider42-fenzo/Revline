@@ -825,6 +825,20 @@ object Logic {
 
     fun newGame(): GameState = GameState(money = startingMoney(0))
 
+    /** Research per second at the 60% shop at the end of each block, from the research pace test. */
+    private val RACE_RP_RATE = doubleArrayOf(0.7, 0.8, 1.2, 1.9, 3.0, 4.9, 6.8, 8.9)
+    const val RACE_RP_HOURS = 3.0
+    const val RACE_RP_STACK = 1.5
+
+    /** Research a race rebuild takes: a few hours of that block's research, 1.5x more for each race rebuild in a row. */
+    fun raceRebuildCost(state: GameState): Double {
+        if (state.devMode) return 0.0
+        val rate = RACE_RP_RATE[state.prestiges.coerceIn(0, RACE_RP_RATE.lastIndex)]
+        return RACE_RP_HOURS * 3600.0 * rate * RACE_RP_STACK.pow(state.raceStreak.coerceAtLeast(0))
+    }
+
+    fun canRaceRebuild(state: GameState): Boolean = state.researchPoints >= raceRebuildCost(state)
+
     fun prestige(state: GameState, racing: Boolean = false): GameState {
         val sheet = sheet(state)
         val stats = sheet.stats
@@ -836,10 +850,13 @@ object Logic {
             state.racing,
         )
         if (gain <= 0) return state
+        if (racing && !canRaceRebuild(state)) return state
+        val spent = if (racing) raceRebuildCost(state) else 0.0
         return state.copy(
             money = startingMoney(state.prestiges + 1),
             runEarnings = 0.0,
-            researchPoints = state.researchPoints * 0.20,
+            researchPoints = (state.researchPoints - spent) * 0.20,
+            raceStreak = if (racing) state.raceStreak + 1 else 0,
             knowledge = state.knowledge + gain,
             prestiges = state.prestiges + 1,
             upgrades = emptyMap(),

@@ -136,40 +136,40 @@ object Parts {
         Line(
             "brakes", "BRAKES", "Later braking points, and a car that stops in the same place lap after lap.",
             listOf(
-                Level("Sport pads", "A harder pad that bites hot.", 40.0, 0, 500.0, Fx(brake = 1.12, mistakes = 0.97)),
-                Level("Vented rotors", "More iron to soak the heat.", 300.0, 2, 2400.0, Fx(brake = 1.27, mistakes = 0.94, addKg = 2.0)),
-                Level("Big brake kit", "Four-pot calipers and big discs.", 1400.0, 4, 6200.0, Fx(brake = 1.46, mistakes = 0.90, addKg = 5.0)),
+                Level("Sport pads", "A harder pad that bites hot.", 40.0, 0, 450.0, Fx(brake = 1.12, mistakes = 0.97)),
+                Level("Vented rotors", "More iron to soak the heat.", 280.0, 2, 2250.0, Fx(brake = 1.27, mistakes = 0.94, addKg = 2.0)),
+                Level("Big brake kit", "Four-pot calipers and big discs.", 1330.0, 4, 5900.0, Fx(brake = 1.46, mistakes = 0.90, addKg = 5.0)),
             ),
         ),
         Line(
             "suspension", "SUSPENSION", "Springs and dampers keep the tires flat on the road, and put the power down out of a corner.",
             listOf(
-                Level("Stiff springs", "Less roll, less squat.", 60.0, 1, 700.0, Fx(lateral = 1.04, traction = 1.05, launch = 1.01)),
-                Level("Dampers", "Gas dampers that hold a spring in check.", 520.0, 3, 3000.0, Fx(lateral = 1.08, traction = 1.10, launch = 1.02)),
-                Level("Coilovers", "Height and rate to suit the track.", 2000.0, 5, 8200.0, Fx(lateral = 1.12, traction = 1.16, launch = 1.035, addKg = -4.0)),
+                Level("Stiff springs", "Less roll, less squat.", 80.0, 1, 950.0, Fx(lateral = 1.04, traction = 1.05, launch = 1.01)),
+                Level("Dampers", "Gas dampers that hold a spring in check.", 590.0, 3, 3400.0, Fx(lateral = 1.08, traction = 1.10, launch = 1.02)),
+                Level("Coilovers", "Height and rate to suit the track.", 2100.0, 5, 8600.0, Fx(lateral = 1.12, traction = 1.16, launch = 1.035, addKg = -4.0)),
             ),
         ),
         Line(
             "arb", "ANTI-ROLL BARS", "A stiffer car turns in flatter and does what the driver expects.",
             listOf(
-                Level("Front bar", "A thicker bar up front.", 50.0, 1, 600.0, Fx(lateral = 1.04, mistakes = 0.94, addKg = 2.0)),
-                Level("Adjustable pair", "A bar at each end, tuned to the track.", 900.0, 4, 4400.0, Fx(lateral = 1.12, traction = 1.04, mistakes = 0.88, launch = 0.995, addKg = 4.0)),
+                Level("Front bar", "A thicker bar up front.", 50.0, 1, 650.0, Fx(lateral = 1.04, mistakes = 0.94, addKg = 2.0)),
+                Level("Adjustable pair", "A bar at each end, tuned to the track.", 650.0, 4, 3200.0, Fx(lateral = 1.12, traction = 1.04, mistakes = 0.88, launch = 0.995, addKg = 4.0)),
             ),
         ),
         Line(
             "aero", "AERO", "Downforce pushes the car into the road in a fast corner. The wing is drag on a straight.",
             listOf(
-                Level("Splitter", "A lip under the nose.", 280.0, 2, 2000.0, Fx(downforce = 0.0003, dragMult = 1.04, addKg = 3.0)),
-                Level("Rear wing", "A wing on struts.", 1100.0, 4, 5200.0, Fx(downforce = 0.00065, dragMult = 1.12, addKg = 8.0)),
-                Level("Full aero kit", "Splitter, wing, flat floor and diffuser.", 4200.0, 6, 14000.0, Fx(downforce = 0.0011, dragMult = 1.25, addKg = 14.0)),
+                Level("Splitter", "A lip under the nose.", 100.0, 2, 700.0, Fx(downforce = 0.0003, dragMult = 1.04, addKg = 3.0)),
+                Level("Rear wing", "A wing on struts.", 650.0, 4, 3100.0, Fx(downforce = 0.00065, dragMult = 1.12, addKg = 8.0)),
+                Level("Full aero kit", "Splitter, wing, flat floor and diffuser.", 2500.0, 6, 8300.0, Fx(downforce = 0.0011, dragMult = 1.25, addKg = 14.0)),
             ),
         ),
         Line(
             "weight", "WEIGHT", "Everything not bolted down comes out. A light car turns, stops and pulls harder.",
             listOf(
-                Level("Seats and trim", "A bucket seat. The carpet goes.", 40.0, 0, 450.0, Fx(shave = 0.015, lateral = 1.02, brake = 1.04, wear = 0.95)),
-                Level("Stripped interior", "No headlining, no sound deadening.", 450.0, 3, 2600.0, Fx(shave = 0.03, lateral = 1.04, brake = 1.08, wear = 0.90)),
-                Level("Panels and glass", "Thin panels and plastic windows.", 1800.0, 5, 7600.0, Fx(shave = 0.05, lateral = 1.07, brake = 1.14, wear = 0.85)),
+                Level("Seats and trim", "A bucket seat. The carpet goes.", 100.0, 0, 1100.0, Fx(shave = 0.015, lateral = 1.02, brake = 1.04, wear = 0.95)),
+                Level("Stripped interior", "No headlining, no sound deadening.", 900.0, 3, 5200.0, Fx(shave = 0.03, lateral = 1.04, brake = 1.08, wear = 0.90)),
+                Level("Panels and glass", "Thin panels and plastic windows.", 3200.0, 5, 13500.0, Fx(shave = 0.05, lateral = 1.07, brake = 1.14, wear = 0.85)),
             ),
         ),
         Line(
@@ -183,8 +183,8 @@ object Parts {
         Line(
             "steer", "STEERING AND SETUP", "A quick rack, and a car set up for the track. The driver makes fewer mistakes.",
             listOf(
-                Level("Quick rack", "Fewer turns lock to lock.", 200.0, 2, 1500.0, Fx(lateral = 1.02, mistakes = 0.93)),
-                Level("Alignment and corner weights", "The shop sets the car up on a flat floor.", 1000.0, 4, 4800.0, Fx(lateral = 1.07, mistakes = 0.90, wear = 0.80)),
+                Level("Quick rack", "Fewer turns lock to lock.", 50.0, 2, 350.0, Fx(lateral = 1.02, mistakes = 0.93)),
+                Level("Alignment and corner weights", "The shop sets the car up on a flat floor.", 1060.0, 4, 5100.0, Fx(lateral = 1.07, mistakes = 0.90, wear = 0.80)),
                 Level("Full setup", "Geometry, bump steer and a day on the track.", 3800.0, 6, 12000.0, Fx(lateral = 1.11, mistakes = 0.86, wear = 0.65)),
             ),
         ),
@@ -222,23 +222,23 @@ object Parts {
         Line(
             "flywheel", "LIGHT FLYWHEEL", "Less metal to spin. The engine revs freely and every gear pulls harder, but the launch has less swing.",
             listOf(
-                Level("Lightened flywheel", "Steel, with the rim skimmed.", 120.0, 1, 800.0, Fx(flywheel = 0.04, addKg = -3.0)),
-                Level("Aluminium flywheel", "Half the inertia. Easy to stall, quick to rev.", 650.0, 3, 2400.0, Fx(flywheel = 0.07, addKg = -6.0)),
+                Level("Lightened flywheel", "Steel, with the rim skimmed.", 160.0, 1, 1100.0, Fx(flywheel = 0.04, addKg = -3.0)),
+                Level("Aluminium flywheel", "Half the inertia. Easy to stall, quick to rev.", 1520.0, 3, 5600.0, Fx(flywheel = 0.07, addKg = -6.0)),
             ),
             strip = true,
         ),
         Line(
             "shifter", "SHORT SHIFTER", "A short throw, and a light that tells you when. Quick, and unforgiving of a slow hand.",
             listOf(
-                Level("Short-throw shifter and shift light", "Less throw, a notchy gate, and a light you can set on the Drag tune.", 80.0, 1, 500.0, Fx(shiftMult = 0.88)),
-                Level("Air-shifted quick-shift", "An air ram on the lever. The shift is a snap.", 800.0, 4, 3600.0, Fx(shiftMult = 0.75, addKg = 3.0)),
+                Level("Short-throw shifter and shift light", "Less throw, a notchy gate, and a light you can set on the Drag tune.", 110.0, 1, 700.0, Fx(shiftMult = 0.88)),
+                Level("Air-shifted quick-shift", "An air ram on the lever. The shift is a snap.", 620.0, 4, 2800.0, Fx(shiftMult = 0.75, addKg = 3.0)),
             ),
             strip = true,
         ),
         Line(
             "linelock", "LINE LOCK", "Locks the front brakes so the rears can smoke a burnout and heat the tires.",
             listOf(
-                Level("Line lock", "A solenoid on the front brake line. Hot tires grip. It also warms the air in them.", 300.0, 2, 900.0, Fx(burnout = 1.0, addKg = 1.0)),
+                Level("Line lock", "A solenoid on the front brake line. Hot tires grip. It also warms the air in them.", 230.0, 2, 700.0, Fx(burnout = 1.0, addKg = 1.0)),
             ),
             strip = true,
         ),

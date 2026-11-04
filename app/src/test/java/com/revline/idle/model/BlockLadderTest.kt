@@ -31,8 +31,8 @@ class BlockLadderTest {
     @Test
     fun aRaceRebuildRaisesPowerTargetsAndCutsMpg() {
         for (block in Block.entries) {
-            assertTrue("${block.title} hp", block.sheetHp(true) > block.sheetHp(false) * 1.3)
-            assertTrue("${block.title} tq", block.sheetTorque(true) > block.sheetTorque(false) * 1.1)
+            assertTrue("${block.title} hp", block.sheetHp(true) > block.sheetHp(false) * 1.15)
+            assertTrue("${block.title} tq", block.sheetTorque(true) > block.sheetTorque(false) * 1.05)
             assertTrue("${block.title} mpg", block.sheetMpg(true) < block.sheetMpg(false) * 0.75)
         }
         val research = com.revline.idle.game.ResearchTree.all.map { it.id }.toSet()
@@ -55,6 +55,7 @@ class BlockLadderTest {
         }
         val ready = GameState(
             money = 1e9,
+            researchPoints = 1e9,
             researched = research,
             upgrades = maxed,
         )

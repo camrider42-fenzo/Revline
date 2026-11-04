@@ -123,9 +123,9 @@ enum class Block(
     }
 
     /** Race sheet: more power, less cruise. The street numbers stay the rebuild the shop was tuned on. */
-    fun sheetHp(racing: Boolean): Double = if (racing) hpGoal * 1.42 else hpGoal
+    fun sheetHp(racing: Boolean): Double = if (racing) hpGoal * 1.21 else hpGoal
 
-    fun sheetTorque(racing: Boolean): Double = if (racing) torqueGoal * 1.18 else torqueGoal
+    fun sheetTorque(racing: Boolean): Double = if (racing) torqueGoal * 1.09 else torqueGoal
 
     /** Light vehicles go further on the same fuel. The V12 car does not. */
     fun mpgScale(): Double = when (this) {
