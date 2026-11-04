@@ -41,12 +41,12 @@ object Tires {
     /** The lap on which a soft tire is at the cliff on this circuit, for the reference car and hands (a whole lap, rounded up). */
     fun softCliffLap(circuit: Circuits.Circuit): Int = kotlin.math.ceil(softLaps(circuit) - 1e-9).toInt()
 
-    /** Grip floor: a destroyed tire still holds the road, barely. It bounds what the car feels ([felt]), not the wear shown. */
+    /** The wear at which a tire goes over its cliff: below this the grip it gives falls faster ([felt]). */
     const val FLOOR = 0.35
 
     /**
      * Share of the tire left (1.0 new) after [life] of the tire's life is used: a straight loss, then the cliff. It keeps
-     * falling past [FLOOR] toward 0, so a long stint reads as the worn-out tire it is. The strategy sheet shows this.
+     * falling past [FLOOR] toward 0, so a long stint reads as the worn-out tire it is, and past [FLOOR] the car feels it ([felt]).
      */
     fun condition(life: Double): Double {
         val l = max(0.0, life)
@@ -56,8 +56,18 @@ object Tires {
     /** How much of the grip lost to wear the lap time feels: a tire shown at 60% grip costs 0.30 x 40% = 12% of the car's grip. */
     const val WEAR_FELT = 0.30
 
-    /** The car's grip multiplier from the tire's condition (1.0 new). */
-    fun felt(condition: Double): Double = 1.0 - WEAR_FELT * (1.0 - max(FLOOR, condition))
+    /** Extra grip a tire at 0% has lost on top of the straight wear loss: the cliff below [FLOOR], reached in a straight line from it. */
+    const val CLIFF_LOSS = 0.20
+
+    /**
+     * The car's grip multiplier from the tire's condition (1.0 new). Above [FLOOR] a tire loses [WEAR_FELT] of what it has
+     * worn. Below it the tire is through its rubber and the loss steepens: up to [CLIFF_LOSS] more by 0%. So the multiplier
+     * is 0.805 at 35%, 0.67 at 20% and 0.50 at 0%: it keeps falling, and never reaches zero.
+     */
+    fun felt(condition: Double): Double {
+        val c = condition.coerceIn(0.0, 1.0)
+        return 1.0 - WEAR_FELT * (1.0 - c) - CLIFF_LOSS * (max(0.0, FLOOR - c) / FLOOR)
+    }
 
     /** How hard this compound wears under the sky: a wet tire cooks on a dry track, slicks run a little cooler in the wet. */
     fun wearIn(c: Compound, sev: Double): Double =

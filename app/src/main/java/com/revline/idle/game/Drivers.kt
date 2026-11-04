@@ -28,7 +28,7 @@ object Drivers {
         }
     }
 
-    enum class Stat(val title: String) { THROTTLE("THROTTLE"), CLUTCH("CLUTCH"), SHIFTING("SHIFTING"), DYNO("DYNO") }
+    enum class Stat(val title: String) { THROTTLE("THROTTLE"), CLUTCH("CLUTCH"), SHIFTING("SHIFTING"), DYNO("DYNO"), REACTION("REACTION") }
 
     data class Driver(
         val id: String,
@@ -52,6 +52,8 @@ object Drivers {
         val mistakes: Int = 50,
         /** Mechanical sympathy: short-shifts when the engine hurts, spares it. Less wear, less failure risk, less power fade. */
         val care: Int = 50,
+        /** Strip and grid reflexes: how soon he is off at the lights (0..100, higher is quicker). Old data and anyone not set gets an average 50. */
+        val reaction: Int = 50,
     ) {
         /** Overall rating out of 100, see [overall]. */
         val overall: Int get() = Drivers.overall(this)
@@ -61,6 +63,7 @@ object Drivers {
             Stat.CLUTCH -> clutch
             Stat.SHIFTING -> shifting
             Stat.DYNO -> dyno
+            Stat.REACTION -> reaction
         }
     }
 
@@ -88,16 +91,16 @@ object Drivers {
     }
 
     val roster: List<Driver> = listOf(
-        Driver("dusty", "Graham Hill", 1, 42, 40, 44, 38, Specialty.ALL_ROUNDER, 0.015, "Tidy and unflappable. Keeps it pointed straight.", cornering = 44, braking = 42, acceleration = 40, mistakes = 40, care = 50),
-        Driver("mina", "Stirling Moss", 1, 66, 40, 34, 40, Specialty.GRIP, 0.035, "Smooth as silk. Soft right foot.", cornering = 62, braking = 48, acceleration = 46, mistakes = 40, care = 55),
-        Driver("rusty", "Jack Brabham", 1, 36, 60, 38, 34, Specialty.CLUTCH, 0.045, "Mechanic first. Feels the clutch through his boots.", cornering = 38, braking = 44, acceleration = 50, mistakes = 46, care = 66),
-        Driver("pavel", "Niki Lauda", 2, 48, 52, 74, 50, Specialty.GEARS, 0.07, "Exact and unhurried. Rows a box faster than you can say the gear.", cornering = 58, braking = 60, acceleration = 54, mistakes = 28, care = 74),
-        Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 90, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives.", cornering = 70, braking = 62, acceleration = 66, mistakes = 66, care = 36),
-        Driver("tanaka", "James Hunt", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Charming and quick off the line.", cornering = 62, braking = 54, acceleration = 72, mistakes = 64, care = 40),
-        Driver("gus", "Jackie Stewart", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Calm, careful and clever. Wins by being tidy.", cornering = 66, braking = 64, acceleration = 58, mistakes = 32, care = 68),
-        Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.17, "The Professor. Lives on the bite point.", cornering = 70, braking = 74, acceleration = 62, mistakes = 20, care = 88),
-        Driver("viktor", "Ayrton Senna", 3, 64, 60, 62, 90, Specialty.REVS, 0.13, "Counts the curve in his head. Shifts exactly there.", cornering = 92, braking = 78, acceleration = 86, mistakes = 36, care = 48),
-        Driver("ace", "Juan Manuel Fangio", 3, 78, 76, 80, 76, Specialty.ALL_ROUNDER, 0.22, "The old master. Sharp everywhere, and he bills for it.", cornering = 76, braking = 76, acceleration = 74, mistakes = 26, care = 72),
+        Driver("dusty", "Graham Hill", 1, 42, 40, 44, 38, Specialty.ALL_ROUNDER, 0.015, "Tidy and unflappable. Keeps it pointed straight.", cornering = 44, braking = 42, acceleration = 40, mistakes = 40, care = 50, reaction = 44),
+        Driver("mina", "Stirling Moss", 1, 66, 40, 34, 40, Specialty.GRIP, 0.035, "Smooth as silk. Soft right foot.", cornering = 62, braking = 48, acceleration = 46, mistakes = 40, care = 55, reaction = 42),
+        Driver("rusty", "Jack Brabham", 1, 36, 60, 38, 34, Specialty.CLUTCH, 0.045, "Mechanic first. Feels the clutch through his boots.", cornering = 38, braking = 44, acceleration = 50, mistakes = 46, care = 66, reaction = 50),
+        Driver("pavel", "Niki Lauda", 2, 48, 52, 74, 50, Specialty.GEARS, 0.07, "Exact and unhurried. Rows a box faster than you can say the gear.", cornering = 58, braking = 60, acceleration = 54, mistakes = 28, care = 74, reaction = 46),
+        Driver("ines", "Gilles Villeneuve", 2, 50, 48, 52, 90, Specialty.REVS, 0.07, "Flat out and fearless. Knows where the power lives.", cornering = 70, braking = 62, acceleration = 66, mistakes = 66, care = 36, reaction = 58),
+        Driver("tanaka", "James Hunt", 2, 76, 52, 46, 54, Specialty.GRIP, 0.075, "Charming and quick off the line.", cornering = 62, braking = 54, acceleration = 72, mistakes = 64, care = 40, reaction = 56),
+        Driver("gus", "Jackie Stewart", 2, 62, 60, 60, 60, Specialty.ALL_ROUNDER, 0.085, "Calm, careful and clever. Wins by being tidy.", cornering = 66, braking = 64, acceleration = 58, mistakes = 32, care = 68, reaction = 60),
+        Driver("colette", "Alain Prost", 3, 58, 84, 72, 62, Specialty.CLUTCH, 0.17, "The Professor. Lives on the bite point.", cornering = 70, braking = 74, acceleration = 62, mistakes = 20, care = 88, reaction = 70),
+        Driver("viktor", "Ayrton Senna", 3, 64, 60, 62, 90, Specialty.REVS, 0.13, "Counts the curve in his head. Shifts exactly there.", cornering = 92, braking = 78, acceleration = 86, mistakes = 36, care = 48, reaction = 66),
+        Driver("ace", "Juan Manuel Fangio", 3, 78, 76, 80, 76, Specialty.ALL_ROUNDER, 0.22, "The old master. Sharp everywhere, and he bills for it.", cornering = 76, braking = 76, acceleration = 74, mistakes = 26, care = 72, reaction = 76),
     )
 
     /** The player at the wheel on a circuit: a middling driver across the board. Never a roster entry, never paid. */
@@ -203,6 +206,7 @@ object Drivers {
             v(driver.clutch, Stat.CLUTCH),
             v(driver.shifting, Stat.SHIFTING),
             v(driver.dyno, Stat.DYNO),
+            v(driver.reaction, Stat.REACTION),
         )
     }
 
@@ -215,7 +219,7 @@ object Drivers {
     }
 
     /** Flat reference hands for the balance harness: what a player manages on the real pedals. */
-    fun reference(level: Int): Skills = Skills(level / 100.0, level / 100.0, level / 100.0, level / 100.0)
+    fun reference(level: Int): Skills = Skills(level / 100.0, level / 100.0, level / 100.0, level / 100.0, level / 100.0)
 
     /**
      * Rpm where the next gear starts pulling harder than this one: engine torque times ratio, before and after the shift.

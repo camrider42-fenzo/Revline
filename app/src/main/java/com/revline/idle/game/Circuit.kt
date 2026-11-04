@@ -240,6 +240,8 @@ object Circuits {
         val dyno: Double,
         val care: Double,
         val mistakes: Double,
+        /** Off the lights, 0..1. */
+        val reaction: Double = 0.5,
     )
 
     fun hands(driver: Drivers.Driver, setup: RaceDrive.Setup): Hands {
@@ -252,8 +254,12 @@ object Circuits {
             dyno = skill.dyno,
             care = driver.care / 100.0,
             mistakes = driver.mistakes / 100.0,
+            reaction = skill.reaction,
         )
     }
+
+    /** Seconds a driver's getaway is off the grid's standard 3 s: 0 for an average reaction, a tenth to two either way, and the noise of that run. */
+    fun startDelay(reaction: Double, noise: Double): Double = 0.35 * (0.5 - reaction) + noise * (0.02 + 0.06 * (1.0 - reaction))
 
     // ---- The lap -------------------------------------------------------------------------------------------------
 
@@ -910,7 +916,7 @@ object Circuits {
                 break
             }
             var lap = base.time * (1.0 + (0.002 + 0.004 * h.mistakes) * lapNoise * dice.gauss())
-            if (lapNo == 1) lap += START + gridOffset(mySlot, circuit)
+            if (lapNo == 1) lap += START + gridOffset(mySlot, circuit) + startDelay(h.reaction, Dice(seed xor 0x5DEECE66DL).gauss())
             var crashed = false
             repeat(dice.poisson(lambda)) {
                 val spot = slice(circuit, dice)

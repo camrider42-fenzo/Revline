@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.86.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.87.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -110,6 +110,10 @@ DRAG PARTS (1.84.0) sit under a DRAG PARTS heading on the race screen's parts li
 The TUNE tab has an ENGINE page and a new DRAG page with a clean-pass forecast. Each knob has a slider, - and + buttons and a note on what it gives and costs: tire pressure (launch grip against rolling drag), final drive (pull against trap speed), front and rear stiffness (rear grip against nose lift and squat), ride height (grip against drag), and, once their part is fitted, launch rpm (transbrake), shift rpm (short shifter) and nitrous point. The settings are saved with the game (old saves open on the defaults) and are not reset by a rebuild.
 
 SHIFT POINT NEVER REACHED (1.86.0): with a Short shifter and the Shift rpm knob turned up, the driver could aim at a shift rpm above the highest the needle reads on the limiter (redline minus 20) and never change up. The driver now never aims above that, so every setting of the knob shifts through the gears. Drivers who used to stick on the limiter now shift, which lifts every driver and every human a few points of win rate on the revvy builds. Ines (Rev hound) lost the mid-ladder sleeper builds she used to win only because the others stuck, so her dyno knowledge goes from 76 to 90 to keep her the right hire somewhere.
+
+GRIP CLIFF (1.87.0): below 35% wear a tire now falls off a cliff. The grip the car feels keeps dropping about three times as steeply as before and bottoms at half grip on a bare tire, never zero. About 7% a lap slower at 20% wear and about 22% at 0%, so the strategy sheet and the rival AI pit before it.
+
+REACTION (1.87.0): drivers have a Reaction stat. It sets the launch delay on the strip (with per-run noise) and the standing-start delay on the grid. It shows on the driver card and the hire screen. Old saves read it from the roster, and a hand-built driver defaults to 50.
 
 TIRE WEAR PAST 35% (1.85.1): the circuit strategy sheet no longer stops a tire at 35%. The wear it shows keeps falling toward 0% on a long stint. Only the grip the car feels keeps its floor, so lap times and results are unchanged.
 

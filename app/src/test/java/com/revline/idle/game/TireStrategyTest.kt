@@ -50,6 +50,14 @@ class TireStrategyTest {
         assertTrue(push.raceTime < steady.raceTime + 5.0)
     }
 
+    @Test fun theBestPlanPitsBeforeTheCliff() {
+        for (c in Circuits.all) {
+            val best = Circuits.advise(car("street"), c, d).first()
+            val g = listOfNotNull(best.gripAtStop, best.gripAtStop2, best.gripAtFlag)
+            assertTrue("${c.id} $g", g.all { it >= 0.30 })
+        }
+    }
+
     @Test fun everyPaceIsTheBestOnAtLeastOneCircuitOrCloseToIt() {
         // Pace is a real choice: the three paces' best plans are within about a percent of each other.
         for (c in Circuits.all) {

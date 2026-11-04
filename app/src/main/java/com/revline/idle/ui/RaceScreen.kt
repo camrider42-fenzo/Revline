@@ -639,7 +639,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
     } else {
         ChipRow(hired.map { it.id to it.name.uppercase(Locale.US) }, picked.id) { driverPick = it }
         Text(
-            "${picked.name}  overall ${picked.overall}  corner ${picked.cornering}  brake ${picked.braking}  accel ${picked.acceleration}  mistakes ${picked.mistakes} (lower is better)  care ${picked.care}",
+            "${picked.name}  overall ${picked.overall}  corner ${picked.cornering}  brake ${picked.braking}  accel ${picked.acceleration}  react ${picked.reaction}  mistakes ${picked.mistakes} (lower is better)  care ${picked.care}",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

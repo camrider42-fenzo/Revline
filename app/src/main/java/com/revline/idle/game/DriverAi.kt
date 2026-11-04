@@ -11,6 +11,8 @@ data class Skills(
     val clutch: Double,
     val shifting: Double,
     val dyno: Double,
+    /** Off the lights. Defaults to the clutch so a hand-built [Skills] reacts as it always did. */
+    val reaction: Double = clutch,
 )
 
 /**
@@ -41,6 +43,7 @@ class Pilot(private val setup: RaceDrive.Setup, val skills: Skills, seed: Long) 
     private val loseC = 1.0 - skills.clutch
     private val loseS = (1.0 - skills.shifting) * (1.0 + 1.5 * setup.notchy)
     private val loseD = 1.0 - skills.dyno
+    private val loseR = 1.0 - skills.reaction
 
     // Launch throttle: the true limit, as this driver reads it, then backed off by his own foot noise.
     private val plan = Drivers.launchPlan(setup)
@@ -59,7 +62,7 @@ class Pilot(private val setup: RaceDrive.Setup, val skills: Skills, seed: Long) 
     // Tree: where the pedal sits. The margin over the bite point is sized to the driver's own wobble.
     private val clutchNoise = (0.008 + 0.075 * loseC * (1.0 + 0.5 * grab))
     private val sitPedal = (RaceDrive.BITE_START + 0.03 + clutchNoise + gauss() * clutchNoise).coerceIn(0.3, 1.0)
-    private val reaction = ((0.09 + 0.22 * loseC + gauss() * (0.015 + 0.05 * loseC)) * (if (setup.launchRpm > 0.0) 0.6 else 1.0)).coerceAtLeast(0.07)
+    private val reaction = ((0.09 + 0.22 * loseR + gauss() * (0.015 + 0.05 * loseR)) * (if (setup.launchRpm > 0.0) 0.6 else 1.0)).coerceAtLeast(0.07)
     private val launchRelease = (0.05 + 0.40 * Math.pow(loseC, 1.2) * (1.0 + 0.6 * grab)) * (if (setup.launchRpm > 0.0) 0.3 else 1.0)
 
     // Shifts.

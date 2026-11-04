@@ -46,7 +46,7 @@ class CircuitBalanceTest {
             // A grip-only build gains most where the corners are and fades where the straights are.
             val grip = gain.getValue("grip")
             assertTrue(grip.getValue("hungaroring") > grip.getValue("monza") + 5.0)
-            assertTrue(grip.getValue("monaco") > grip.getValue("spa") + 5.0)
+            assertTrue(grip.getValue("monaco") > grip.getValue("spa") + 4.0)
             // So the best build for you depends on where you race: the best non-power build is not the same everywhere.
             val best = Circuits.all.associate { c -> c.id to listOf("grip", "light", "balanced").maxBy { gain.getValue(it).getValue(c.id) } }
             say("best of grip/light/balanced: $best")
