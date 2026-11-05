@@ -9,7 +9,10 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.min
+import kotlin.math.sin
 
 class CircuitLayoutTest {
     private fun race(id: String, seed: Long): Circuits.Result {
@@ -47,7 +50,7 @@ class CircuitLayoutTest {
         // The drawn road is wider than the real one, so where two parts of a real track really are close it can touch. That is a few percent of the lap at most.
         for (c in Circuits.all) {
             val g = CircuitGeo(936f, 936f / CircuitLayouts.aspect(c.id), c.id)
-            val share = g.line.tightShare(g.roadUnits * 1.05f)
+            val share = g.draw.tightShare(g.roadUnits * 1.05f)
             assertTrue("${c.id}: ${(share * 100).toInt()}% of the lap is closer than a road width", share < (if (c.id == "suzuka") 0.12f else 0.06f))
         }
     }
@@ -343,4 +346,106 @@ class CircuitLayoutTest {
         assertEquals((1..replay.you.completed).minOf { replay.you.cum[it] - replay.you.cum[it - 1] }, b.second.span, 1e-6)
         assertEquals(ReplaySpeed.labels.size, 7)
     }
+
+    @Test fun displayedRoadIsWiderThanTheOldRibbon() {
+        // Floors sit above the previous shares (0.024–0.036) and under the 90 m cap.
+        val floor = mapOf(
+            "monza" to 60f, "monaco" to 22f, "silverstone" to 52f, "spa" to 48f,
+            "hungaroring" to 52f, "suzuka" to 66f, "montreal" to 44f, "singapore" to 60f,
+        )
+        for (c in Circuits.all) {
+            val g = picture(c.id)
+            val drawn = g.roadUnits * g.line.metersPerUnit
+            assertTrue("${c.id} road is ${drawn}m", drawn > floor.getValue(c.id) && drawn < 90f)
+            val half = g.roadW / 2f
+            var i = 0
+            while (i < g.line.xs.size) {
+                val s = i * g.line.step
+                for (lat in floatArrayOf(-half, 0f, half)) {
+                    val p = g.point(s, lat)
+                    assertTrue("${c.id} edge off the picture at $s", p.x in -1f..g.w + 1f && p.y in -1f..g.h + 1f)
+                }
+                i += 6
+            }
+        }
+    }
+
+    @Test fun crowdedBendsOpenOnTheDrawingAndTheMeasuredLapDoesNotMove() {
+        for (c in Circuits.all) {
+            val line = CircuitLayouts.of(c.id)
+            val xs = line.xs.copyOf()
+            val ys = line.ys.copyOf()
+            val arcs = line.cornerArc.copyOf()
+            val lengthM = line.lengthM
+            val bridge = line.bridgeArc
+            val g = picture(c.id)
+            assertTrue(xs.contentEquals(line.xs))
+            assertTrue(ys.contentEquals(line.ys))
+            assertTrue(arcs.contentEquals(line.cornerArc))
+            assertEquals(lengthM, line.lengthM, 0.0)
+            assertEquals(bridge, line.bridgeArc, 0f)
+            assertEquals(c.id == "suzuka", line.bridgeArc >= 0f)
+            assertEquals(c.id == "suzuka", g.draw.crosses())
+            val gap = g.roadUnits * 1.05f
+            val physical = line.tightShare(gap)
+            val drawn = g.draw.tightShare(gap)
+            val cap = if (c.id == "suzuka") 0.12f else 0.06f
+            assertTrue("${c.id} drawn tight $drawn", drawn < cap)
+            if (physical > 0.01f) assertTrue("${c.id} drawn $drawn still as tight as the centreline $physical", drawn < physical)
+            if (c.id != "suzuka") assertTrue("${c.id} clearance ${g.draw.minClearance()} vs road ${g.roadUnits}", g.draw.minClearance() >= gap)
+            // Eight samples down one bend stay neighbours. Opening a distant stretch must not pull them apart.
+            var i = 0
+            while (i < line.xs.size) {
+                val j = (i + 8) % line.xs.size
+                val along = min(abs(i - j) * line.step, line.length - abs(i - j) * line.step)
+                assertTrue(along < 30f)
+                val before = hypot(line.xs[i] - line.xs[j], line.ys[i] - line.ys[j])
+                val after = hypot(g.draw.xs[i] - g.draw.xs[j], g.draw.ys[i] - g.draw.ys[j])
+                assertTrue("${c.id} neighbours $before -> $after", abs(after - before) < 1.2f)
+                i += 23
+            }
+        }
+        val monaco = picture("monaco")
+        assertTrue(monaco.draw.minClearance() > monaco.line.minClearance() + 0.4f)
+        val montreal = picture("montreal")
+        assertTrue(montreal.draw.minClearance() > montreal.line.minClearance() + 0.4f)
+        val singapore = picture("singapore")
+        assertTrue(singapore.draw.minClearance() > singapore.line.minClearance() + 0.4f)
+    }
+
+    @Test fun carsKerbsAndTheFollowPointUseTheDrawnTangent() {
+        for (c in Circuits.all) {
+            val g = picture(c.id)
+            val line = g.line
+            val marks = floatArrayOf(0f, line.step, -line.step, line.length * 0.37f, line.cornerArc[0], line.cornerArc.last())
+            for (s in marks) {
+                val h = g.heading(s)
+                val mid = g.point(s, 0f)
+                val side = g.point(s, 20f)
+                assertEquals("${c.id} normal x at $s", mid.x - sin(h) * 20f, side.x, 0.08f)
+                assertEquals("${c.id} normal y at $s", mid.y + cos(h) * 20f, side.y, 0.08f)
+                assertTrue("${c.id} racing line leaves the road at $s", abs(g.racingLat(s)) <= g.roadW * CircuitGeo.RACING_OF_ROAD + 0.05f)
+            }
+            assertEquals("${c.id} start x", line.xs[0], g.draw.xs[0], 0.35f)
+            assertEquals("${c.id} start y", line.ys[0], g.draw.ys[0], 0.35f)
+            var s = 0f
+            var prev = g.point(0f, 0f)
+            while (s < line.length - line.step) {
+                s += line.step
+                val p = g.point(s, 0f)
+                val stepUnits = hypot(p.x - prev.x, p.y - prev.y) / g.u
+                assertTrue("${c.id} step $stepUnits at $s", stepUnits < 1.35f)
+                prev = p
+            }
+            val seam = hypot(g.point(0f, 0f).x - g.point(line.length, 0f).x, g.point(0f, 0f).y - g.point(line.length, 0f).y)
+            assertTrue("${c.id} seam $seam", seam < 0.6f)
+            assertTrue(abs(CircuitLine.angleDiff(g.heading(-line.step), g.heading(0f))) < 0.55f)
+            assertTrue(abs(CircuitLine.angleDiff(g.heading(0f), g.heading(line.step))) < 0.55f)
+            // The inside of a marked corner is still the inside on the drawn bend.
+            val agree = (0 until line.corners).count { g.bend(line.cornerArc[it]) * line.cornerSide[it] > 0f }
+            assertTrue("${c.id} bend agrees $agree of ${line.corners}", agree >= line.corners * 0.85f)
+        }
+    }
+
+    private fun picture(id: String) = CircuitGeo(936f, 936f / CircuitLayouts.aspect(id), id)
 }

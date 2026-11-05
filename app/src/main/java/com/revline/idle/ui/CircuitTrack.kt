@@ -47,6 +47,11 @@ internal class CircuitGeo(val w: Float, val h: Float, id: String) {
     val roadUnits: Float
     /** One car length in layout units. */
     val carUnits: Float
+    /** Spare picture, in layout units, after the physical line and its pad are fitted. The drawn line is not fitted again. */
+    val slackX: Float
+    val slackY: Float
+    /** Painted centerline. Same arc as [line], shifted apart only where two stretches would otherwise touch. */
+    val draw: CircuitDraw
 
     init {
         val bw = line.maxX - line.minX
@@ -56,21 +61,28 @@ internal class CircuitGeo(val w: Float, val h: Float, id: String) {
         oy = (h - bh * u) / 2f - line.minY * u
         roadUnits = roadW / u
         carUnits = carLen / u
+        slackX = ((w - 2 * padX) / u - bw).coerceAtLeast(0f)
+        slackY = ((h - 2 * padY) / u - bh).coerceAtLeast(0f)
+        draw = CircuitDraw.of(line, roadUnits, slackX, slackY)
     }
 
     private val tmp = FloatArray(3)
 
-    /** Page position of the point [lat] pixels to the right of the line at arc [s]. */
+    /** Page position of the point [lat] pixels to the right of the drawn line at physical arc [s]. */
     fun point(s: Float, lat: Float): Offset {
-        line.at(s, tmp)
+        draw.at(s, tmp)
         val h = tmp[2]
         return Offset(ox + tmp[0] * u - sin(h) * lat, oy + tmp[1] * u + cos(h) * lat)
     }
 
+    /** Tangent of the drawn line at physical arc [s]. */
     fun heading(s: Float): Float {
-        line.at(s, tmp)
+        draw.at(s, tmp)
         return tmp[2]
     }
+
+    /** Curvature of the drawn line, for the racing line, kerbs and steering. */
+    fun bend(s: Float): Float = draw.curvature(s)
 
     /**
      * The racing line, in pixels right of the middle at each layout sample: toward the inside through a corner by up to
@@ -78,12 +90,15 @@ internal class CircuitGeo(val w: Float, val h: Float, id: String) {
      */
     private val racing: FloatArray = run {
         val n = line.xs.size
-        val raw = FloatArray(n) { (line.curvature(it * line.step) * roadUnits * 4f).coerceIn(-1f, 1f) }
+        // The line's shape along the lap follows the real corner, not the small shifts that open a crowded bend.
+        // The gain stays near the old road width so a wider ribbon does not throw a car across the lane.
+        val sense = roadUnits.coerceAtMost(4.5f)
+        val raw = FloatArray(n) { (line.curvature(it * line.step) * sense * 4f).coerceIn(-1f, 1f) }
         fun blur(a: FloatArray, halfUnits: Float): FloatArray {
             val k = max(1, (halfUnits / line.step).toInt())
             return FloatArray(n) { i -> var sum = 0f; for (d in -k..k) sum += a[((i + d) % n + n) % n]; sum / (2 * k + 1) }
         }
-        val smooth = blur(blur(raw, roadUnits * 1.5f), roadUnits * 3f)
+        val smooth = blur(blur(raw, sense * 1.5f), sense * 3f)
         FloatArray(n) { smooth[it].coerceIn(-1f, 1f) * roadW * RACING_OF_ROAD }
     }
 
@@ -135,17 +150,21 @@ internal fun pitSide(geo: CircuitGeo): Int {
     for (side in intArrayOf(line.pitSide, -line.pitSide)) {
         var room = Float.MAX_VALUE
         val probe = FloatArray(3)
+        val draw = geo.draw
+        val left = line.minX - geo.slackX / 2f - 2.6f * geo.roadUnits
+        val right = line.maxX + geo.slackX / 2f + 2.6f * geo.roadUnits
+        val top = line.minY - geo.slackY / 2f - 2.2f * geo.roadUnits
+        val bot = line.maxY + geo.slackY / 2f + 2.2f * geo.roadUnits
         var s = -20f
         while (s <= 20f) {
-            line.at(s, probe)
+            draw.at(s, probe)
             val px = probe[0] - side * kotlin.math.sin(probe[2]) * geo.roadUnits * 2.6f
             val py = probe[1] + side * kotlin.math.cos(probe[2]) * geo.roadUnits * 2.6f
-            for (i in line.xs.indices step 3) {
+            for (i in draw.xs.indices step 3) {
                 val arc = (i * line.step - s).let { d -> val m = ((d % line.length) + line.length) % line.length; min(m, line.length - m) }
-                if (arc > 24f) room = min(room, hypot(line.xs[i] - px, line.ys[i] - py))
+                if (arc > 24f) room = min(room, hypot(draw.xs[i] - px, draw.ys[i] - py))
             }
-            val inside = px < 0f || px > line.boxW || py < 0f || py > line.boxH
-            if (inside) room = min(room, 0f)
+            if (px < left || px > right || py < top || py > bot) room = min(room, 0f)
             s += 5f
         }
         // The real pit lane's side wins unless there is no room for it there.
@@ -233,8 +252,8 @@ private fun DrawScope.circuitScenery(geo: CircuitGeo, title: String, subtitle: S
     val lights = 10
     for (k in 0 until lights) {
         val s = line.length * (k + 0.3f) / lights
-        val outside = if (line.curvature(s) > 0f) -1 else 1
-        val sideOf = if (abs(line.curvature(s)) < 0.004f) (if (k % 2 == 0) 1 else -1) else outside
+        val outside = if (geo.bend(s) > 0f) -1 else 1
+        val sideOf = if (abs(geo.bend(s)) < 0.004f) (if (k % 2 == 0) 1 else -1) else outside
         val c = geo.point(s, sideOf * w * 1.3f)
         val r = w * 3.2f
         drawCircle(Brush.radialGradient(listOf(Color(0xFFFFF3C8).copy(alpha = 0.2f), Color.Transparent), center = c, radius = r), r, c)
@@ -320,15 +339,12 @@ private fun DrawScope.circuitScenery(geo: CircuitGeo, title: String, subtitle: S
     for (k in line.cornerArc.indices) {
         val s = line.cornerArc[k]
         val sd = line.cornerSide[k]
-        val a = FloatArray(3)
-        val b = FloatArray(3)
-        line.at(s - 6f, a); line.at(s + 6f, b)
-        val turn = abs(CircuitLine.angleDiff(a[2], b[2]))
+        val turn = abs(CircuitLine.angleDiff(geo.heading(s - 6f), geo.heading(s + 6f)))
         // Only the apex and exit, never longer than the bend's own inside arc, and pulled in on a radius too tight for it.
-        var k = 0f
+        var peak = 0f
         var q = s - 6f
-        while (q <= s + 6f) { k = max(k, abs(line.curvature(q))); q += 0.5f }
-        val radius = if (k > 1e-4f) 1f / k else 1e4f
+        while (q <= s + 6f) { peak = max(peak, abs(geo.bend(q))); q += 0.5f }
+        val radius = if (peak > 1e-4f) 1f / peak else 1e4f
         val total = min((turn * 7f).coerceIn(3f, 9f), turn * radius).coerceAtLeast(1.5f)
         val kw = w * 0.15f
         val kerbLat = min(w * 0.5f + kw * 0.1f, radius * geo.u * 0.8f)
@@ -414,8 +430,11 @@ internal fun DrawScope.drawCircuitScene(scene: CircuitScene, cars: List<CircuitC
     for (car in cars) {
         val plan = TopPlan.of(car.look, car.mid)
         val wheelbaseUnits = (plan.frontAxle - plan.rearAxle) / plan.length * geo.carUnits
-        val steer = (geo.line.curvature(car.s) * wheelbaseUnits * 1.5f).coerceIn(-0.5f, 0.5f)
-        val yaw = kotlin.math.atan2(geo.racingLat(car.s + 0.5f) - geo.racingLat(car.s - 0.5f), geo.u)
+        val steer = (geo.bend(car.s) * wheelbaseUnits * 1.5f).coerceIn(-0.5f, 0.5f)
+        val back = geo.point(car.s - 0.5f, 0f)
+        val fore = geo.point(car.s + 0.5f, 0f)
+        val along = hypot(fore.x - back.x, fore.y - back.y).coerceAtLeast(1e-3f)
+        val yaw = kotlin.math.atan2(geo.racingLat(car.s + 0.5f) - geo.racingLat(car.s - 0.5f), along)
         drawTopCar(car.look, car.mid, car.color, car.accent, geo.point(car.s, car.lat), geo.heading(car.s) + yaw, geo.carLen, steer)
     }
 }

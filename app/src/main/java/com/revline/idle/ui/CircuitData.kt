@@ -45,7 +45,7 @@ internal object CircuitData {
                 + "5564637373729292:1:1:1;1;1<0<1<0>0>1>0>0>0?0@0?0@0@0@0@0?0@0@0?0@0?0@0@0?0@0?0@0@0@0@0@0@0@0A0@0A0A0B0A0B0A0B0"
                 + "A0B0B1A0B0",
             measuredM = 5764.0, cornerArcM = "892,936,1444,2104,2144,2512,2836,3904,4004,4096,5180",
-            cornerSides = "RLRLRRRLRLR", pitSide = 1, roadShare = 0.032f,
+            cornerSides = "RLRLRRRLRLR", pitSide = 1, roadShare = 0.040f,
         ),
         TrackData(
             "monaco", 3.337, -646, 487,
@@ -58,7 +58,7 @@ internal object CircuitData {
                 + "CPCOCPCPDOCP?P7L2I3I<OBPEOEPEOFOFNFOGNHOHMINJLJMJLLKLJNINGOGNFNHIMEO<P4I1F0D1C0D0C0B0@1?1;45<1>0<0826454737372"
                 + "837282:2:1;0;1<1;1;0<1;1<0<1;0<1<0<1<0=1=0=0>0=1>0>0=0",
             measuredM = 3304.0, cornerArcM = "220,604,772,904,1140,1264,1352,1456,1972,2088,2120,2376,2520,2568,2688,2724,2840,2908,2992",
-            cornerSides = "RRLRRLRRRLRLLRRLLRR", pitSide = 1, roadShare = 0.024f,
+            cornerSides = "RRLRRLRRRLRLLRRLLRR", pitSide = 1, roadShare = 0.027f,
         ),
         TrackData(
             "silverstone", 5.891, -1018, 834,
@@ -77,7 +77,7 @@ internal object CircuitData {
                 + "7373636364636464546454545544555554555464536463646463646364546454371;0A2H3J5K4K4K4J2G0B0=1:46455554546463738292"
                 + "92:1:1;1;0<1;1=0>0A0E1G2I2H2I3I3I3",
             measuredM = 5864.0, cornerArcM = "464,684,944,1088,1280,2024,2228,2580,3132,3652,3756,3916,4064,4220,5088,5548,5624,5792",
-            cornerSides = "RLRLLLRRRLRLRLRLRR", pitSide = 1, roadShare = 0.036f, startShiftM = 150.0,
+            cornerSides = "RLRLLLRRRLRLRLRLRR", pitSide = 1, roadShare = 0.042f, startShiftM = 150.0,
         ),
         TrackData(
             "spa", 7.004, -335, -1803,
@@ -98,7 +98,7 @@ internal object CircuitData {
                 + "D0D1B0B0A0?0?0>0<1<0:1;1:1:291:1:1:1;2:1:1:1:1;1:1:1:1;1:1:1:1;2:1:1;1:1;0;1<1<0<1<0=1=0<0=1>0=0>0>0?0>0>1?0>0"
                 + "?0>0?0?0>0?0?0?0>0?0?0?0?0?0@0?0B0G2M8P>PBPBP?O>N8I3A0:192828372827372837283827382828282",
             measuredM = 6956.0, cornerArcM = "424,1080,1188,1308,2444,2524,2676,3080,3312,3848,4056,4524,4676,4960,5176,5900,6196,6740,6800",
-            cornerSides = "RLRLRLRRLLLRLRRLLRL", pitSide = 1, roadShare = 0.028f,
+            cornerSides = "RLRLRLRRLLLRLRRLLRL", pitSide = 1, roadShare = 0.034f,
         ),
         TrackData(
             "hungaroring", 4.381, -276, 923,
@@ -113,7 +113,7 @@ internal object CircuitData {
                 + "5L3I1F0@1:365554645464546454645454645445554635464636463638181:1=0@0C2G3J6L8N:O>PAPCOGOIMKKLKLJMJLJMJLJMJMILJMJ"
                 + "MJLJMILJMKLJLJKLJMFNEOCPAP@P<P;O9N8N6L3J3I2G1F0D0A0@0>1;1:283737463637463636463647363646364636463647",
             measuredM = 4364.0, cornerArcM = "664,1168,1348,1832,2088,2396,2440,2612,2744,2948,3128,3544,3804,4100",
-            cornerSides = "RLRLRRLLRLRRLR", pitSide = 1, roadShare = 0.036f,
+            cornerSides = "RLRLRRLLRLRRLR", pitSide = 1, roadShare = 0.042f,
         ),
         TrackData(
             "suzuka", 5.807, 1067, -96,
@@ -132,7 +132,7 @@ internal object CircuitData {
                 + "K5L5L5L5L6L5L6L5M7M6M7M7N8N8O>OGLJLKKKMIOFP@O:M6L6K5M5L7M6N8N9O:P=P>P?P?PAPAPBOBPCPDOEOFNFOGOFNGNHMINIMILJLKLJ"
                 + "KLLKKLJKKLJMKLJLKL",
             measuredM = 5800.0, cornerArcM = "704,852,1108,1224,1384,1560,1816,2296,2460,2788,2924,3312,3812,3984,4996,5392,5448,5580",
-            cornerSides = "RRLRLRLRRRLRLLLRLR", pitSide = 1, roadShare = 0.026f,
+            cornerSides = "RRLRLRLRRRLRLLLRLR", pitSide = 1, roadShare = 0.030f,
         ),
         TrackData(
             "montreal", 4.361, 585, 965,
@@ -147,7 +147,7 @@ internal object CircuitData {
                 + "CPCOCPDPCPCOCPDPCOCPCPCODPCPCOCPCPDOCPCPCOCPCPDOCPCPCOCPDPCOCPCPCPCODPCPCOCPCPDOCPCPDOCPCP=O7M3H2H5L;OAPBPCOCP"
                 + "DPCODPDPCODPCODPDOCPDPCOCPCPDOCPCPCOCPDPCOCPCPDOCPDPCOCPDPCOCPDOCPDPCOCPDPCODPCODPCPDOCPDPCOCP",
             measuredM = 4344.0, cornerArcM = "248,348,720,780,1012,1248,1336,1996,2060,2684,2812,3864,3884,3920",
-            cornerSides = "LRRLRLRRLRLRRL", pitSide = 1, roadShare = 0.028f,
+            cornerSides = "LRRLRLRRLRLRRL", pitSide = 1, roadShare = 0.032f,
         ),
         TrackData(
             "singapore", 4.940, 1409, 4,
@@ -164,7 +164,7 @@ internal object CircuitData {
                 + "LJNHOEPDOCPBPBPBPBPBPBPAPBOAPBPAPBPAPBPAPAPBPAPAPAPAPAP@PAPAPAP@PAPAPAP?O:K5I3I3I2H3I3I2I3I2H3I3F1B0@0?0>0>0>0"
                 + ">1>0>0>0>0>0=0>0>1>0",
             measuredM = 4928.0, cornerArcM = "412,480,564,692,960,1420,1788,2000,2200,2656,2776,2836,3056,3592,3836,4332,4396,4688,4788",
-            cornerSides = "LRLLRRLRLLRLLRLRLLL", pitSide = -1, roadShare = 0.030f,
+            cornerSides = "LRLLRRLRLLRLLRLRLLL", pitSide = -1, roadShare = 0.036f,
         ),
     )
 }

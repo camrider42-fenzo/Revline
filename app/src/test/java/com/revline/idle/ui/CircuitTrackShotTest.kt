@@ -10,6 +10,7 @@ import com.revline.idle.game.Drivers
 import com.revline.idle.game.Racing
 import org.junit.Test
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.abs
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -103,6 +104,44 @@ class CircuitTrackShotTest {
             var t = max(0.0, at - 2.0)
             while (t < at) { keeper.cars(scene.geo, t, "p911", false); t += 1.0 / 30.0 }
             drawCircuitView(scene, keeper.cars(scene.geo, at, "p911", false), size.width, size.height, followYou = true)
+        }
+    }
+
+    @Test fun foldOverviewAndFollow() {
+        // Unfolded Fold, 18:21.6, held upright. Width is at least three quarters of the height, so the map sits beside the dials.
+        val screenW = 900f
+        val screenH = screenW * 21.6f / 18f
+        for (id in listOf("monaco", "monza")) {
+            val aspect = CircuitLayouts.aspect(id)
+            val mapW = min(screenW * 0.55f, screenH * aspect)
+            val w = mapW.toInt()
+            val h = (w / aspect).toInt()
+            val title = id.uppercase()
+            CircuitShots.shoot("$id-fold", w, h) {
+                val scene = bakeCircuitScene(CircuitGeo(size.width, size.height, id), Density(2.6f), title, "unfolded")
+                val geo = scene.geo
+                drawCircuitScene(scene, listOf(
+                    CircuitCar("p911", false, lime, Color(0xFF101010), gridArc(geo, 0, 1), geo.laneOffset),
+                    CircuitCar("vette", false, red, Color.White, gridArc(geo, 0, -1), -geo.laneOffset),
+                ))
+            }
+            val line = CircuitLayouts.of(id)
+            var apex = line.cornerArc[0]
+            if (id == "monaco") {
+                var best = 0f
+                var q = 0f
+                while (q < line.length) {
+                    val k = abs(line.curvature(q))
+                    if (k > best) { best = k; apex = q }
+                    q += 0.5f
+                }
+            }
+            CircuitShots.shoot("$id-fold-follow", w, h) {
+                val zoom = CircuitView.zoomFor(size.width, size.height)
+                val scene = bakeCircuitScene(CircuitGeo(size.width * zoom, size.height * zoom, id), Density(2.6f * zoom), title, "follow")
+                val geo = scene.geo
+                drawCircuitView(scene, listOf(CircuitCar("p911", false, lime, Color(0xFF101010), apex, geo.racingLat(apex))), size.width, size.height, followYou = true)
+            }
         }
     }
 
