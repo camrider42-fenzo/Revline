@@ -10,7 +10,7 @@ import kotlin.math.abs
 /** Rotary long-blocks sit on the piston step whose stock power is closest. */
 class RotaryAlternativesTest {
     private val alts = listOf(
-        Block.ROTARY_1R to 2,
+        Block.ROTARY_1R to 1,
         Block.ROTARY_RENESIS to 4,
         Block.ROTARY to 4,
         Block.ROTARY_20B to 5,
@@ -97,9 +97,9 @@ class RotaryAlternativesTest {
         assertEquals(Block.ROTARY_RENESIS, Block.of(atFour.blockId, atFour.prestiges))
         val wrong = GameState(prestiges = 4, blockId = Block.ROTARY_20B.name)
         assertEquals(Block.INLINE_FOUR, Block.of(wrong.blockId, wrong.prestiges))
-        val fitted = Logic.fitBlock(GameState(prestiges = 2), Block.ROTARY_1R.name)
+        val fitted = Logic.fitBlock(GameState(prestiges = 1), Block.ROTARY_1R.name)
         assertEquals(Block.ROTARY_1R.name, fitted.blockId)
-        val back = Logic.fitBlock(fitted, Block.TWIN.name)
+        val back = Logic.fitBlock(fitted, Block.THUMPER.name)
         assertEquals("", back.blockId)
     }
 }
