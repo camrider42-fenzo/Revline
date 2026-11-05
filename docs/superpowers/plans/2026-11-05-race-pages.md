@@ -4,7 +4,7 @@
 
 **Goal:** Split the Race tab into Drag and Circuit pages with shared car and hire controls at the bottom of both, then ship that as signed 1.93.2 (versionCode 124).
 
-**Architecture:** `RaceScreen` keeps one column per page. The open page, both scroll offsets, and the circuit venue live in `RaceScreen` so they survive a page switch and rotation. Circuit pit choices, the local driver pick, and the replay arm live in `CircuitSection` under `rememberSaveableStateHolder`. A `circuitOutcome` that arrives while Drag is showing is handled by an effect in `RaceScreen`, which stays composed. `GameViewModel`, `RaceMeet`, `CircuitRaceScreen`, and the map geometry are not edited.
+**Architecture:** `RaceScreen` keeps one column per page. The open page, both scroll offsets, the circuit venue, and the replay arm live in `RaceScreen` so they survive a page switch and rotation. Circuit pit choices and the local driver pick live in `CircuitSection` under `rememberSaveableStateHolder`. A `circuitOutcome` that arrives while Drag is showing is handled by an effect in `RaceScreen`, which stays composed, and the replay opens only when Circuit is showing. `GameViewModel`, `RaceMeet`, `CircuitRaceScreen`, and the map geometry are not edited.
 
 **Tech Stack:** Kotlin, Jetpack Compose, Robolectric 4.14, `androidx.compose.ui:ui-test-junit4`, Gradle `testDebugUnitTest`, `assembleRelease`, `scripts/pack-release.sh`.
 
@@ -152,7 +152,7 @@ Expected: PASS. Task 1 test still PASS.
 - Consumes: `Circuits.Outcome`, `Season.next`
 - Produces: venue id owned by `RaceScreen`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 State is `mutableStateOf`. Game is `Logic.newGame().copy(devMode = true, hiredDrivers = setOf("dusty"))`. Count `onCircuit` and `onRevise`.
 
@@ -160,11 +160,11 @@ Open Circuit, click `MONACO`, click `Run race` (count is 1). Click DRAG. Set `ci
 
 Set `mainClock.autoAdvance = false` before the dialog can open, and `advanceTimeBy(300)` after the click that should open it. Do not advance long enough to need the replay to finish.
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Expected: FAIL because the venue stays on Monaco, or `Close` never appears, or a second `onCircuit` fires. Not a compile failure.
 
-- [ ] **Step 3: Handle the outcome above the page switch**
+- [x] **Step 3: Handle the outcome above the page switch**
 
 ```kotlin
 var circuitId by rememberSaveable { mutableStateOf(Season.next(ui.game).id) }
@@ -176,13 +176,13 @@ LaunchedEffect(ui.circuitOutcome) {
 }
 ```
 
-Pass `circuitId` into `CircuitSection` and delete that function's own venue state and follow effect. Keep `armed`, `watching`, pit orders, and `driverPick` where they are. The Run race click stays the only `onRun` call.
+Pass `circuitId` into `CircuitSection` and delete that function's own venue state and follow effect. The replay arm and `watching` also live in `RaceScreen`: an effect keyed on the outcome, the page, and the arm opens the dialog only while Circuit is showing, so a result that arrives on Drag is not lost when `CircuitSection` is not composed. Pit orders and `driverPick` stay in `CircuitSection`. The Run race click stays the only `onRun` call.
 
-- [ ] **Step 4: Re-run Task 3 and Task 2 tests**
+- [x] **Step 4: Re-run Task 3 and Task 2 tests**
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 `git commit -m "Apply a circuit result once when Drag is showing."`
 

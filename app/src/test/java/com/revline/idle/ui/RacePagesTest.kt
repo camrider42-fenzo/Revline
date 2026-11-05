@@ -6,6 +6,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -15,7 +16,12 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import com.revline.idle.DynoPhase
 import com.revline.idle.UiModel
+import com.revline.idle.economy.DriverBuilds
+import com.revline.idle.game.Circuits
+import com.revline.idle.game.Drivers
 import com.revline.idle.game.Logic
+import com.revline.idle.game.Racing
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -103,6 +109,60 @@ class RacePagesTest {
         rule.onNodeWithText("Free race.", substring = true).assertDoesNotExist()
     }
 
+    @Test fun offscreenResultOpensOneReplayAndMovesTheVenueOnce() {
+        val game = Logic.newGame().copy(devMode = true, hiredDrivers = setOf("dusty"))
+        val ui = androidx.compose.runtime.mutableStateOf(UiModel(game, Logic.sheet(game), 800.0, DynoPhase.IDLE, null))
+        var runs = 0
+        var revises = 0
+        rule.setContent {
+            RaceScreen(
+                ui.value, {}, {}, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {},
+                { _, _, _ -> runs++ }, { _, _ -> revises++ },
+            )
+        }
+        val page = SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
+        rule.onNodeWithText("CIRCUIT", substring = false).performClick()
+        rule.onNodeWithText("MONACO").performClick()
+        rule.onNodeWithText("Free race.", substring = true).assertExists()
+        rule.onNode(page).performScrollToNode(hasText("Run race"))
+        rule.onNodeWithText("Run race").performClick()
+        assertEquals(1, runs)
+        rule.onNodeWithText("DRAG", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.runOnIdle { ui.value = ui.value.copy(circuitBusy = true) }
+        rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Racing...").assertIsNotEnabled()
+        assertEquals(1, runs)
+        rule.onNodeWithText("DRAG", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        val outcome = finishedRace()
+        check(outcome.result.log.rows.isNotEmpty()) { "fixture log is empty" }
+        rule.runOnIdle { ui.value = ui.value.copy(circuitBusy = false, circuitOutcome = outcome) }
+        rule.onNodeWithText("Close").assertDoesNotExist()
+        assertEquals(0, revises)
+        rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Close").assertExists()
+        rule.onNodeWithText("CHAMPIONSHIP ROUND", substring = true).assertExists()
+        assertEquals(1, runs)
+        assertEquals(0, revises)
+        rule.onNodeWithText("DRAG", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Close").assertDoesNotExist()
+        rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Close").assertExists()
+        rule.onNodeWithText("Close").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Close").assertDoesNotExist()
+        rule.onNode(page).performScrollToNode(hasText("MONACO"))
+        rule.onNodeWithText("MONACO").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Free race.", substring = true).assertExists()
+        rule.onNodeWithText("DRAG", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Free race.", substring = true).assertExists()
+        rule.onNodeWithText("Close").assertDoesNotExist()
+        rule.onNode(page).performScrollToNode(hasText("Watch the race"))
+        rule.onNodeWithText("Watch the race").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Close").assertExists()
+        assertEquals(1, runs)
+        assertEquals(0, revises)
+    }
+
     private fun show() = rule.setContent { screen() }
 
     @androidx.compose.runtime.Composable
@@ -110,7 +170,15 @@ class RacePagesTest {
         val game = Logic.newGame()
         RaceScreen(
             UiModel(game, Logic.sheet(game), 800.0, DynoPhase.IDLE, null, raceNote = "The till is short."),
-            {}, {}, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, { _, _ -> },
+            {}, {}, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {},             { _, _, _ -> }, { _, _ -> },
         )
+    }
+
+    private fun finishedRace(): Circuits.Outcome {
+        val c = Circuits.all.first { it.id == "spa" }
+        val d = Drivers.byId("colette")!!
+        val car = Circuits.carOf(DriverBuilds.make(3, Racing.Build.MEDIUM, "race", "close", "lsd", 0.8))
+        val result = Circuits.race(Circuits.plan(car, c, d), d, Circuits.parPlan(3, c), 7L)
+        return Circuits.Outcome(result, 0.0, 0.0, 0.0, 0.0, "")
     }
 }

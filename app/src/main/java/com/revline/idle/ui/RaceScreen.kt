@@ -74,6 +74,21 @@ fun RaceScreen(
     val slots = car.spec.slots
     val slotMax = Racing.slotMax(body, level)
     var page by rememberSaveable { mutableStateOf("DRAG") }
+    var circuitId by rememberSaveable { mutableStateOf(Season.next(state).id) }
+    val handled = remember { arrayOf(ui.circuitOutcome) }
+    LaunchedEffect(ui.circuitOutcome) {
+        val outcome = ui.circuitOutcome
+        if (outcome != null && outcome !== handled[0]) circuitId = Season.next(ui.game).id
+        handled[0] = outcome
+    }
+    var armed by rememberSaveable { mutableStateOf(false) }
+    var watching by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(ui.circuitOutcome, page, armed) {
+        if (page == "CIRCUIT" && armed && ui.circuitOutcome?.result?.log?.rows?.isNotEmpty() == true) {
+            watching = true
+            armed = false
+        }
+    }
     val dragScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     val circuitScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     val pages = rememberSaveableStateHolder()
@@ -179,7 +194,7 @@ fun RaceScreen(
         )
         Parts.strip.forEach { line -> KitLine(state, line, onStudy, onPart) }
         } else {
-        CircuitSection(ui, car, onCircuit, onRevise)
+        CircuitSection(ui, car, circuitId, { circuitId = it }, watching, { watching = it }, { armed = true }, onCircuit, onRevise)
         Text("CIRCUIT TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         Text(
             "For corners and brakes. A softer tire grips more and wears faster, most on a hot circuit. Strips use the drag tires on the Drag page. Costs a study, then the price.",
@@ -571,18 +586,19 @@ private fun aspectLabel(a: Circuits.Aspect) = when (a) {
 }
 
 @Composable
-private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String, Circuits.Orders) -> Unit, onRevise: (Circuits.Orders, Int) -> Unit = { _, _ -> }) {
+private fun CircuitSection(
+    ui: UiModel,
+    car: Racing.Car,
+    circuitId: String,
+    onCircuitId: (String) -> Unit,
+    watching: Boolean,
+    onWatching: (Boolean) -> Unit,
+    onArm: () -> Unit,
+    onRun: (String, String, Circuits.Orders) -> Unit,
+    onRevise: (Circuits.Orders, Int) -> Unit = { _, _ -> },
+) {
     val state = ui.game
-    var circuitId by rememberSaveable { mutableStateOf(Season.next(state).id) }
     val circuit = Circuits.all.firstOrNull { it.id == circuitId } ?: Circuits.all.first()
-    // The pick used to be set once and never moved. When a race finishes (a new outcome appears, not one already showing when the tab opened),
-    // the venue follows the championship to its next round. The chips still let the player pick any circuit afterwards.
-    val outcome = ui.circuitOutcome
-    val handled = remember { arrayOf(outcome) }
-    LaunchedEffect(outcome) {
-        if (outcome != null && outcome !== handled[0]) circuitId = Season.next(ui.game).id
-        handled[0] = outcome
-    }
     // Circuit races are for hired drivers only. This pick is its own, so the drag-race toggle is left alone.
     var driverPick by rememberSaveable { mutableStateOf(Drivers.selected(state)?.id ?: "") }
     val hired = Drivers.hired(state)
@@ -595,7 +611,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
         fontSize = 12.sp,
     )
     val upNext = Season.next(state)
-    ChipRow(Circuits.all.map { it.id to (if (it.id == upNext.id) "> " else "") + it.name.substringBefore('-').uppercase(Locale.US) }, circuit.id) { circuitId = it }
+    ChipRow(Circuits.all.map { it.id to (if (it.id == upNext.id) "> " else "") + it.name.substringBefore('-').uppercase(Locale.US) }, circuit.id) { onCircuitId(it) }
     Text(
         if (circuit.id == upNext.id) "CHAMPIONSHIP ROUND ${state.seasonRound + 1} of ${Season.ROUNDS}: this race scores points."
         else "Free race. The championship's next round is ${upNext.name} (marked >).",
@@ -809,12 +825,7 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
     }
     val can = picked != null && breach == null && !ui.circuitBusy && (state.devMode || state.money >= entry + fee)
     // Running a race opens the race screen: the map, the dash and the replay live there and nowhere else.
-    var watching by rememberSaveable { mutableStateOf(false) }
-    var armed by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(ui.circuitOutcome) {
-        if (armed && ui.circuitOutcome?.result?.log?.rows?.isNotEmpty() == true) { watching = true; armed = false }
-    }
-    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { armed = true; onRun(circuit.id, picked?.id ?: "", orders) }, Modifier.padding(top = 6.dp))
+    LineButton(if (ui.circuitBusy) "Racing..." else "Run race", can, { onArm(); onRun(circuit.id, picked?.id ?: "", orders) }, Modifier.padding(top = 6.dp))
     ui.circuitOutcome?.let { o ->
         val r = o.result
         Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, if (r.retired != null) Red else Lime).padding(8.dp)) {
@@ -828,9 +839,9 @@ private fun CircuitSection(ui: UiModel, car: Racing.Car, onRun: (String, String,
             if (r.retired != null) Text(r.retired, color = Red, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             else Text("Total ${Circuits.clock(r.totalTime)}  best lap ${Circuits.clock(r.bestLap)}", color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             if (r.log.rows.isNotEmpty()) {
-                LineButton("Watch the race", true, { watching = true }, Modifier.padding(top = 4.dp))
+                LineButton("Watch the race", true, { onWatching(true) }, Modifier.padding(top = 4.dp))
                 remember(r) { Replay.build(r) }?.let { BestLapTraces(it, Modifier.padding(vertical = 4.dp)) }
-                if (watching) CircuitRaceScreen(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID", session = o.run?.seed, onRevise = onRevise) { watching = false }
+                if (watching) CircuitRaceScreen(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID", session = o.run?.seed, onRevise = onRevise) { onWatching(false) }
             }
             Text(
                 "Laps " + r.lapTimes.joinToString("  ") { Circuits.clock(it) },
