@@ -197,13 +197,13 @@ Expected: PASS.
 - Consumes: finished `RaceScreen`
 - Produces: `dist/revline.zip` and PNGs under `app/build/reports/race-pages/`
 
-- [ ] **Step 1: README**
+- [x] **Step 1: README**
 
 After `The race tab is a separate car.` add: `Drag and Circuit are separate pages under that tab. Drag has the distance, the strip driver, Quick, Ladder, Stake, drag tires and drag parts. Circuit has the venue, the championship, the pit wall, Run race, the result, circuit tires and circuit parts. Chassis, gearbox, final drive, driveline, layout, ducts and the hire roster sit at the bottom of both.` Change the 1.84.0 sentence so drag parts are on the Drag page, not after the circuit parts on one list.
 
 `## 1.93.2` says the Race tab is those two pages and the strip, replay, payouts, and saves are unchanged. Install instructions say 1.93.2.
 
-- [ ] **Step 2: Screenshots**
+- [x] **Step 2: Screenshots**
 
 `RacePagesShotTest` uses qualifiers `w690dp-h830dp-xhdpi` and writes, by drawing the decor view the way `RaceScreenShotTest` does:
 
@@ -212,13 +212,13 @@ After `The race tab is a separate car.` add: `Drag and Circuit are separate page
 
 A second method with qualifiers `w411dp-h731dp-xhdpi` writes `drag-phone.png` and `circuit-phone.png`. Directory: `app/build/reports/race-pages/`. `autoAdvance = false`. Copy the six files to `/opt/cursor/artifacts/` after the run.
 
-- [ ] **Step 3: One full check, then the zip**
+- [x] **Step 3: One full check, then the zip**
 
 Run `./gradlew testDebugUnitTest` once. Expected: BUILD SUCCESSFUL, 0 failures.
 
 Then set version 1.93.2 / 124, run `./gradlew assembleRelease` and `./scripts/pack-release.sh`. `keytool -list` on `app/sideload.keystore` must show SHA256 prefix `8F:33:2A:4C`. `apksigner verify --print-certs dist/revline.apk` must show the same prefix. `unzip -t dist/revline.zip` passes and the only entry is `revline.apk`.
 
-- [ ] **Step 4: Commit and PR**
+- [x] **Step 4: Commit and PR**
 
 Commit the README, version, zip, and shot test. Push `cursor/race-pages-design-cc52`. Open the PR with base `cursor/circuit-display-width-72d3`. Subscribe to CI once; do not poll.
 
