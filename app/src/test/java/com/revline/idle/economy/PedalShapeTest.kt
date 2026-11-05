@@ -16,7 +16,7 @@ class PedalShapeTest {
     fun wideOpenIsNotTheContractOnAnyEngine() {
         val misses = mutableListOf<String>()
         for (built in listOf(false, true)) {
-            for (index in Block.entries.indices) {
+            for (index in 0..Block.maxLadderStep) {
                 val block = Block.forPrestige(index)
                 var state = GameState(
                     prestiges = index,

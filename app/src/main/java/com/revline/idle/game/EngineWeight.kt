@@ -14,7 +14,7 @@ object EngineWeight {
     fun baseKg(block: Block): Double = block.baseEngineKg
 
     fun partDeltaKg(state: GameState): Double {
-        val family = Block.forPrestige(state.prestiges).family
+        val family = Block.of(state.blockId, state.prestiges).family
         fun lvl(id: String) = if (family.allows(id)) (state.upgrades[id] ?: 0).toDouble() else 0.0
         var d = 0.0
         // Piston bolt-ons stay tiny so share-0.6 circuit harness cars keep the
@@ -46,7 +46,7 @@ object EngineWeight {
     }
 
     fun kg(state: GameState): Double {
-        val block = Block.forPrestige(state.prestiges)
+        val block = Block.of(state.blockId, state.prestiges)
         return (baseKg(block) + partDeltaKg(state)).coerceAtLeast(12.0)
     }
 

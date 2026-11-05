@@ -162,7 +162,7 @@ fun RaceMeet(
         frame.lights > 0.7f -> "READY"
         frame.lights > 0f -> "SET"
         frame.shiftLeft > 0.0 -> "SHIFT"
-        frame.spinning -> "SPIN"
+        RaceDrive.wheelspinLit(frame.slip.toDouble()) -> "SPIN"
         frame.limiter -> "LIMITER"
         else -> "GO"
     }
@@ -170,7 +170,7 @@ fun RaceMeet(
         frame.jumped -> Red
         frame.countdown > 0f || frame.lights > 0f -> Amber
         frame.done && frame.won -> Lime
-        frame.done || frame.spinning || frame.limiter -> Red
+        frame.done || RaceDrive.wheelspinLit(frame.slip.toDouble()) || frame.limiter -> Red
         frame.shiftLeft > 0.0 -> Amber
         else -> Lime
     }
@@ -306,9 +306,9 @@ fun RaceMeet(
                 val tip = Offset(c.x + (cos(ang) * r * 0.78).toFloat(), c.y + (sin(ang) * r * 0.78).toFloat())
                 val hot = frame.limiter || frame.rpm > setup.redline * 0.9
                 glowLine(if (hot) Red else Lime, tail, tip, stroke * 1.25f, 1.15f)
-                glowCircle(if (frame.spinning) Red else Lime, stroke * 2.2f, c, stroke, filled = true)
+                glowCircle(if (RaceDrive.wheelspinLit(frame.slip.toDouble())) Red else Lime, stroke * 2.2f, c, stroke, filled = true)
             }
-            SpinLamp(frame.spinning, frame.slip, Modifier.align(Alignment.TopCenter))
+            SpinLamp(RaceDrive.wheelspinLit(frame.slip.toDouble()), frame.slip, Modifier.align(Alignment.TopCenter))
             }
             Box(Modifier.width(60.dp).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
                 SquareShift(if (auto != null) "AUTO" else if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT", canShift) { hands.shift = true }
@@ -354,7 +354,7 @@ fun RaceMeet(
     }
 }
 
-/** Dash traction lamp: dark outline until the tires break loose, then amber, red when they are really going. */
+/** Dash traction lamp: follows per-step slip (any gear), amber then red as slip climbs. */
 @Composable
 private fun SpinLamp(on: Boolean, slip: Float, modifier: Modifier = Modifier) {
     val color = if (!on) Olive else if (slip > 0.6f) Red else Amber

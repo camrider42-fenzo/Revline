@@ -24,7 +24,7 @@ class ResearchPaceTest {
         var carriedRp = 0.0
         val owned = mutableListOf<Int>()
         val lines = mutableListOf<String>()
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val start = GameState(
                 prestiges = index,
                 knowledge = index,

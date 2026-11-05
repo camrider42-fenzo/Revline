@@ -10,10 +10,11 @@ import org.junit.Test
 class BlockLadderTest {
     @Test
     fun redlinesClimbAndTheV12StopsAtTenThousand() {
-        val stocks = Block.entries.map { it.redlineRpm }
-        val caps = Block.entries.map { it.redlineCap() }
+        val primaries = Block.primarySteps()
+        val stocks = primaries.map { it.redlineRpm }
+        val caps = primaries.map { it.redlineCap() }
         for (i in 1 until caps.size) {
-            assertTrue("${Block.entries[i].title} cap ${caps[i]}", caps[i] > caps[i - 1])
+            assertTrue("${primaries[i].title} cap ${caps[i]}", caps[i] > caps[i - 1])
         }
         assertTrue(stocks[1] > stocks[0] && stocks[2] > stocks[1])
         assertTrue(Block.MOPED.redlineRpm < 7500.0)
@@ -39,7 +40,7 @@ class BlockLadderTest {
         val research = com.revline.idle.game.ResearchTree.all.map { it.id }.toSet()
         val maxed = com.revline.idle.game.Upgrades.all.associate { it.id to it.maxLevel }
         val misses = mutableListOf<String>()
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val stockSheet = Logic.sheet(GameState(prestiges = index, racing = true))
             val stock = stockSheet.stats
@@ -73,7 +74,7 @@ class BlockLadderTest {
     fun prestigeStepsUpInPowerAndChangesThePicture() {
         var previous = 0.0
         var previousPay = 0.0
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val state = GameState(prestiges = index)
             val sheet = Logic.sheet(state.copy(throttle = Logic.bestThrottle(state)))
             val block = Block.forPrestige(index)
@@ -99,5 +100,20 @@ class BlockLadderTest {
         assertEquals(Block.V12.ordinal + 1, Block.ROTARY.ordinal)
         assertEquals(EngineFamily.ROTARY, Block.ROTARY.family)
         assertTrue(Block.entries.filter { it.family == EngineFamily.PISTON }.all { it.ordinal < Block.ROTARY.ordinal })
+        assertTrue(Block.ROTARY_1R.ordinal > Block.ROTARY.ordinal)
+        assertEquals(0, Block.ROTARY_1R.ladderStep)
+        assertEquals(4, Block.ROTARY_RENESIS.ladderStep)
+        assertEquals(6, Block.ROTARY_20B.ladderStep)
+        assertEquals(7, Block.ROTARY_26B.ladderStep)
+        assertEquals(8, Block.ROTARY.ladderStep)
+        assertEquals(8, Block.maxLadderStep)
+    }
+
+    @Test
+    fun oldSavesWithoutBlockIdKeepTheDefaultAtEachStep() {
+        for (step in 0..Block.maxLadderStep) {
+            val state = GameState(prestiges = step)
+            assertEquals(Block.forPrestige(step), Block.of(state.blockId, state.prestiges))
+        }
     }
 }

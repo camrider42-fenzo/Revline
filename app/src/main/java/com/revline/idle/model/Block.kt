@@ -3,9 +3,10 @@ package com.revline.idle.model
 import kotlin.math.pow
 
 /**
- * Long-blocks in rising stock power. Prestige count picks the block.
- * Past the last one, further rebuilds stay there and only add knowledge.
- * Rotary is appended after V12 so earlier prestige ordinals stay put.
+ * Long-blocks in rising stock power. Prestige count picks the ladder step;
+ * [forPrestige] is the default (piston, or the classic 13B at the top).
+ * Rotary alternatives share a step with a piston and are chosen via [of]
+ * + GameState.blockId. New rotaries append after ROTARY so ordinals 0..8 stay.
  */
 enum class Block(
     val title: String,
@@ -38,18 +39,28 @@ enum class Block(
      * `35 + stockCc * 0.042` so stock cars keep total mass; rotaries sit light.
      */
     val baseEngineKg: Double,
+    /**
+     * Prestige ladder step this long-block sits on. Pistons use their ordinal;
+     * rotary alternatives share a piston step and are picked through blockId.
+     */
+    val ladderStep: Int,
 ) {
-    MOPED("50cc moped single", 1, 1, 39.0, 41.4, 8.2, 6800.0, 1700.0, 0.78, 0.70, 140.0, 14.0, 0.45, true, 0.24, 56.0, 222.0, 104.7, baseEngineKg = 37.1),
-    THUMPER("250cc thumper", 1, 1, 74.0, 58.0, 9.0, 7600.0, 1300.0, 0.86, 0.64, 280.0, 16.0, 0.70, true, 3.01, 60.0, 134.0, 74.0, baseEngineKg = 45.5),
-    TWIN("500cc parallel twin", 2, 1, 72.0, 61.5, 10.2, 8200.0, 1200.0, 0.90, 0.62, 420.0, 18.0, 0.90, false, 5.84, 105.0, 145.0, 55.0, baseEngineKg = 56.0),
-    TRIPLE("1.0L inline-three", 3, 1, 76.0, 73.5, 10.8, 7800.0, 950.0, 0.91, 0.58, 560.0, 18.0, 1.05, false, 8.26, 150.0, 179.0, 36.0, baseEngineKg = 77.0),
-    INLINE_FOUR("2.0L inline-four", 4, 1, 86.0, 86.0, 9.5, 6500.0, 820.0, 0.93, 0.58, 760.0, 16.0, 1.25, false, 12.77, 240.0, 245.0, 22.5, baseEngineKg = 118.9),
-    V6("3.5L V6", 6, 2, 94.0, 83.0, 10.2, 7000.0, 750.0, 0.98, 0.56, 2000.0, 18.0, 2.05, false, 34.55, 420.0, 350.0, 12.0, baseEngineKg = 180.2),
-    V8("5.0L V8", 8, 2, 93.0, 92.0, 10.2, 7000.0, 700.0, 1.02, 0.56, 2800.0, 20.0, 3.10, false, 39.94, 580.0, 480.0, 8.7, baseEngineKg = 245.0),
-    V12("6.5L V12", 12, 2, 89.0, 87.0, 10.6, 8000.0, 900.0, 1.06, 0.62, 3800.0, 22.0, 4.20, false, 50.77, 800.0, 580.0, 6.4, baseEngineKg = 307.8),
+    MOPED("50cc moped single", 1, 1, 39.0, 41.4, 8.2, 6800.0, 1700.0, 0.78, 0.70, 140.0, 14.0, 0.45, true, 0.24, 56.0, 222.0, 104.7, baseEngineKg = 37.1, ladderStep = 0),
+    THUMPER("250cc thumper", 1, 1, 74.0, 58.0, 9.0, 7600.0, 1300.0, 0.86, 0.64, 280.0, 16.0, 0.70, true, 3.01, 60.0, 134.0, 74.0, baseEngineKg = 45.5, ladderStep = 1),
+    TWIN("500cc parallel twin", 2, 1, 72.0, 61.5, 10.2, 8200.0, 1200.0, 0.90, 0.62, 420.0, 18.0, 0.90, false, 5.84, 105.0, 145.0, 55.0, baseEngineKg = 56.0, ladderStep = 2),
+    TRIPLE("1.0L inline-three", 3, 1, 76.0, 73.5, 10.8, 7800.0, 950.0, 0.91, 0.58, 560.0, 18.0, 1.05, false, 8.26, 150.0, 179.0, 36.0, baseEngineKg = 77.0, ladderStep = 3),
+    INLINE_FOUR("2.0L inline-four", 4, 1, 86.0, 86.0, 9.5, 6500.0, 820.0, 0.93, 0.58, 760.0, 16.0, 1.25, false, 12.77, 240.0, 245.0, 22.5, baseEngineKg = 118.9, ladderStep = 4),
+    V6("3.5L V6", 6, 2, 94.0, 83.0, 10.2, 7000.0, 750.0, 0.98, 0.56, 2000.0, 18.0, 2.05, false, 34.55, 420.0, 350.0, 12.0, baseEngineKg = 180.2, ladderStep = 5),
+    V8("5.0L V8", 8, 2, 93.0, 92.0, 10.2, 7000.0, 700.0, 1.02, 0.56, 2800.0, 20.0, 3.10, false, 39.94, 580.0, 480.0, 8.7, baseEngineKg = 245.0, ladderStep = 6),
+    V12("6.5L V12", 12, 2, 89.0, 87.0, 10.6, 8000.0, 900.0, 1.06, 0.62, 3800.0, 22.0, 4.20, false, 50.77, 800.0, 580.0, 6.4, baseEngineKg = 307.8, ladderStep = 7),
     // Appended after V12 — prestige ordinals for earlier blocks stay put.
     // Goals lean rpm/hp and apex-seal durability, not stump-pulling torque. Thirsty mpg.
-    ROTARY("1.3L 13B rotary", 2, 1, 80.0, 130.11, 9.7, 9000.0, 950.0, 1.08, 0.78, 2400.0, 18.0, 2.60, false, 55.0, 245.0, 170.0, 21.0, family = EngineFamily.ROTARY, baseEngineKg = 63.0),
+    ROTARY("1.3L 13B rotary", 2, 1, 80.0, 130.11, 9.7, 9000.0, 950.0, 1.08, 0.78, 2400.0, 18.0, 2.60, false, 55.0, 245.0, 170.0, 21.0, family = EngineFamily.ROTARY, baseEngineKg = 63.0, ladderStep = 8),
+    // Rotary alternatives at earlier ladder steps (pick via blockId). Ordinals keep growing past 8.
+    ROTARY_1R("0.6L single-rotor", 1, 1, 80.0, 130.11, 9.0, 8000.0, 1100.0, 0.92, 0.74, 420.0, 16.0, 0.70, false, 0.55, 58.0, 55.0, 60.0, family = EngineFamily.ROTARY, baseEngineKg = 32.0, ladderStep = 0),
+    ROTARY_RENESIS("1.3L Renesis 13B-MSP", 2, 1, 80.0, 130.11, 10.0, 8500.0, 900.0, 1.05, 0.72, 1600.0, 18.0, 1.40, false, 13.5, 240.0, 180.0, 22.0, family = EngineFamily.ROTARY, baseEngineKg = 68.0, ladderStep = 4),
+    ROTARY_20B("2.0L 20B three-rotor", 3, 1, 80.0, 130.11, 9.7, 8500.0, 900.0, 1.06, 0.76, 2600.0, 19.0, 2.90, false, 40.0, 580.0, 420.0, 16.0, family = EngineFamily.ROTARY, baseEngineKg = 92.0, ladderStep = 6),
+    ROTARY_26B("2.6L 26B four-rotor", 4, 1, 80.0, 130.11, 9.7, 8800.0, 950.0, 1.07, 0.76, 3400.0, 20.0, 3.80, false, 51.0, 800.0, 550.0, 14.0, family = EngineFamily.ROTARY, baseEngineKg = 118.0, ladderStep = 7),
     ;
 
     /**
@@ -65,7 +76,10 @@ enum class Block(
         V6 -> 9600.0
         V8 -> 9800.0
         V12 -> 10000.0
-        ROTARY -> 10500.0
+        ROTARY, ROTARY_RENESIS -> 10500.0
+        ROTARY_1R -> 9200.0
+        ROTARY_20B -> 10200.0
+        ROTARY_26B -> 10400.0
     }
 
     /**
@@ -84,6 +98,10 @@ enum class Block(
         V8 -> 2.10
         V12 -> 4.04
         ROTARY -> 4.40
+        ROTARY_1R -> 0.028
+        ROTARY_RENESIS -> 0.95
+        ROTARY_20B -> 2.15
+        ROTARY_26B -> 4.10
     }
 
     /**
@@ -113,6 +131,10 @@ enum class Block(
             V8 -> 1.90
             V12 -> 1.48
             ROTARY -> 1.55
+            ROTARY_1R -> 1.0
+            ROTARY_RENESIS -> 1.10
+            ROTARY_20B -> 1.85
+            ROTARY_26B -> 1.50
         }
         return minMultiplier * pace * glide * trim * shop
     }
@@ -134,6 +156,10 @@ enum class Block(
         V8 -> 3.025
         V12 -> 3.545
         ROTARY -> 3.620
+        ROTARY_1R -> 1.960
+        ROTARY_RENESIS -> 2.740
+        ROTARY_20B -> 3.050
+        ROTARY_26B -> 3.560
     }
 
     /** Race sheet: more power, less cruise. The street numbers stay the rebuild the shop was tuned on. */
@@ -152,6 +178,10 @@ enum class Block(
         V8 -> 0.82
         V12 -> 0.78
         ROTARY -> 0.72
+        ROTARY_1R -> 1.35
+        ROTARY_RENESIS -> 0.80
+        ROTARY_20B -> 0.78
+        ROTARY_26B -> 0.74
     }
 
     /** Best mpg that class of vehicle can ever show: a moped near 100, the cars between 25 and 55. */
@@ -165,6 +195,10 @@ enum class Block(
         V8 -> 32.0
         V12 -> 26.0
         ROTARY -> 36.0
+        ROTARY_1R -> 85.0
+        ROTARY_RENESIS -> 50.0
+        ROTARY_20B -> 30.0
+        ROTARY_26B -> 24.0
     }
 
     fun sheetMpg(racing: Boolean): Double = if (racing) mpgGoal * 0.64 else mpgGoal
@@ -172,6 +206,40 @@ enum class Block(
     fun sheetTitle(racing: Boolean): String = if (racing) "Race $title" else title
 
     companion object {
-        fun forPrestige(prestiges: Int): Block = entries[prestiges.coerceIn(0, entries.lastIndex)]
+        /** Highest prestige ladder step (classic 13B). Alternatives do not extend it. */
+        val maxLadderStep: Int get() = entries.maxOf { it.ladderStep }
+
+        /** Long-blocks that share a prestige step (piston default + rotary alts). */
+        fun alternativesAt(step: Int): List<Block> =
+            entries.filter { it.ladderStep == step.coerceIn(0, maxLadderStep) }
+
+        /**
+         * Default long-block for a prestige step: the piston when both exist,
+         * else the classic 13B on the top step.
+         */
+        fun forPrestige(prestiges: Int): Block {
+            val step = prestiges.coerceIn(0, maxLadderStep)
+            val at = alternativesAt(step)
+            return at.firstOrNull { it.family == EngineFamily.PISTON }
+                ?: at.firstOrNull { it == ROTARY }
+                ?: at.first()
+        }
+
+        /** Primary (default) block at every ladder step, in order. */
+        fun primarySteps(): List<Block> = (0..maxLadderStep).map { forPrestige(it) }
+
+        /**
+         * Fitted long-block: [blockId] when it names an alternative on this
+         * prestige step, otherwise the step default. Blank/unknown id = default.
+         * Old saves with no blockId keep the piston (or 13B) they had.
+         */
+        fun of(blockId: String, prestiges: Int): Block {
+            val step = prestiges.coerceIn(0, maxLadderStep)
+            if (blockId.isNotEmpty()) {
+                val picked = entries.firstOrNull { it.name == blockId }
+                if (picked != null && picked.ladderStep == step) return picked
+            }
+            return forPrestige(step)
+        }
     }
 }

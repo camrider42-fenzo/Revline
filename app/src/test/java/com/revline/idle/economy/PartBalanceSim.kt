@@ -89,7 +89,7 @@ class PartBalanceSim {
     }
 
     private fun state(block: Block, parts: Map<String, Int>): GameState = GameState(
-        prestiges = block.ordinal,
+        prestiges = block.ladderStep, blockId = block.name,
         knowledge = block.ordinal,
         researched = researched,
         upgrades = parts,

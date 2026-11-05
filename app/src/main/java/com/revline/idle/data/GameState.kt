@@ -15,6 +15,12 @@ data class GameState(
     val researchPoints: Double = 0.0,
     val knowledge: Int = 0,
     val prestiges: Int = 0,
+    /**
+     * Fitted long-block id ([com.revline.idle.model.Block.name]) when an alternative
+     * at this prestige step is chosen. Blank uses the step default (piston / 13B).
+     * Old saves omit this and keep the default.
+     */
+    val blockId: String = "",
     /** This long-block is the race spec: higher redline, higher sheet power, lower sheet mpg. */
     val racing: Boolean = false,
     /** Race rebuilds in a row. Each one makes the next cost more research. A street rebuild resets it. */

@@ -165,7 +165,7 @@ fun RevlineApp(vm: GameViewModel) {
                             vm::runCircuit,
                             vm::reviseCircuit,
                         )
-                        Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::toggleDevMode, vm::resetGame)
+                        Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::fitBlock, vm::toggleDevMode, vm::resetGame)
                     }
                 }
             }
@@ -376,11 +376,11 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Stat("HP", formatPower(s.peakHorsepower), Lime, Modifier.weight(1f))
             Stat("TQ", formatPower(s.peakTorqueLbFt), Amber, Modifier.weight(1f))
-            Stat("MPG@\$", String.format(Locale.US, "%.1f", ui.sheet.profit.mpg), if (ui.sheet.profit.mpg < Block.forPrestige(ui.game.prestiges).sheetMpg(ui.game.racing)) Amber else White, Modifier.weight(1f))
+            Stat("MPG@\$", String.format(Locale.US, "%.1f", ui.sheet.profit.mpg), if (ui.sheet.profit.mpg < Block.of(ui.game.blockId, ui.game.prestiges).sheetMpg(ui.game.racing)) Amber else White, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
         val engKg = EngineWeight.kg(ui.game)
-        val block = Block.forPrestige(ui.game.prestiges)
+        val block = Block.of(ui.game.blockId, ui.game.prestiges)
         val tier = EngineWeight.familyTierLabel(block) +
             if (block.family == com.revline.idle.model.EngineFamily.ROTARY) " rotary" else ""
         Text(
@@ -576,23 +576,65 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
 }
 
 @Composable
-private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Boolean) -> Unit, onDevMode: () -> Unit, onReset: () -> Unit) {
-    val block = Block.forPrestige(ui.game.prestiges)
+private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Boolean) -> Unit, onFitBlock: (String) -> Unit, onDevMode: () -> Unit, onReset: () -> Unit) {
+    val block = Block.of(ui.game.blockId, ui.game.prestiges)
     val next = Block.forPrestige(ui.game.prestiges + 1)
+    val nextAlts = Block.alternativesAt(ui.game.prestiges + 1).filter { it != next }
     val racing = ui.game.racing
     val stats = ui.sheet.stats
     val gain = Prestige.knowledgeGain(stats.peakHorsepower, stats.peakTorqueLbFt, ui.sheet.profit.mpg, block, racing)
     val nextMultiplier = Prestige.multiplier(ui.game.knowledge + gain)
     val free = Logic.knowledgeFree(ui.game)
-    val onLast = ui.game.prestiges >= Block.entries.lastIndex
+    val onLast = ui.game.prestiges >= Block.maxLadderStep
+    val alts = Block.alternativesAt(ui.game.prestiges)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Hud(ui)
         Text(block.sheetTitle(racing).uppercase(Locale.US), color = if (racing) Red else White, fontFamily = FontFamily.Monospace, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp))
+        if (alts.size > 1) {
+            Text(
+                "ENGINE ON THIS STEP",
+                color = Lime,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+            Text(
+                "Same ladder step, different long-block. Rotary alternatives keep the 1.92 family parts and weight.",
+                color = White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                alts.forEach { opt ->
+                    val on = opt == block
+                    val color = if (on) Cyan else Olive
+                    Text(
+                        opt.title.substringBefore(' ').uppercase(Locale.US),
+                        color = color,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        modifier = Modifier
+                            .border(BorderStroke(1.dp, color))
+                            .clickable { onFitBlock(opt.name) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            Text(
+                block.title,
+                color = White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         Text(
             if (onLast) {
                 "Another rebuild stays on the ${block.title}. Street keeps this sheet. Race raises the power targets and cuts the mpg target, and the long-block itself revs higher. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay."
             } else {
-                "The next long-block is a ${next.title}. Street keeps the road sheet. Race asks for more power and less mpg, and comes out of the crate with more compression and a higher tach. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay."
+                val altNote = if (nextAlts.isEmpty()) "" else " Alternatives at that step: " + nextAlts.joinToString(", ") { it.title } + "."
+                "The next long-block is a ${next.title}.$altNote Street keeps the road sheet. Race asks for more power and less mpg, and comes out of the crate with more compression and a higher tach. Parts come off. The bench starts with ${formatDollars(Logic.startingMoney(ui.game.prestiges + 1))}, enough for the four cheapest tools. Studies stay."
             },
             color = White,
             fontFamily = FontFamily.Monospace,

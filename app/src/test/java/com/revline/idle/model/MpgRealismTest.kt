@@ -37,7 +37,7 @@ class MpgRealismTest {
             30.0..100.0, 25.0..80.0, 25.0..70.0, 22.0..62.0, 18.0..55.0, 15.0..40.0, 12.0..32.0, 10.0..26.0, 12.0..36.0,
         )
         val misses = mutableListOf<String>()
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             for ((name, state) in builds(index)) {
                 val mpg = Logic.sheet(state).stats.cruiseMpg
@@ -47,12 +47,12 @@ class MpgRealismTest {
         assertTrue(misses.joinToString("\n"), misses.isEmpty())
         // A moped tops out around a hundred. The cars sit between 15 and 60.
         assertTrue(Block.MOPED.mpgCap() <= 110.0)
-        assertTrue(Block.entries.drop(2).all { it.mpgCap() <= 70.0 })
+        assertTrue(Block.primarySteps().drop(2).all { it.mpgCap() <= 70.0 })
     }
 
     @Test
     fun liveMpgNeverPassesTheClassCapAtAnyPedal() {
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             for ((name, state) in builds(index)) {
                 val params = Logic.sheet(state).params
@@ -66,7 +66,7 @@ class MpgRealismTest {
 
     @Test
     fun economyPartsCannotStackPastAFewPercentEach() {
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val stock = Logic.sheet(GameState(prestiges = index)).stats.cruiseMpg
             val trimmed = Logic.sheet(builds(index).getValue("economy only")).stats.cruiseMpg
@@ -88,7 +88,7 @@ class MpgRealismTest {
 
     @Test
     fun aStockEngineMissesItsMpgGoalAndPowerStillGatesTheRebuild() {
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val sheet = Logic.sheet(GameState(prestiges = index))
             assertTrue("${block.title} stock ${sheet.profit.mpg} vs ${block.mpgGoal}", sheet.profit.mpg < block.mpgGoal)
@@ -106,7 +106,7 @@ class MpgRealismTest {
     @Test
     fun anOldSaveWithEveryEconomyPartMaxedStillReadsASaneMpg() {
         // Saves keep parts, not mpg. Whatever they own now goes through the same cap on load.
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val state = GameState(prestiges = index, knowledge = 500, researched = research, upgrades = maxed, money = 1e12)
             val stats = Logic.sheet(state).stats
             assertTrue(stats.cruiseMpg.isFinite() && stats.cruiseMpg < Block.forPrestige(index).mpgCap())

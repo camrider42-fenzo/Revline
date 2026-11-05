@@ -27,7 +27,7 @@ class UpgradePriceProbe {
             if (delta <= 0.15) continue
             val cost = Logic.upgradeCost(
                 GameState(
-                    prestiges = block.ordinal,
+                    prestiges = block.ladderStep, blockId = block.name,
                     researched = researched,
                     upgrades = before,
                     fuel = FuelKind.PREMIUM_93,

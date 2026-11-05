@@ -871,7 +871,7 @@ private fun DrawScope.drawRotary(
     val w = size.width
     val h = size.height
     fun part(id: String) = parts[id] ?: 0
-    val rotors = params.cylinders.coerceIn(2, 4)
+    val rotors = params.cylinders.coerceIn(1, 4)
     val pulse = 0.82f + 0.18f * sin(clock * (2.2f + spinRpm / 1800f))
     // Generating radius sized to the panel; R/e = 7 (Mazda-class peanut).
     val e = h * 0.030f

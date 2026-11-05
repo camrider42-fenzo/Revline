@@ -97,7 +97,7 @@ object RaceDrive {
         var shiftLeft: Double = 0.0,
         var time: Double = 0.0,
         var spinning: Boolean = false,
-        /** 0..1 smoke and dash-lamp strength: set by how far the launch overshoots grip, eased out when the tires hook. */
+        /** 0..1 smoke and dash-lamp strength: how far drive force overshoots grip this step (any gear), eased out when the tires hook. */
         var slip: Double = 0.0,
         var limiter: Boolean = false,
         var hooked: Boolean = false,
@@ -133,7 +133,7 @@ object RaceDrive {
             idle = sheet.params.idleRpm,
             finalDrive = Racing.finalRatio(state.finalDrive) + rig.finalTrim,
             distanceM = Racing.lengthOf(state.raceLength).meters,
-            displacementCc = Block.forPrestige(state.prestiges).let {
+            displacementCc = Block.of(state.blockId, state.prestiges).let {
                 EngineSim.displacementCc(it.boreMm, it.strokeMm, it.cylinders)
             },
             circuit = circuit,
@@ -401,6 +401,13 @@ object RaceDrive {
         if (gripN <= 0.0 || requestedN <= gripN) return 0.0
         return (SLIP_EDGE + (1.0 - SLIP_EDGE) * (requestedN / gripN - 1.0) / 0.5).coerceIn(SLIP_EDGE, 1.0)
     }
+
+    /**
+     * Dash SPIN lamp. Lit from per-step [Run.slip], not the discrete [Run.spinning]
+     * flag: spinning clears the instant the tires hook, while slip is what the
+     * smoke and the lamp should track for the whole pass (any gear).
+     */
+    fun wheelspinLit(slip: Double): Boolean = slip > 0.05
 
     private fun drive(setup: Setup, run: Run, throttle: Double, shift: Boolean, dt: Double, clutch: Double) {
         if (run.distance >= setup.distanceM) return

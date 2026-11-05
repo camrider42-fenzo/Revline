@@ -28,7 +28,7 @@ class ProfitMpgTest {
 
     @Test
     fun theGatePedalIsTheBestPayingStopUnderTheCap() {
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             for (state in builds(index)) {
                 val sheet = Logic.sheet(state)
                 assertEquals(Logic.profitStop(state, Logic.GATE_CAP).throttle, sheet.profit.throttle, 1e-9)
@@ -54,7 +54,7 @@ class ProfitMpgTest {
         // Uncapped, the best-paying stop on a fully built big engine is flat out and reads the
         // 0.4 mpg floor. At the cap it reads a real figure and clears the goal.
         for (block in listOf(Block.TRIPLE, Block.INLINE_FOUR, Block.V6, Block.V8, Block.V12)) {
-            val state = GameState(prestiges = block.ordinal, knowledge = block.ordinal, researched = research, upgrades = maxed)
+            val state = GameState(prestiges = block.ladderStep, blockId = block.name, knowledge = block.ladderStep, researched = research, upgrades = maxed)
             val sheet = Logic.sheet(state)
             val open = Logic.profitStop(state)
             assertTrue("${block.title} open ${open.mpg} at ${open.throttle}", open.mpg < 3.0 && open.mpg < sheet.profit.mpg / 5 && open.throttle > Logic.GATE_CAP)
@@ -97,7 +97,7 @@ class ProfitMpgTest {
 
     @Test
     fun everyEngineStockMissesTheGoalAndTheEconomyPartsAreAPathToIt() {
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val stock = Logic.sheet(GameState(prestiges = index))
             assertTrue("${block.title} stock ${stock.profit.mpg} vs ${block.mpgGoal}", stock.profit.mpg < block.mpgGoal)
@@ -110,7 +110,7 @@ class ProfitMpgTest {
 
     @Test
     fun theFortyAndSixtyBuildsKeepTheirPlaceAgainstTheGoal() {
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val sixty = Logic.sheet(GameState(prestiges = index, knowledge = index, researched = research, upgrades = BlockPaceTest.sixty))
             assertTrue("${block.title} sixty ${sixty.profit.mpg} vs ${block.mpgGoal}", sixty.profit.mpg >= block.mpgGoal)
@@ -124,7 +124,7 @@ class ProfitMpgTest {
     @Test
     fun profitMpgIsTheLiveMpgAtThatPedalAndNotTheCruiseFigure() {
         var differs = 0
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             for (state in builds(index)) {
                 val sheet = Logic.sheet(state)
                 val live = EngineSim.point(
@@ -142,7 +142,7 @@ class ProfitMpgTest {
 
     @Test
     fun theRebuildGateUsesProfitMpg() {
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val ready = GameState(prestiges = index, knowledge = index, researched = research, upgrades = maxed, money = 1e12)
             val sheet = Logic.sheet(ready)

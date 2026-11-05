@@ -159,10 +159,10 @@ fun RaceScreen(
         )
         val quickestId = Racing.quickest(state)?.id
         ChassisRow("Shop mule", "640 kg  front  fits the engine you have  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
-        com.revline.idle.model.Block.entries.forEach { block ->
-            val group = Racing.chassis.filter { it.group == block.ordinal }
+        com.revline.idle.model.Block.primarySteps().forEach { block ->
+            val group = Racing.chassis.filter { it.group == block.ladderStep }
             if (group.isEmpty()) return@forEach
-            if (block.ordinal > state.prestiges) {
+            if (block.ladderStep > state.prestiges) {
                 Text(
                     "${block.title}  ·  three cars, with a later engine",
                     color = Olive,

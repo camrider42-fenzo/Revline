@@ -105,7 +105,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             clock += dt
             val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle, ui.sheet.params.idleRpm)
             val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
-            val block = Block.forPrestige(ui.game.prestiges)
+            val block = Block.of(ui.game.blockId, ui.game.prestiges)
             val soakRate = EngineSim.soakPer10s(ui.sheet.params, spun, opening)
             val soaked = Logic.stepSoak(ui.game.soakC, soakRate, dt)
             val pay = Logic.incomeAt(
@@ -226,6 +226,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun nudgeTune(id: String, direction: Int) = mutate { Tuners.nudge(it, id, direction) }
     fun setDragTune(id: String, value: Double) = mutate { DragTune.set(it, id, value) }
     fun prestige(racing: Boolean) = mutate { Logic.prestige(it, racing) }
+    fun fitBlock(id: String) = mutate { Logic.fitBlock(it, id) }
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
     fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }
     fun setAimGoal(goal: AimGoal) = mutate { it.copy(aimGoal = goal.name) }

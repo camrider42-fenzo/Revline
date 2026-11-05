@@ -90,7 +90,7 @@ fun PartsScreen(
     onGoal: (AimGoal) -> Unit,
 ) {
     val selected = remember { mutableStateOf<String?>(null) }
-    val family = Block.forPrestige(ui.game.prestiges).family
+    val family = Block.of(ui.game.blockId, ui.game.prestiges).family
     val layout = remember(family) { UpgradeMap.bubbles(family) }
     val pedalBucket = (ui.game.throttle * 20.0).toInt()
     val previews = remember(

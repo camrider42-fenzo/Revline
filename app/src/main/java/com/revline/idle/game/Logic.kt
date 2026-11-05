@@ -214,7 +214,7 @@ object Logic {
     }
 
     fun paramsFrom(state: GameState): EngineParams {
-        val block = Block.forPrestige(state.prestiges)
+        val block = Block.of(state.blockId, state.prestiges)
         val race = state.racing
         val comp0 = block.compression + if (race) 0.8 else 0.0
         val ve0 = block.peakVe + if (race) 0.04 else 0.0
@@ -523,7 +523,7 @@ object Logic {
         val notebook = state.perks["notebook"] ?: 0
         val rp = (0.04 + 0.022 * stats.peakHorsepower.coerceAtLeast(0.0).pow(0.8)) * (1.0 + 0.22 * notebook) * mult
         val rpm = targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
-        val block = Block.forPrestige(state.prestiges)
+        val block = Block.of(state.blockId, state.prestiges)
         val pay = incomeAt(params, rpm, stats.reliability, mult, state.throttle, stats) * block.payScale()
         return Sheet(params, stats, pay, rp, mult)
     }
@@ -575,7 +575,7 @@ object Logic {
             params.fuel.dollarsPerGallon,
             output,
             ideal = true,
-        ) * Block.forPrestige(state.prestiges).payScale()
+        ) * Block.of(state.blockId, state.prestiges).payScale()
     }
 
     /**
@@ -695,7 +695,7 @@ object Logic {
         if (state.devMode) return 0.0
         val u = Upgrades.byId(id)
         val level = state.upgrades[id] ?: 0
-        val scale = Block.forPrestige(state.prestiges).upgradePriceScale(state.prestiges)
+        val scale = Block.of(state.blockId, state.prestiges).upgradePriceScale(state.prestiges)
         return u.baseCost * u.growth.pow(level.toDouble()) * costMultiplier(state) * 0.5 * scale
     }
 
@@ -725,7 +725,7 @@ object Logic {
 
     fun canBuyUpgrade(state: GameState, id: String): Boolean {
         val u = Upgrades.all.find { it.id == id } ?: return false
-        if (!Block.forPrestige(state.prestiges).family.allows(id)) return false
+        if (!Block.of(state.blockId, state.prestiges).family.allows(id)) return false
         val level = state.upgrades[id] ?: 0
         if (level >= u.maxLevel) return false
         if (lockReason(state, id) != null) return false
@@ -844,7 +844,7 @@ object Logic {
             stats.peakHorsepower,
             stats.peakTorqueLbFt,
             sheet.profit.mpg,
-            Block.forPrestige(state.prestiges),
+            Block.of(state.blockId, state.prestiges),
             state.racing,
         )
     }
@@ -883,7 +883,7 @@ object Logic {
             stats.peakHorsepower,
             stats.peakTorqueLbFt,
             sheet.profit.mpg,
-            Block.forPrestige(state.prestiges),
+            Block.of(state.blockId, state.prestiges),
             state.racing,
         )
         if (gain <= 0) return state
@@ -896,6 +896,7 @@ object Logic {
             raceStreak = if (racing) state.raceStreak + 1 else 0,
             knowledge = state.knowledge + gain,
             prestiges = state.prestiges + 1,
+            blockId = "",
             upgrades = emptyMap(),
             tune = emptyMap(),
             fuel = FuelKind.PUMP_87,
@@ -906,6 +907,15 @@ object Logic {
             soakC = 0.0,
             racing = racing,
         )
+    }
+
+    /** Fit a long-block alternative on the current prestige step. Unknown or wrong-step ids are ignored. */
+    fun fitBlock(state: GameState, id: String): GameState {
+        val step = state.prestiges.coerceIn(0, Block.maxLadderStep)
+        val picked = Block.entries.firstOrNull { it.name == id } ?: return state
+        if (picked.ladderStep != step) return state
+        val default = Block.forPrestige(step)
+        return state.copy(blockId = if (picked == default) "" else picked.name)
     }
 
     fun fuelUnlocked(state: GameState, fuel: FuelKind): Boolean = when (fuel) {

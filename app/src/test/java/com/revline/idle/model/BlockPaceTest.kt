@@ -48,7 +48,7 @@ class BlockPaceTest {
         val research = ResearchTree.all.map { it.id }.toSet()
         val maxed = Upgrades.all.associate { it.id to it.maxLevel }
         val misses = mutableListOf<String>()
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val sheet = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = maxed))
             val stats = sheet.stats
@@ -64,7 +64,7 @@ class BlockPaceTest {
         val pistonShop = Upgrades.forFamily(com.revline.idle.model.EngineFamily.PISTON).size
         val share = sixty.size.toDouble() / pistonShop
         assertTrue("sixty share $share", share in 0.50..0.70)
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val basket = if (block.family == com.revline.idle.model.EngineFamily.ROTARY) rotarySixty else sixty
             val thinBasket = if (block.family == com.revline.idle.model.EngineFamily.ROTARY) {
@@ -174,7 +174,7 @@ class BlockPaceTest {
         var researched = emptySet<String>()
         var carriedRp = 0.0
         val lines = mutableListOf<String>()
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val start = GameState(
                 prestiges = index,
@@ -280,7 +280,7 @@ class BlockPaceTest {
     fun eachEngineShopFitsInAFewHours() {
         var researched = setOf("premium")
         val lines = mutableListOf<String>()
-        for (index in Block.entries.indices) {
+        for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val start = GameState(
                 prestiges = index,

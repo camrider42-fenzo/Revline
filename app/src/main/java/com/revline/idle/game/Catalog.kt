@@ -180,10 +180,10 @@ object ResearchTree {
         ResearchNode("nitrous_node", "Past the limit", "Nitrous oxide", "A shot adds oxygen the intake never measured, and fuel to match. The hit shows up on the dyno slip immediately. So does the heat in the chamber.", 12000.0, listOf("overlimit"), minPrestige = Block.V8.ordinal),
         ResearchNode("limiter_node", "Past the limit", "Rev limiter delete", "The tach keeps climbing. Mean piston speed does not care what number used to be the limiter.", 14000.0, listOf("overlimit"), minPrestige = Block.V8.ordinal),
         ResearchNode("overboost_node", "Past the limit", "Wastegate delete", "The wastegate spring is a limit, not a law. Past it the compressor, the charge temperature, and the rods are all guessing.", 18000.0, listOf("overlimit", "turbo_node"), minPrestige = Block.V8.ordinal),
-        ResearchNode("apex_science", "Rotary", "Apex seals", "Tip seals, corner seals, and why a Wankel dies when they go soft. Opens on the rotary rebuild.", 800.0, minPrestige = Block.ROTARY.ordinal),
-        ResearchNode("port_science", "Rotary", "Porting", "Street, bridge, and peripheral windows. The VE hill gets taller and narrower.", 2200.0, listOf("apex_science"), minPrestige = Block.ROTARY.ordinal),
-        ResearchNode("housing_science", "Rotary", "Housing coats", "Trochoid coatings that keep heat out of the coolant and in the exhaust.", 1600.0, listOf("apex_science"), minPrestige = Block.ROTARY.ordinal),
-        ResearchNode("rotor_kit", "Rotary", "Multi-rotor kit", "Adding a third and fourth rotor. More chambers, more mass, more fuel.", 9000.0, listOf("apex_science"), minPrestige = Block.ROTARY.ordinal),
+        ResearchNode("apex_science", "Rotary", "Apex seals", "Tip seals, corner seals, and why a Wankel dies when they go soft. Opens on the rotary rebuild.", 800.0, minPrestige = Block.ROTARY_1R.ladderStep),
+        ResearchNode("port_science", "Rotary", "Porting", "Street, bridge, and peripheral windows. The VE hill gets taller and narrower.", 2200.0, listOf("apex_science"), minPrestige = Block.ROTARY_1R.ladderStep),
+        ResearchNode("housing_science", "Rotary", "Housing coats", "Trochoid coatings that keep heat out of the coolant and in the exhaust.", 1600.0, listOf("apex_science"), minPrestige = Block.ROTARY_1R.ladderStep),
+        ResearchNode("rotor_kit", "Rotary", "Multi-rotor kit", "Adding a third and fourth rotor. More chambers, more mass, more fuel.", 9000.0, listOf("apex_science"), minPrestige = Block.ROTARY_1R.ladderStep),
     )
 
     fun byId(id: String): ResearchNode = all.first { it.id == id }

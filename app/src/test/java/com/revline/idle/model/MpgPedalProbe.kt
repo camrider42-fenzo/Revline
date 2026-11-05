@@ -16,7 +16,7 @@ class MpgPedalProbe {
         val all11 = Logic.ECONOMY_IDS + Logic.NEW_ECONOMY_IDS
         val out = StringBuilder()
         out.appendLine("rebuild engine            goal  stock  forty  sixty  ecoOnly  eco+new ecoHalf  maxed  cap | (sixty ecoHalf=half levels of eco parts on top of nothing else)")
-        for (i in Block.entries.indices) {
+        for (i in 0..Block.maxLadderStep) {
             val b = Block.forPrestige(i)
             fun mpg(s: GameState) = Logic.sheet(s).profit.mpg
             val stock = mpg(GameState(prestiges = i))

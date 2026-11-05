@@ -207,7 +207,7 @@ class EconomyTest {
 
     @Test
     fun theOpeningToolOnEveryEngineIsACoupleOfMinutes() {
-        for (index in com.revline.idle.model.Block.entries.indices) {
+        for (index in 0..com.revline.idle.model.Block.maxLadderStep) {
             val state = GameState(prestiges = index, knowledge = index)
             val pay = Logic.sheet(state.copy(throttle = Logic.bestThrottle(state))).incomePerSec
             val cheapest = com.revline.idle.game.Upgrades.all

@@ -59,7 +59,7 @@ object SheetAim {
 
     fun recommend(state: GameState, goal: AimGoal? = null): Aim {
         if (goal != null) return toward(state, goal)
-        val block = Block.forPrestige(state.prestiges)
+        val block = Block.of(state.blockId, state.prestiges)
         val nowParams = Logic.paramsFrom(state)
         val now = EngineSim.evaluate(nowParams)
         val nowMpg = profitMpg(state, nowParams, now)
@@ -185,7 +185,7 @@ object SheetAim {
         val rpm = Logic.targetRpm(params.redlineRpm, state.throttle, params.idleRpm)
         val mult = Prestige.multiplier(state.knowledge)
         return Logic.incomeAt(params, rpm, stats.reliability, mult, state.throttle, stats) *
-            Block.forPrestige(state.prestiges).payScale()
+            Block.of(state.blockId, state.prestiges).payScale()
     }
 
     private fun reading(stats: EngineStats, pay: Double, profitMpg: Double, goal: AimGoal): Double = when (goal) {

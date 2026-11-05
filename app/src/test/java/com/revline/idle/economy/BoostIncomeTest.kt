@@ -35,7 +35,7 @@ class BoostIncomeTest {
     }
 
     private fun pay(block: Block, parts: Map<String, Int>): Double {
-        val state = GameState(prestiges = block.ordinal, fuel = FuelKind.PREMIUM_93, upgrades = parts)
+        val state = GameState(prestiges = block.ladderStep, blockId = block.name, fuel = FuelKind.PREMIUM_93, upgrades = parts)
         return payAt(state, Logic.bestThrottle(state))
     }
 

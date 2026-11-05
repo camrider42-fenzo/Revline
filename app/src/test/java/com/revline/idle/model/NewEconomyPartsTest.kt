@@ -44,10 +44,10 @@ class NewEconomyPartsTest {
 
     @Test fun theMpgReadUnderLoadRisesOnEveryEngineFromTheTwinOn() {
         for (block in Block.entries) {
-            val base = GameState(prestiges = block.ordinal, researched = research)
+            val base = GameState(prestiges = block.ladderStep, blockId = block.name, researched = research)
             val before = Logic.sheet(base).profit.mpg
             val after = Logic.sheet(base.copy(upgrades = newIds.associateWith { Upgrades.byId(it).maxLevel })).profit.mpg
-            if (block.ordinal <= Block.THUMPER.ordinal) assertTrue(after >= before) else assertTrue("${block.title} $before -> $after", after > before * 1.2)
+            if (block.ladderStep <= Block.THUMPER.ladderStep && block.family == EngineFamily.PISTON) assertTrue(after >= before) else assertTrue("${block.title} $before -> $after", after > before * 1.2)
             assertTrue(after < block.mpgCap())
         }
     }
@@ -76,11 +76,11 @@ class NewEconomyPartsTest {
     }
 
     @Test fun noSingleFirstLevelClearsTheGoalFromTwinOnAndStockStillMissesIt() {
-        for (block in Block.entries.filter { it.ordinal >= Block.TWIN.ordinal }) {
-            val stock = Logic.sheet(GameState(prestiges = block.ordinal, researched = research))
+        for (block in Block.entries.filter { it.ladderStep >= Block.TWIN.ladderStep }) {
+            val stock = Logic.sheet(GameState(prestiges = block.ladderStep, blockId = block.name, researched = research))
             assertTrue("${block.title} stock ${stock.profit.mpg} vs ${block.mpgGoal}", stock.profit.mpg < block.mpgGoal)
             for (id in Logic.ECONOMY_IDS + newIds) {
-                val one = Logic.sheet(GameState(prestiges = block.ordinal, researched = research, upgrades = mapOf(id to 1)))
+                val one = Logic.sheet(GameState(prestiges = block.ladderStep, blockId = block.name, researched = research, upgrades = mapOf(id to 1)))
                 assertTrue("${block.title} $id L1 ${one.profit.mpg} vs ${block.mpgGoal}", one.profit.mpg < block.mpgGoal)
             }
         }
@@ -88,8 +88,8 @@ class NewEconomyPartsTest {
 
     @Test fun theOldSevenAloneStillClearTheRaisedGoalsAndTheNewFourAreExtraRoom() {
         for (block in Block.entries) {
-            val old = Logic.sheet(GameState(prestiges = block.ordinal, researched = research, upgrades = Logic.ECONOMY_IDS.associateWith { Upgrades.byId(it).maxLevel })).profit.mpg
-            val all = Logic.sheet(GameState(prestiges = block.ordinal, researched = research, upgrades = (Logic.ECONOMY_IDS + newIds).associateWith { Upgrades.byId(it).maxLevel })).profit.mpg
+            val old = Logic.sheet(GameState(prestiges = block.ladderStep, blockId = block.name, researched = research, upgrades = Logic.ECONOMY_IDS.associateWith { Upgrades.byId(it).maxLevel })).profit.mpg
+            val all = Logic.sheet(GameState(prestiges = block.ladderStep, blockId = block.name, researched = research, upgrades = (Logic.ECONOMY_IDS + newIds).associateWith { Upgrades.byId(it).maxLevel })).profit.mpg
             assertTrue("${block.title} old seven $old vs ${block.mpgGoal}", old >= block.mpgGoal)
             assertTrue("${block.title} all eleven $all vs old $old", all >= old)
         }

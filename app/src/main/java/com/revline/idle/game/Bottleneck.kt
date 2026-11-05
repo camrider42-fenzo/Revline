@@ -35,7 +35,7 @@ object Bottleneck {
                 "The mixture is out of fuel. The pump and the injectors are the limit.",
             )
         }
-        val block = Block.forPrestige(state.prestiges)
+        val block = Block.of(state.blockId, state.prestiges)
         val hp = stats.peakHorsepower / block.sheetHp(state.racing)
         val tq = stats.peakTorqueLbFt / block.sheetTorque(state.racing)
         val mpg = profitMpg / block.sheetMpg(state.racing)

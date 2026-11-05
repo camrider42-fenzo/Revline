@@ -417,7 +417,7 @@ object Racing {
      * Both drag stakes and circuit entries, prizes, fees and rebuilds follow this one number.
      */
     fun stakeCost(prestiges: Int): Double {
-        val p = prestiges.coerceIn(0, Block.entries.lastIndex)
+        val p = prestiges.coerceIn(0, Block.maxLadderStep)
         val raw = STAKE_BASE * Block.forPrestige(p).upgradePriceScale(p) / Block.forPrestige(0).upgradePriceScale(0)
         val step = 10.0.pow(floor(log10(raw)) - 1.0)
         return (raw / step).roundToInt() * step
@@ -701,7 +701,7 @@ object Racing {
     }
 
     fun chassisPrice(state: GameState, body: Chassis, level: Int): Double {
-        val scale = Block.forPrestige(state.prestiges).upgradePriceScale(state.prestiges)
+        val scale = Block.of(state.blockId, state.prestiges).upgradePriceScale(state.prestiges)
         return body.price * scale * 1.15.pow((level - 1).coerceAtLeast(0).toDouble())
     }
 
@@ -717,7 +717,7 @@ object Racing {
     }
 
     private fun partPrice(state: GameState, kind: String, id: String): Double {
-        val scale = Block.forPrestige(state.prestiges).upgradePriceScale(state.prestiges)
+        val scale = Block.of(state.blockId, state.prestiges).upgradePriceScale(state.prestiges)
         return rawPrice(kind, id) * scale
     }
 
@@ -770,13 +770,13 @@ object Racing {
     private data class Ghost(val title: String, val pace: Double, val label: String, val id: String, val entrant: DragRivals.Entrant)
 
     private fun classGhost(state: GameState, tier: Tier): Ghost {
-        val block = Block.forPrestige(state.prestiges)
+        val block = Block.of(state.blockId, state.prestiges)
         val frac = when (tier) {
             Tier.CLUB -> 0.50
             Tier.NATIONAL -> 0.95
             Tier.INTERNATIONAL -> 0.63
         }
-        val group = state.prestiges.coerceIn(0, Block.entries.lastIndex)
+        val group = state.prestiges.coerceIn(0, Block.maxLadderStep)
         val body = when (tier) {
             Tier.CLUB -> groupChassis(group, Build.HEAVY)
             Tier.NATIONAL -> groupChassis(group, Build.MEDIUM)
@@ -818,8 +818,9 @@ object Racing {
      * the previous by a small step — the build earns the number, the number is not painted on.
      */
     fun ladderRungs(length: Length = Length.QUARTER): List<Rung> {
-        val out = ArrayList<Rung>(Block.entries.size * 2)
-        Block.entries.forEachIndexed { index, block ->
+        val out = ArrayList<Rung>(Block.primarySteps().size * 2)
+        Block.primarySteps().forEach { block ->
+            val index = block.ladderStep
             listOf(0.74 to "club", 1.18 to "national").forEach { (baseFrac, name) ->
                 val national = name == "national"
                 val medium = groupChassis(index, Build.MEDIUM)
@@ -852,7 +853,7 @@ object Racing {
 
     private fun rival(state: GameState, seed: Long): Rival {
         val rng = Random(seed)
-        val block = Block.forPrestige(state.prestiges)
+        val block = Block.of(state.blockId, state.prestiges)
         val built = rng.nextDouble() < 0.5
         val tire = if (built) tires.first { it.id == "slick" } else tires.first { it.id == "radial" }
         val box = if (built) gearboxes.first { it.id == "dog" } else gearboxes.first { it.id == "four" }

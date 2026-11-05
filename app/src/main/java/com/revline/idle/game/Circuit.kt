@@ -1122,8 +1122,8 @@ object Circuits {
      * The car the field is built around at this point of the game: a medium chassis with the stock bits (radial tires,
      * limited slip, close-ratio box) on a block at 60% of the upgrades, race-tuned. Beat it with parts and hands.
      */
-    fun parCar(prestiges: Int): Car = parStates.getOrPut(prestiges.coerceIn(0, Block.entries.lastIndex)) {
-        val p = prestiges.coerceIn(0, Block.entries.lastIndex)
+    fun parCar(prestiges: Int): Car = parStates.getOrPut(prestiges.coerceIn(0, Block.maxLadderStep)) {
+        val p = prestiges.coerceIn(0, Block.maxLadderStep)
         val body = Racing.groupChassis(p, Racing.Build.MEDIUM)
         // Match DriverBuilds: pre-rotary catalog size for the 60% share, family-gated pool.
         val family = Block.forPrestige(p).family
@@ -1153,7 +1153,7 @@ object Circuits {
     }
 
     fun parPlan(prestiges: Int, circuit: Circuit, weather: Weather = Weather.DRY): Plan =
-        parPlans.getOrPut("${prestiges.coerceIn(0, Block.entries.lastIndex)}:${circuit.id}:${weather.name}") {
+        parPlans.getOrPut("${prestiges.coerceIn(0, Block.maxLadderStep)}:${circuit.id}:${weather.name}") {
             plan(parCar(prestiges), circuit, Drivers.you, parOrders(weather), weather, measure = true)
         }
 
