@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +72,12 @@ fun RaceScreen(
     val level = state.chassisLevel[body.id] ?: 0
     val slots = car.spec.slots
     val slotMax = Racing.slotMax(body, level)
+    var page by rememberSaveable { mutableStateOf("DRAG") }
+    val setup = RaceDrive.setup(state, ui.sheet)
+    val forecast by produceState<Map<String, Drivers.Forecast>>(emptyMap(), setup) {
+        value = withContext(Dispatchers.Default) { Drivers.forecast(setup).associateBy { it.driver.id } }
+    }
+    key(page) {
     Column(
         Modifier
             .fillMaxSize()
@@ -78,6 +85,11 @@ fun RaceScreen(
             .padding(12.dp),
     ) {
         Text("RACE", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("DRAG", "CIRCUIT").forEach { tab ->
+                LineButton(tab, page != tab, { page = tab })
+            }
+        }
         Text(
             "${body.name}  ${car.massKg.toInt()} kg  dyno ${car.wheelHp.toInt()} hp  pace ${car.pace.toInt()}",
             color = if (car.fits) Lime else Amber,
@@ -101,6 +113,7 @@ fun RaceScreen(
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
+        if (page == "DRAG") {
         Text("DISTANCE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
             "An eighth is the launch. A quarter is the gears. A half mile is the top end. The pace number follows that distance.",
@@ -109,10 +122,6 @@ fun RaceScreen(
             fontSize = 12.sp,
         )
         ChipRow(Racing.Length.entries.map { it.id to it.title }, state.raceLength, onLength)
-        val setup = RaceDrive.setup(state, ui.sheet)
-        val forecast by produceState<Map<String, Drivers.Forecast>>(emptyMap(), setup) {
-            value = withContext(Dispatchers.Default) { Drivers.forecast(setup).associateBy { it.driver.id } }
-        }
         DriverToggle(state, forecast, onPick)
         Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
@@ -145,10 +154,58 @@ fun RaceScreen(
             fontSize = 12.sp,
         )
         LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
-
+        Text("DRAG TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "For the strip. Grip off the line, and nothing else. Circuit races use the circuit tires on the Circuit page, whatever is fitted here. A better tire is a study, then the price.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        ChipRow(Racing.tires.map { it.id to Racing.gate(state, "tire", it.id, it.name).label }, state.tire) { id ->
+            val tire = Racing.tires.first { it.id == id }
+            val gate = Racing.gate(state, "tire", id, tire.name)
+            if (gate.study != null) onStudy(gate.study) else onPart("tire", id)
+        }
+        Text("DRAG PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "Launch control, a transbrake, wheelie bars, a light flywheel, a short shifter, a line lock and a nitrous kit. They work on the strip only, at full price. Several open a knob on the Tune page's Drag tab.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        Parts.strip.forEach { line -> KitLine(state, line, onStudy, onPart) }
+        } else {
         CircuitSection(ui, car, onCircuit, onRevise)
-
-        DriverRoster(state, forecast, onHire)
+        Text("CIRCUIT TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "For corners and brakes. A softer tire grips more and wears faster, most on a hot circuit. Strips use the drag tires on the Drag page. Costs a study, then the price.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        ChipRow(Racing.circuitTires.map { it.id to Racing.gate(state, "ctire", it.id, it.name).label }, state.circuitTire) { id ->
+            val tire = Racing.circuitTires.first { it.id == id }
+            val gate = Racing.gate(state, "ctire", id, tire.name)
+            if (gate.study != null) onStudy(gate.study) else onPart("ctire", id)
+        }
+        Racing.circuitTires.firstOrNull { it.id == state.circuitTire }?.let { t ->
+            Text(
+                String.format(Locale.US, "Grip %.2f, loses %.1f%% a lap on a mild track. For circuits only.", t.mu, t.wear * 100.0),
+                color = Cyan,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Text("CIRCUIT PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            "Brakes, suspension, aero and the rest. Each moves a lap a lot and a drag run a little. A study, then the price. One level of a line is fitted at a time.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
+        Parts.lines.forEach { line -> KitLine(state, line, onStudy, onPart) }
+        }
 
         Text("CHASSIS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp))
         Text(
@@ -282,55 +339,6 @@ fun RaceScreen(
             val gate = Racing.gate(state, "axle", id, Racing.axles.first { it.id == id }.name)
             if (gate.study != null) onStudy(gate.study) else onPart("axle", id)
         }
-        Text("DRAG TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "For the strip. Grip off the line, and nothing else. Circuit races use the circuit tires below, whatever is fitted here. A better tire is a study, then the price.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        ChipRow(Racing.tires.map { it.id to Racing.gate(state, "tire", it.id, it.name).label }, state.tire) { id ->
-            val tire = Racing.tires.first { it.id == id }
-            val gate = Racing.gate(state, "tire", id, tire.name)
-            if (gate.study != null) onStudy(gate.study) else onPart("tire", id)
-        }
-        Text("CIRCUIT TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "For corners and brakes. A softer tire grips more and wears faster, most on a hot circuit. Strips use the drag tires above. Costs a study, then the price.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        ChipRow(Racing.circuitTires.map { it.id to Racing.gate(state, "ctire", it.id, it.name).label }, state.circuitTire) { id ->
-            val tire = Racing.circuitTires.first { it.id == id }
-            val gate = Racing.gate(state, "ctire", id, tire.name)
-            if (gate.study != null) onStudy(gate.study) else onPart("ctire", id)
-        }
-        Racing.circuitTires.firstOrNull { it.id == state.circuitTire }?.let { t ->
-            Text(
-                String.format(Locale.US, "Grip %.2f, loses %.1f%% a lap on a mild track. For circuits only.", t.mu, t.wear * 100.0),
-                color = Cyan,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        Text("CIRCUIT PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "Brakes, suspension, aero and the rest. Each moves a lap a lot and a drag run a little. A study, then the price. One level of a line is fitted at a time.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        Parts.lines.forEach { line -> KitLine(state, line, onStudy, onPart) }
-        Text("DRAG PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "Launch control, a transbrake, wheelie bars, a light flywheel, a short shifter, a line lock and a nitrous kit. They work on the strip only, at full price. Several open a knob on the Tune page's Drag tab.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        Parts.strip.forEach { line -> KitLine(state, line, onStudy, onPart) }
         Text("LAYOUT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
         if (body.places.size == 1) {
             Text(
@@ -366,6 +374,8 @@ fun RaceScreen(
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
         )
+        DriverRoster(state, forecast, onHire)
+    }
     }
 }
 
