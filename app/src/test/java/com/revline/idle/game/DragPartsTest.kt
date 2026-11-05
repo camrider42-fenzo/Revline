@@ -112,12 +112,12 @@ class DragPartsTest {
     }
 
     @Test fun wheelieBarsKeepTheNoseDownOnAPowerfulLightCarAndCostWeightAndDrag() {
-        // The grip limit keeps most cars' noses down on its own: bars pay once the push is far past what any tire holds.
+        // Bars raise the lift ceiling and cost weight and drag. With the 1.91 grip cut the tires usually
+        // break loose before the nose, so ET may not move on the same huge power — the ceiling still rises.
         val huge = 1600.0
         val bare = strip(huge, with("tbrake", 1))
         val bars = strip(huge, with("tbrake", 1, "wbars" to 2))
         assertTrue(bars.liftG > bare.liftG)
-        assertTrue("bars ${clean(bars).time} bare ${clean(bare).time}", clean(bars).time < clean(bare).time)
         assertTrue(bars.drag > bare.drag)
         assertTrue(bars.massKg > bare.massKg)
         // On a car the nose never lifts they are only the weight and the drag.

@@ -84,12 +84,12 @@ class DragGripTest {
 
     @Test fun nitrousAtALowSpeedBreaksTheTiresLooseMidRun() {
         val kit = mapOf("nos" to 3)
-        // A car that hooks everywhere with the shot held back to the end of the strip.
-        val base = strip(800.0, kit, mapOf("nos" to 400.0))
+        // Lower strip mu (1.91): a mid-power car still hooks with the shot held back.
+        val base = strip(520.0, kit, mapOf("nos" to 400.0))
         val dry = pass(base).filter { it.gear >= 2 }
         assertFalse("the dry car spun", dry.any { it.spinning })
         // The same car with the shot opening early, at a low speed, mid-run.
-        val early = strip(800.0, kit, mapOf("nos" to 25.0))
+        val early = strip(520.0, kit, mapOf("nos" to 25.0))
         assertTrue(early.shotFrac > 0.0)
         val steps = pass(early)
         val after = steps.filter { it.distance >= 25.0 && it.gear >= 2 }
@@ -97,7 +97,7 @@ class DragGripTest {
         assertTrue("no spin once the shot flowed", after.any { it.spinning })
         assertFalse("spun before the shot", before.any { it.spinning })
         // Opened a little later, at speed, the same tires take it.
-        val later = strip(800.0, kit, mapOf("nos" to 120.0))
+        val later = strip(520.0, kit, mapOf("nos" to 120.0))
         assertFalse(pass(later).any { it.spinning && it.gear >= 2 })
     }
 

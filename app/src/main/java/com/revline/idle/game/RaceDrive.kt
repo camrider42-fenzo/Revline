@@ -543,7 +543,7 @@ object RaceDrive {
      * Rubber works into the surface and the tire grows as it goes faster, so a tire holds more at speed than it
      * did at the line: up to [SPEED_GRIP] more, reached around [SPEED_GRIP_V] m/s.
      */
-    private const val SPEED_GRIP = 0.7
+    private const val SPEED_GRIP = 0.42
     private const val SPEED_GRIP_V = 22.0
 
     /** The share of the car's weight on the driven wheels when it pushes at [accel] m/s2, before downforce. Signed lever: rear drive gains, front drive loses. */

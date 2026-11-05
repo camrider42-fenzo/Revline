@@ -85,6 +85,8 @@ fun RaceMeet(
     var clutchShown by remember { mutableFloatStateOf(1f) }
     var frame by remember { mutableStateOf(Frame(rpm = setup.idle)) }
     var settled by remember { mutableStateOf(false) }
+    // Green-to-roll for the player's lane (hired or self). Always recorded so the board can show it.
+    var playerRolled by remember { mutableStateOf(Double.NaN) }
     fun settle(won: Boolean, jumped: Boolean = false) {
         if (settled) return
         settled = true
@@ -106,6 +108,7 @@ fun RaceMeet(
                     auto.advance(dt)
                     throttle = auto.throttle.toFloat()
                     clutchShown = auto.clutch.toFloat()
+                    if (playerRolled.isNaN() && !auto.staging && auto.run.distance >= 0.15) playerRolled = auto.run.time
                     frame = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown)
                     if (hear) {
                         val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
@@ -132,6 +135,7 @@ fun RaceMeet(
                 val shift = hands.shift && hands.clutch > RaceDrive.SHIFT_PEDAL
                 hands.shift = false
                 RaceDrive.step(setup, hands.run, hands.throttle, shift, dt, hands.clutch)
+                if (playerRolled.isNaN() && hands.run.distance >= 0.15) playerRolled = hands.run.time
                 frame = snap(hands.run, 0f, rivalPass, finish, done = false, won = false)
                 if (hear) {
                     val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
@@ -230,6 +234,25 @@ fun RaceMeet(
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
+        // Reaction board: after the tree, show both lanes. Player lane always — even with a hired driver.
+        if (frame.lights <= 0f && frame.countdown <= 0f && !frame.jumped) {
+            val youRt = when {
+                !playerRolled.isNaN() -> playerRolled
+                auto != null -> auto.reaction
+                else -> Double.NaN
+            }
+            val themRt = rivalPass.rolled
+            val youLabel = driver?.name?.uppercase(Locale.US) ?: "YOU"
+            val youTxt = if (youRt.isNaN()) "—" else String.format(Locale.US, "%.3f", youRt)
+            val themTxt = if (themRt.isNaN() || themRt > 30.0) "—" else String.format(Locale.US, "%.3f", themRt)
+            Text(
+                "RT $youLabel ${youTxt}s   THEM ${themTxt}s",
+                color = Cyan,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
         val canShift = auto == null && frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > RaceDrive.SHIFT_PEDAL.toFloat()
         Row(Modifier.fillMaxWidth().height(128.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(Modifier.width(60.dp).fillMaxHeight()) {

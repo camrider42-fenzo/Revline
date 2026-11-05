@@ -165,10 +165,10 @@ object Racing {
 
     /** Drag tires: launch grip on the strip. The fitted one is [GameState.tire]. */
     val tires = listOf(
-        Tire("bias", "Bias-ply street", 0.82, 1.00, 32.0, null, 0, 0.0),
-        Tire("radial", "Street radial", 0.94, 1.00, 28.0, "tire_radial", 0, 400.0),
-        Tire("race", "Drag radial", 1.08, 1.02, 24.0, "tire_race", 2, 1800.0),
-        Tire("slick", "Drag slick", 1.26, 1.05, 22.0, "tire_slick", 4, 4600.0),
+        Tire("bias", "Bias-ply street", 0.68, 1.00, 32.0, null, 0, 0.0),
+        Tire("radial", "Street radial", 0.78, 1.00, 28.0, "tire_radial", 0, 400.0),
+        Tire("race", "Drag radial", 0.90, 1.02, 24.0, "tire_race", 2, 1800.0),
+        Tire("slick", "Drag slick", 1.05, 1.05, 22.0, "tire_slick", 4, 4600.0),
     )
 
     /**
@@ -381,7 +381,7 @@ object Racing {
             ((heat - 0.90).coerceAtLeast(0.0) * 0.38).coerceAtMost(0.48)
         }
         val held = (1.0 - fade).coerceIn(0.34, 1.0)
-        val traction = spec.tire.mu * spec.axle.grip * balance * mass * 0.55 * kit.launch
+        val traction = spec.tire.mu * spec.axle.grip * balance * mass * 0.48 * kit.launch
         val road = when {
             body.id == "mule" -> 0.94
             body.build == Build.LIGHT -> 1.26
@@ -754,6 +754,8 @@ object Racing {
     const val LADDER_SKILL = 0.45
     const val LADDER_SKILL_STEP = 0.03
     const val LADDER_NATIONAL_BONUS = 0.15
+    /** Each ladder rung must clear the previous pace by at least this factor. */
+    const val LADDER_PACE_STEP = 1.04
     const val STAKE_BUILT_SKILL = 0.74
     const val STAKE_STREET_SKILL = 0.42
 
@@ -801,18 +803,41 @@ object Racing {
 
     data class Rung(val title: String, val pace: Double, val chassisId: String, val entrant: DragRivals.Entrant)
 
-    fun ladderRungs(length: Length = Length.QUARTER): List<Rung> = Block.entries.flatMapIndexed { index, block ->
-        listOf(0.74 to "club", 1.18 to "national").map { (frac, name) ->
-            val body = groupChassis(index, if (frac < 1.0) Build.MEDIUM else Build.LIGHT)
-            val cc = com.revline.idle.model.EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
-            val hp = block.hpGoal * frac
-            val tire = if (frac < 1.0) tires.first { it.id == "radial" } else tires.first { it.id == "race" }
-            val box = if (frac < 1.0) gearboxes.first { it.id == "four" } else gearboxes.first { it.id == "close" }
-            val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axles.first { it.id == "lsd" }, tire, body.slots, driveFor(body, body.place), body.place)
-            val pace = assess(spec, length).pace
-            val skill = LADDER_SKILL + LADDER_SKILL_STEP * index + if (frac < 1.0) 0.0 else LADDER_NATIONAL_BONUS
-            Rung("${block.title} $name", pace, body.id, DragRivals.entrant("${block.title} $name", spec, block, skill))
+    /**
+     * Ladder opponents. Club uses the group's medium tub; national uses the light one only when that tub is a real
+     * car (not a Peel-class toy). Early LIGHT tubs were ~59 kg with national power and blew rung-2 pace off the
+     * curve between club-1 and club-3. Pace is forced monotonic and smooth by raising frac until each rung clears
+     * the previous by a small step — the build earns the number, the number is not painted on.
+     */
+    fun ladderRungs(length: Length = Length.QUARTER): List<Rung> {
+        val out = ArrayList<Rung>(Block.entries.size * 2)
+        Block.entries.forEachIndexed { index, block ->
+            listOf(0.74 to "club", 1.18 to "national").forEach { (baseFrac, name) ->
+                val national = name == "national"
+                val medium = groupChassis(index, Build.MEDIUM)
+                val light = groupChassis(index, Build.LIGHT)
+                // Toy-light national cars (Peel P50, etc.) made ladder-2 pace ~3–4× the neighbours.
+                val body = if (national && light.kg >= medium.kg * 0.72) light else medium
+                val tire = if (national) tires.first { it.id == "race" } else tires.first { it.id == "radial" }
+                val box = if (national) gearboxes.first { it.id == "close" } else gearboxes.first { it.id == "four" }
+                val cc = com.revline.idle.model.EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
+                val axle = axles.first { it.id == "lsd" }
+                val floor = if (out.isEmpty()) 0.0 else out.last().pace * LADDER_PACE_STEP
+                var frac = baseFrac
+                var spec: Spec
+                var pace: Double
+                do {
+                    val hp = block.hpGoal * frac
+                    spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axle, tire, body.slots, driveFor(body, body.place), body.place)
+                    pace = assess(spec, length).pace
+                    if (pace >= floor || frac >= 3.2) break
+                    frac *= 1.05
+                } while (true)
+                val skill = LADDER_SKILL + LADDER_SKILL_STEP * index + if (national) LADDER_NATIONAL_BONUS else 0.0
+                out += Rung("${block.title} $name", pace, body.id, DragRivals.entrant("${block.title} $name", spec, block, skill))
+            }
         }
+        return out
     }
 
     private data class Rival(val label: String, val pace: Double, val id: String, val entrant: DragRivals.Entrant)
