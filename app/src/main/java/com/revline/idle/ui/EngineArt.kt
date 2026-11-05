@@ -873,66 +873,122 @@ private fun DrawScope.drawRotary(
     fun part(id: String) = parts[id] ?: 0
     val rotors = params.cylinders.coerceIn(2, 4)
     val pulse = 0.82f + 0.18f * sin(clock * (2.2f + spinRpm / 1800f))
-    val R = h * 0.22f
-    val e = R * 0.17f
-    val gap = w * 0.02f
-    val total = rotors * (R * 2.05f) + (rotors - 1) * gap
-    val originX = (w - total) * 0.5f + R * 1.05f
-    val cy = h * 0.52f
+    // Generating radius sized to the panel; R/e = 7 (Mazda-class peanut).
+    val e = h * 0.030f
+    val R = e * WankelGeometry.DEFAULT_R_OVER_E.toFloat()
+    val housingSpan = (R + e) * 2.15f
+    val gap = w * 0.018f
+    val total = rotors * housingSpan + (rotors - 1) * gap
+    val originX = (w - total) * 0.5f + housingSpan * 0.5f
+    val cy = h * 0.54f
 
-    glowLine(White, Offset(originX - R * 0.9f, cy), Offset(originX + total - R * 1.1f, cy), stroke * 0.9f, 0.55f)
+    glowLine(White, Offset(originX - housingSpan * 0.45f, cy), Offset(originX + total - housingSpan * 0.55f, cy), stroke * 0.7f, 0.45f)
 
     for (i in 0 until rotors) {
-        val cx = originX + i * (R * 2.05f + gap)
-        val rotorDeg = EngineMotion.rotorAngle(angle, i, rotors)
-        val eccRad = Math.toRadians(angle.toDouble() + i * (360.0 / rotors))
-        val ox = cx + (cos(eccRad) * e).toFloat()
-        val oy = cy + (sin(eccRad) * e).toFloat()
+        val cx = originX + i * (housingSpan + gap)
+        val shaftDeg = angle + i * (360f / rotors)
+        val shaftRad = Math.toRadians(shaftDeg.toDouble())
+        val rotorDeg = EngineMotion.rotorAngle(shaftDeg, 0, 1)
 
-        val housing = ArrayList<Offset>(72)
-        for (s in 0 until 72) {
-            val th = s * Math.PI * 2.0 / 72.0
-            val hx = cx + ((R + e) * cos(th) + e * cos(2.0 * th) * 0.15).toFloat()
-            val hy = cy + ((R + e) * sin(th) - e * sin(2.0 * th) * 0.15).toFloat()
-            housing += Offset(hx, hy)
-        }
-        for (s in 0 until housing.size) {
-            val a = housing[s]
-            val b = housing[(s + 1) % housing.size]
-            glowLine(White, a, b, stroke * 0.85f, 0.7f)
+        fun toScreen(p: WankelGeometry.Pt): Offset = Offset(cx + p.x.toFloat(), cy + p.y.toFloat())
+
+        // Epitrochoid housing bore.
+        val housing = WankelGeometry.sampleHousing(R.toDouble(), e.toDouble(), 120)
+        for (s in housing.indices) {
+            val a = toScreen(housing[s])
+            val b = toScreen(housing[(s + 1) % housing.size])
+            glowLine(White, a, b, stroke * 0.9f, 0.75f)
         }
 
-        val portGlow = 0.55f + 0.35f * throttle * pulse
-        glowLine(Cyan, Offset(cx - R * 1.05f, cy - R * 0.15f), Offset(cx - R * 0.72f, cy - R * 0.35f), stroke * 1.1f, portGlow)
-        glowLine(exhaust, Offset(cx + R * 0.72f, cy - R * 0.35f), Offset(cx + R * 1.05f, cy - R * 0.15f), stroke * 1.1f, portGlow * exhaustGain)
+        // Renesis-style side intake (left short face) + peripheral/side exhaust (right).
+        val portGlow = 0.50f + 0.40f * throttle * pulse
+        val leftPort = listOf(
+            WankelGeometry.housing(-2.55, R.toDouble(), e.toDouble()),
+            WankelGeometry.housing(-2.35, R.toDouble(), e.toDouble()),
+            WankelGeometry.housing(-2.15, R.toDouble(), e.toDouble()),
+        ).map(::toScreen)
+        for (k in 0 until leftPort.lastIndex) glowLine(Cyan, leftPort[k], leftPort[k + 1], stroke * 1.25f, portGlow)
+        val rightPort = listOf(
+            WankelGeometry.housing(-0.55, R.toDouble(), e.toDouble()),
+            WankelGeometry.housing(-0.35, R.toDouble(), e.toDouble()),
+            WankelGeometry.housing(-0.15, R.toDouble(), e.toDouble()),
+        ).map(::toScreen)
+        for (k in 0 until rightPort.lastIndex) glowLine(exhaust, rightPort[k], rightPort[k + 1], stroke * 1.25f, portGlow * exhaustGain)
 
-        val tips = Array(3) { face ->
-            val a = Math.toRadians((rotorDeg + face * 120.0))
-            Offset(ox + (cos(a) * R * 0.92).toFloat(), oy + (sin(a) * R * 0.92).toFloat())
-        }
+        // Leading + trailing spark plugs on the short (top) flank of the peanut.
+        val lead = toScreen(WankelGeometry.housing(-1.45, R.toDouble(), e.toDouble()))
+        val trail = toScreen(WankelGeometry.housing(-1.75, R.toDouble(), e.toDouble()))
+        val plugOut = stroke * 3.2f
+        glowLine(Lime, lead, Offset(lead.x, lead.y - plugOut), stroke * 0.85f, 1.05f)
+        glowCircle(Lime, stroke * 0.55f, Offset(lead.x, lead.y - plugOut), stroke, filled = true, gain = 1.1f)
+        glowLine(Lime, trail, Offset(trail.x, trail.y - plugOut), stroke * 0.85f, 1.05f)
+        glowCircle(Lime, stroke * 0.55f, Offset(trail.x, trail.y - plugOut), stroke, filled = true, gain = 1.1f)
+
+        // Rotor flanks (Reuleaux-like with combustion recesses) + chamber glow.
         for (face in 0 until 3) {
             val phase = EngineMotion.rotaryFacePhase(rotorDeg, face)
             val glow = when {
-                phase < 0.22f -> Cyan.copy(alpha = (0.25f + 0.45f * throttle) * pulse)
-                phase < 0.45f -> White.copy(alpha = 0.18f * pulse)
-                phase < 0.68f -> (if (throttle > 0.2f) Lime else Amber).copy(alpha = (0.35f + 0.55f * throttle) * pulse)
-                else -> exhaust.copy(alpha = 0.30f * exhaustGain * pulse)
+                phase < 0.22f -> Cyan.copy(alpha = (0.22f + 0.40f * throttle) * pulse)
+                phase < 0.45f -> White.copy(alpha = 0.16f * pulse)
+                phase < 0.68f -> (if (throttle > 0.2f) Lime else Amber).copy(alpha = (0.40f + 0.50f * throttle) * pulse)
+                else -> exhaust.copy(alpha = 0.28f * exhaustGain * pulse)
             }
-            val a = tips[face]
-            val b = tips[(face + 1) % 3]
-            glowLine(glow, a, b, stroke * 1.4f, 0.9f)
-            glowLine(glow, Offset(ox, oy), Offset((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), stroke * 0.7f, 0.5f)
+            val flank = WankelGeometry.sampleFlank(shaftRad, face, R.toDouble(), e.toDouble(), 18)
+            for (k in 0 until flank.lastIndex) {
+                glowLine(glow, toScreen(flank[k]), toScreen(flank[k + 1]), stroke * 1.35f, 0.95f)
+            }
+            glowLine(White, toScreen(flank.first()), toScreen(flank.last()), stroke * 0.55f, 0.35f)
+            // Combustion pocket fill cue toward mid-flank.
+            if (phase in 0.45f..0.68f && throttle > 0.15f) {
+                val mid = toScreen(flank[flank.size / 2])
+                val c = toScreen(WankelGeometry.rotorCenter(shaftRad, e.toDouble()))
+                glowLine(Lime, c, mid, stroke * 1.1f, 0.85f * pulse)
+                glowCircle(Lime, stroke * (1.2f + 0.8f * throttle * pulse), mid, stroke, filled = true, gain = 0.9f)
+            }
         }
-        for (face in 0 until 3) {
-            glowLine(White, tips[face], tips[(face + 1) % 3], stroke, 0.85f)
-        }
+
+        // Apex seals — tips sit on the epitrochoid.
         val sealOn = part("apex_seals") > 0
-        for (tip in tips) {
-            glowLine(if (sealOn) Lime else Amber, tip, Offset(tip.x * 0.04f + ox * 0.96f, tip.y * 0.04f + oy * 0.96f), stroke * 1.2f, 1f)
+        for (face in 0 until 3) {
+            val tip = toScreen(WankelGeometry.apex(shaftRad, face, R.toDouble(), e.toDouble()))
+            val c = toScreen(WankelGeometry.rotorCenter(shaftRad, e.toDouble()))
+            glowCircle(if (sealOn) Lime else Amber, stroke * 0.7f, tip, stroke, filled = true, gain = 1.15f)
+            glowLine(if (sealOn) Lime else Amber, tip, Offset((tip.x + c.x) * 0.5f, (tip.y + c.y) * 0.5f), stroke * 0.6f, 0.55f)
         }
-        glowLine(Cyan, Offset(ox - e * 0.35f, oy), Offset(ox + e * 0.35f, oy), stroke, 0.8f)
-        glowLine(Cyan, Offset(ox, oy - e * 0.35f), Offset(ox, oy + e * 0.35f), stroke, 0.8f)
-        glowLine(White, Offset(cx - e * 0.5f, cy), Offset(cx + e * 0.5f, cy), stroke * 0.7f, 0.5f)
+
+        // Stationary gear (fixed sun at housing centre) + internal gear on rotor (3:2).
+        val sunR = e * 1.55f
+        val ringR = sunR * 1.5f
+        val rc = toScreen(WankelGeometry.rotorCenter(shaftRad, e.toDouble()))
+        val hc = Offset(cx, cy)
+        fun gearRing(center: Offset, radius: Float, teeth: Int, color: Color, gain: Float) {
+            val ring = ArrayList<Offset>(teeth)
+            for (t in 0 until teeth) {
+                val a = t * Math.PI * 2.0 / teeth
+                ring += Offset(center.x + (cos(a) * radius).toFloat(), center.y + (sin(a) * radius).toFloat())
+            }
+            for (t in ring.indices) glowLine(color, ring[t], ring[(t + 1) % ring.size], stroke * 0.65f, gain)
+            // Tooth ticks.
+            for (t in 0 until teeth step 1) {
+                val a = t * Math.PI * 2.0 / teeth
+                val iR = radius * 0.82f
+                val oR = radius * 1.08f
+                glowLine(
+                    color,
+                    Offset(center.x + (cos(a) * iR).toFloat(), center.y + (sin(a) * iR).toFloat()),
+                    Offset(center.x + (cos(a) * oR).toFloat(), center.y + (sin(a) * oR).toFloat()),
+                    stroke * 0.5f,
+                    gain * 0.85f,
+                )
+            }
+        }
+        gearRing(hc, sunR, 24, Cyan, 0.7f)
+        gearRing(rc, ringR, 36, White, 0.65f)
+        // Eccentric shaft journal through rotor centre.
+        glowCircle(Cyan, stroke * 0.9f, rc, stroke, filled = false, gain = 0.9f)
+        glowLine(Cyan, Offset(rc.x - e * 0.55f, rc.y), Offset(rc.x + e * 0.55f, rc.y), stroke * 0.7f, 0.7f)
+        glowLine(Cyan, Offset(rc.x, rc.y - e * 0.55f), Offset(rc.x, rc.y + e * 0.55f), stroke * 0.7f, 0.7f)
+        glowCircle(White, stroke * 0.45f, hc, stroke, filled = true, gain = 0.6f)
     }
 
     if (params.induction != Induction.NA) {
@@ -950,3 +1006,4 @@ private fun DrawScope.drawRotary(
     }
     glowLine(White, Offset(w * 0.08f, h * 0.88f), Offset(w * 0.08f + rotors * w * 0.04f, h * 0.88f), stroke * 0.6f, 0.4f)
 }
+

@@ -54,7 +54,7 @@ class EngineArtShotTest {
     @Test
     fun rotaryAnimShot() {
         val tag = System.getenv("ENGINE_SHOT")
-        if (tag != null && tag !in setOf("rotary-anim", "rotary", "1")) return
+        if (tag != null && tag !in setOf("rotary-anim", "rotary", "rotary-anim-v2", "1")) return
         if (tag == null && System.getenv("CIRCUIT_GFX_DIR") == null) return
         val twin = GameState(
             prestiges = Block.ROTARY.ordinal,
@@ -65,30 +65,35 @@ class EngineArtShotTest {
             ),
             throttle = 0.9,
         )
-        val four = twin.copy(upgrades = twin.upgrades + mapOf("rotor3" to 1, "rotor4" to 1, "light_rotor" to 1))
         val twinParams = Logic.paramsFrom(twin)
-        val fourParams = Logic.paramsFrom(four)
         val rpm = Logic.targetRpm(twinParams.redlineRpm, twin.throttle).toFloat()
-        val panelW = 640
-        val panelH = 480
-        fun panel(params: com.revline.idle.model.EngineParams, parts: Map<String, Int>, angle: Float): Bitmap {
+        val panelW = 420
+        val panelH = 420
+        fun panel(angle: Float): Bitmap {
             val img = ImageBitmap(panelW, panelH)
             CanvasDrawScope().draw(Density(2.6f), LayoutDirection.Ltr, Canvas(img), Size(panelW.toFloat(), panelH.toFloat())) {
                 drawRect(Color(0xFF0B1811))
                 val stroke = (size.width / 170f).coerceIn(1.7f, 3.4f)
-                EngineArtDraw.draw(this, params, parts, stroke, angle = angle, clock = 1.35f, spinRpm = rpm, throttle = 0.9f)
+                EngineArtDraw.draw(this, twinParams, twin.upgrades, stroke, angle = angle, clock = 1.35f, spinRpm = rpm, throttle = 0.9f)
             }
             return img.asAndroidBitmap()
         }
-        val left = panel(twinParams, twin.upgrades, 140f)
-        val right = panel(fourParams, four.upgrades, 95f)
-        val out = Bitmap.createBitmap(panelW * 2, panelH, Bitmap.Config.ARGB_8888)
-        val canvas = AndroidCanvas(out)
-        canvas.drawBitmap(left, 0f, 0f, null)
-        canvas.drawBitmap(right, panelW.toFloat(), 0f, null)
-        CircuitShots.dir.mkdirs()
-        File(CircuitShots.dir, "rotary-anim.png").outputStream().use {
-            out.compress(Bitmap.CompressFormat.PNG, 100, it)
+        val frames = listOf(20f, 80f, 140f, 200f).map(::panel)
+        val refFile = File(CircuitShots.dir, "refs/wankel-engine-diagram.png")
+        val refBmp = if (refFile.isFile) {
+            val raw = android.graphics.BitmapFactory.decodeFile(refFile.absolutePath)
+            android.graphics.Bitmap.createScaledBitmap(raw, panelW, panelH, true)
+        } else {
+            frames[0]
         }
+        val cols = frames.size + 1
+        val out = Bitmap.createBitmap(panelW * cols, panelH, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(out)
+        canvas.drawBitmap(refBmp, 0f, 0f, null)
+        frames.forEachIndexed { idx, bmp -> canvas.drawBitmap(bmp, panelW * (idx + 1).toFloat(), 0f, null) }
+        CircuitShots.dir.mkdirs()
+        File(CircuitShots.dir, "rotary-anim.png").outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        File(CircuitShots.dir, "rotary-anim-v2.png").outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
+
 }
