@@ -16,11 +16,20 @@ object DriverBuilds {
     private val research = ResearchTree.all.map { it.id }.toSet()
     private val studies = Racing.studies.map { it.id }.toSet()
 
-    private fun upgrades(share: Double, extra: Map<String, Int> = emptyMap()): Map<String, Int> {
+    private fun upgrades(p: Int, share: Double, extra: Map<String, Int> = emptyMap()): Map<String, Int> {
         // The mpg-only economy parts do nothing on a circuit, and leaving them out keeps the share-based picks where they were.
-        val all = Upgrades.all.filter { it.id !in com.revline.idle.game.Logic.NEW_ECONOMY_IDS }
-        val count = (all.size * share).toInt()
-        return all.take(count).associate { it.id to it.maxLevel } + extra
+        val family = Block.forPrestige(p).family
+        // Pre-1.92 catalog size (no rotary-only parts) so share 0.8 still means the same
+        // absolute piston take the circuit harness was balanced against.
+        val catalog = Upgrades.all.filter {
+            it.id !in com.revline.idle.game.Logic.NEW_ECONOMY_IDS &&
+                it.id !in com.revline.idle.model.EngineFamily.ROTARY_ONLY
+        }
+        val pool = Upgrades.all.filter {
+            it.id !in com.revline.idle.game.Logic.NEW_ECONOMY_IDS && family.allows(it.id)
+        }
+        val count = (catalog.size * share).toInt().coerceIn(0, pool.size)
+        return pool.take(count).associate { it.id to it.maxLevel } + extra
     }
 
     /** The circuit tire that matches a drag tire's tier: the same money spent, on the other kind of rubber. */
@@ -42,7 +51,11 @@ object DriverBuilds {
             money = 1.0e12,
             racing = true,
             researched = research,
-            upgrades = upgrades(share, if (rev) mapOf("rev_kit" to 4, "springs" to 4, "cam" to 4) else emptyMap()),
+            upgrades = upgrades(p, share, if (rev) {
+                if (Block.forPrestige(p).family == com.revline.idle.model.EngineFamily.ROTARY)
+                    mapOf("eccentric" to 4, "light_rotor" to 2, "apex_seals" to 4)
+                else mapOf("rev_kit" to 4, "springs" to 4, "cam" to 4)
+            } else emptyMap()),
             chassis = body.id,
             chassisLevel = mapOf(body.id to 3),
             coolingSlots = Racing.slotMax(body, 3),

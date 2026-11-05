@@ -47,7 +47,7 @@ class UpgradeMapTest {
     @Test
     fun bubblesStayApartAndLinesDoNotCrossBays() {
         val map = UpgradeMap.bubbles()
-        assertEquals(Upgrades.all.size + Effect.entries.size, map.bubbles.size)
+        assertEquals(Upgrades.forFamily(com.revline.idle.model.EngineFamily.PISTON).size + Effect.entries.size, map.bubbles.size)
         assertTrue("map got wide again ${map.width}", map.width < 2200f)
         assertTrue("map got tall again ${map.height}", map.height < 1500f)
         assertEquals(Upgrades.all.size, Upgrades.all.map { UpgradeMap.effectOf(it.id) }.size)
@@ -73,5 +73,18 @@ class UpgradeMapTest {
         assertTrue(headers!!.contains("Header fabrication"))
         val twin = Logic.lockLabel(GameState(), "twin")
         assertTrue(twin!!.contains("Turbocharger"))
+    }
+
+    @Test
+    fun rotaryMapHidesPistonHardware() {
+        val piston = UpgradeMap.bubbles(com.revline.idle.model.EngineFamily.PISTON).bubbles.map { it.id }.toSet()
+        val rotary = UpgradeMap.bubbles(com.revline.idle.model.EngineFamily.ROTARY).bubbles.map { it.id }.toSet()
+        assertTrue("cam" in piston)
+        assertFalse("cam" in rotary)
+        assertTrue("apex_seals" in rotary)
+        assertFalse("apex_seals" in piston)
+        val rotaryMap = UpgradeMap.bubbles(com.revline.idle.model.EngineFamily.ROTARY)
+        assertTrue("apex_seals" in rotaryMap.bubbles.map { it.id })
+        assertTrue(rotaryMap.bubbles.size > Effect.entries.size + 5)
     }
 }

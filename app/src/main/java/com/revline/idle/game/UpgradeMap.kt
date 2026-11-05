@@ -64,6 +64,7 @@ object UpgradeMap {
         "filter", "manifold", "itb", "headers", "long_tube", "cam", "vvt", "vvl",
         "compression", "bore", "coils", "base_timing", "mapped_timing", "springs",
         "lap", "gap", "limiter", "dyno_fuel", "rev_kit",
+        "port_street", "port_bridge", "port_peri", "eccentric", "light_rotor",
         -> Effect.POWER
         "jets", "afr_map", "catback", "cold_air", "boot", "tip", "needle",
         "rings", "lean_spark", "egr", "cyl_off",
@@ -73,9 +74,10 @@ object UpgradeMap {
         -> Effect.BOOST
         "radiator", "duct", "thermostat", "cap", "water_pump", "electric_pump",
         "oil_cooler", "waterless", "synthetic", "ceramic", "oil_service", "fins",
+        "oil_meter", "housing_coat",
         -> Effect.COOLING
         "studs", "pistons", "rods", "crank", "billet", "inconel", "knock_box", "plugs", "torque_model",
-        "wrench",
+        "wrench", "apex_seals", "rotor3", "rotor4",
         -> Effect.DURABILITY
         else -> error("No effect for $id")
     }
@@ -108,10 +110,10 @@ object UpgradeMap {
     )
 
     /** Effect hubs with their parts on tight rings. Groups sit close enough to read as one map. */
-    fun bubbles(): BubbleMap {
+    fun bubbles(family: com.revline.idle.model.EngineFamily = com.revline.idle.model.EngineFamily.PISTON): BubbleMap {
         val children = mutableMapOf<String, MutableList<Upgrade>>()
         val roots = mutableMapOf<Effect, MutableList<Upgrade>>()
-        for (upgrade in Upgrades.all) {
+        for (upgrade in Upgrades.forFamily(family)) {
             val parent = layoutParent(upgrade.id)
             if (parent == null) roots.getOrPut(effectOf(upgrade.id)) { mutableListOf() }.add(upgrade)
             else children.getOrPut(parent) { mutableListOf() }.add(upgrade)

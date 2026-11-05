@@ -55,6 +55,7 @@ import com.revline.idle.economy.formatCompact
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.model.Block
 import kotlin.math.pow
+import com.revline.idle.game.EngineWeight
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Perks
 import com.revline.idle.game.ResearchStatus
@@ -378,6 +379,19 @@ private fun StatGrid(ui: UiModel, live: com.revline.idle.model.OperatingPoint) {
             Stat("MPG@\$", String.format(Locale.US, "%.1f", ui.sheet.profit.mpg), if (ui.sheet.profit.mpg < Block.forPrestige(ui.game.prestiges).sheetMpg(ui.game.racing)) Amber else White, Modifier.weight(1f))
             Stat("REL", String.format(Locale.US, "%.0f", s.reliability), if (s.reliability < 70) Red else White, Modifier.weight(1f))
         }
+        val engKg = EngineWeight.kg(ui.game)
+        val block = Block.forPrestige(ui.game.prestiges)
+        val tier = EngineWeight.familyTierLabel(block) +
+            if (block.family == com.revline.idle.model.EngineFamily.ROTARY) " rotary" else ""
+        Text(
+            "Engine ${String.format(Locale.US, "%.0f", engKg)} kg ($tier). " +
+                "Parts ${String.format(Locale.US, "%+.0f", EngineWeight.partDeltaKg(ui.game))} kg on a " +
+                "${String.format(Locale.US, "%.0f", block.baseEngineKg)} kg long-block.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         Text(
             "Sheet peak. Now ${formatPower(live.horsepower)} hp, ${formatPower(live.torqueLbFt)} lb-ft, " +
                 "${String.format(Locale.US, "%.1f", live.mpg)} mpg at this pedal. MPG@\$ is mpg at the best-paying pedal up to ${(Logic.GATE_CAP * 100).toInt()}%, " +

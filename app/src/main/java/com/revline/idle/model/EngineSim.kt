@@ -119,6 +119,8 @@ data class EngineParams(
     val mpgScale: Double = 1.0,
     /** The best mpg a vehicle of this class can ever show. Nothing stacks past it. */
     val mpgCap: Double = 95.0,
+    /** Piston or rotary — animation, reliability tip-speed, and shop filter. */
+    val family: EngineFamily = EngineFamily.PISTON,
 )
 
 data class OperatingPoint(
@@ -387,11 +389,21 @@ object EngineSim {
             score -= (egt - egtLimit) * 0.12
             notes += "EGT ${egt.toInt()}°C"
         }
-        val mps = meanPistonSpeedMps(params.strokeMm, params.redlineRpm)
-        val mpsLimit = 21.0 + (params.internalsStrength - 1.0) * 6.0
-        if (mps > mpsLimit) {
-            score -= (mps - mpsLimit) * 7.0
-            notes += "Piston speed"
+        if (params.family == EngineFamily.ROTARY) {
+            // Tip speed proxy: stroke here is the chamber length; the eccentric throw is shorter.
+            val tip = meanPistonSpeedMps(params.strokeMm * 0.28, params.redlineRpm)
+            val tipLimit = 24.0 + (params.internalsStrength - 1.0) * 7.0
+            if (tip > tipLimit) {
+                score -= (tip - tipLimit) * 6.0
+                notes += "Apex tip speed"
+            }
+        } else {
+            val mps = meanPistonSpeedMps(params.strokeMm, params.redlineRpm)
+            val mpsLimit = 21.0 + (params.internalsStrength - 1.0) * 6.0
+            if (mps > mpsLimit) {
+                score -= (mps - mpsLimit) * 7.0
+                notes += "Piston speed"
+            }
         }
         val boost = curve.maxOf { it.boostPsi }
         val boostLimit = (params.internalsStrength - 0.72) * 22.0

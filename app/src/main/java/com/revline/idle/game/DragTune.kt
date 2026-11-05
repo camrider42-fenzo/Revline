@@ -169,11 +169,8 @@ object DragTune {
     }
 
     /** The share of the car's weight on the rear axle standing still: more with the engine behind. */
-    fun rearShare(body: Racing.Car): Double = when (body.spec.place) {
-        Racing.Place.FRONT -> 0.50
-        Racing.Place.MID -> 0.57
-        Racing.Place.REAR -> 0.63
-    }
+    fun rearShare(body: Racing.Car): Double =
+        EngineWeight.rearShare(body.spec.place, body.engineKg, body.massKg)
 
     /** The share of the car's weight on the wheels that drive it, standing still. All four for all-wheel drive. */
     fun drivenShare(body: Racing.Car): Double = when (body.spec.drive) {

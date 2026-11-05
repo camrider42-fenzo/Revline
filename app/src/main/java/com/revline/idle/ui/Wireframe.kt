@@ -344,5 +344,28 @@ object Wireframe {
             axles += floatArrayOf(-0.58f, 0.16f)
             axles += floatArrayOf(0.72f, 0.16f)
         },
+        "rx7" to ink(0.15f) {
+            poly(-0.95f, 0.18f, 1.2f, 0.16f, 1.12f, 0.36f, 0.35f, 0.5f, 0.05f, 0.78f, -0.4f, 0.74f, -0.88f, 0.38f, -0.95f, 0.18f)
+            line(0.05f, 0.78f, -0.7f, 0.34f)
+            line(0.12f, 0.34f, 0.0f, 0.7f)
+            line(-0.55f, 0.34f, -0.62f, 0.55f)
+            axles += floatArrayOf(-0.5f, 0.16f)
+            axles += floatArrayOf(0.7f, 0.16f)
+        },
+        "cosmo" to ink(0.155f) {
+            poly(-1.0f, 0.19f, 1.18f, 0.17f, 1.1f, 0.38f, 0.42f, 0.5f, 0.1f, 0.8f, -0.38f, 0.8f, -0.92f, 0.4f, -1.0f, 0.19f)
+            line(0.1f, 0.8f, -0.78f, 0.36f)
+            line(0.08f, 0.38f, 0.0f, 0.72f)
+            axles += floatArrayOf(-0.55f, 0.16f)
+            axles += floatArrayOf(0.68f, 0.16f)
+        },
+        "luxrotary" to ink(0.16f) {
+            poly(-1.08f, 0.2f, 1.22f, 0.18f, 1.15f, 0.42f, 0.45f, 0.54f, 0.15f, 0.84f, -0.4f, 0.84f, -1.0f, 0.42f, -1.08f, 0.2f)
+            line(0.15f, 0.84f, -0.9f, 0.36f)
+            line(0.08f, 0.42f, 0.0f, 0.78f)
+            line(0.55f, 0.42f, 0.62f, 0.55f)
+            axles += floatArrayOf(-0.6f, 0.16f)
+            axles += floatArrayOf(0.75f, 0.16f)
+        },
     )
 }

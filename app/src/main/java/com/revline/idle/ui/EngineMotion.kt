@@ -107,4 +107,24 @@ object EngineMotion {
         val u = (c - open) / (close - open)
         return sin(PI * u).toFloat().coerceAtLeast(0f)
     }
+
+
+    /** Eccentric shaft degrees for the bench (same visual scale as the crank). */
+    fun advanceEccentric(angle: Float, rpm: Float, dtSec: Float): Float = advanceCrank(angle, rpm, dtSec)
+
+    /**
+     * Rotor face angle for rotor [index] of [rotors]. A Wankel rotor turns at 1/3 shaft speed;
+     * neighbouring rotors are phased 360°/rotors on the eccentric.
+     */
+    fun rotorAngle(eccentricDeg: Float, index: Int, rotors: Int): Float {
+        val phase = index * 360f / rotors.coerceAtLeast(1)
+        return (eccentricDeg / 3f + phase + 3600f) % 360f
+    }
+
+    /** Chamber phase 0..1 around one face: intake, compression, combustion, exhaust. */
+    fun rotaryFacePhase(rotorDeg: Float, face: Int): Float {
+        val a = ((rotorDeg + face * 120f) % 360f + 360f) % 360f
+        return a / 360f
+    }
+
 }

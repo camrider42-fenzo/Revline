@@ -122,9 +122,23 @@ object Upgrades {
         Upgrade("overboost", Category.INDUCTION, "Wastegate shim", "Holds the gate shut at the top of the pull. Boost climbs past what the rods were sized for, the charge leaves the cooler hot, and the dyno slip gets louder.", 3, 9000.0, 1.40, requires = "overboost_node"),
         Upgrade("limiter", Category.VALVETRAIN, "Limiter delete", "The rev limiter moves up, then goes away. Power follows the tach. Piston speed and the bearings follow it.", 3, 7000.0, 1.35, requires = "limiter_node"),
         Upgrade("dyno_fuel", Category.FUEL, "Dyno fuel cut", "The wide-open map leans toward stoich for the rollers. Horsepower climbs. EGT climbs faster, and so does the chance the valve gives up.", 3, 6000.0, 1.30, requires = "lean_node"),
+        // Rotary-only. Hidden on piston blocks by EngineFamily.allows.
+        Upgrade("apex_seals", Category.INTERNALS, "Ceramic apex seals", "Harder tips that hold compression at nine grand. Strength and a little tip-speed headroom.", 4, 280.0, 1.22, requires = "apex_science"),
+        Upgrade("port_street", Category.INTAKE, "Street port", "Milder window. Peak VE climbs without throwing away the midrange.", 3, 320.0, 1.18, requires = "port_science"),
+        Upgrade("port_bridge", Category.INTAKE, "Bridge port", "A bridged intake window. Top-end fill jumps; idle and low torque get ragged.", 2, 480.0, 1.25, requires = "port_science"),
+        Upgrade("port_peri", Category.INTAKE, "Peripheral port", "Side housing ports for race fill. Peakiest curve on the map, thirsty, loud.", 1, 1400.0, 1.0, requires = "port_science"),
+        Upgrade("oil_meter", Category.COOLING, "Oil metering / premix", "Meters oil to the seals. Less friction, cooler tips, and the premix smell of a healthy Wankel.", 3, 180.0, 1.20, requires = "apex_science"),
+        Upgrade("housing_coat", Category.COOLING, "Housing coating", "A ceramic coat on the trochoid. Heat into the coolant drops; EGT climbs a little.", 2, 420.0, 1.22, requires = "housing_science"),
+        Upgrade("light_rotor", Category.INTERNALS, "Lightened rotors", "Less rotating mass. The eccentric spins freer and the tach climbs cleaner.", 2, 560.0, 1.30, requires = "apex_science"),
+        Upgrade("eccentric", Category.VALVETRAIN, "Eccentric shaft kit", "Bearings and a raised limiter for the eccentric. Each level is another few hundred rpm, until this block's tach stops.", 4, 300.0, 1.22, requires = "apex_science"),
+        Upgrade("rotor3", Category.INTERNALS, "Third rotor", "20B conversion. Another chamber, more displacement, more mass.", 1, 4200.0, 1.0, requires = "rotor_kit"),
+        Upgrade("rotor4", Category.INTERNALS, "Fourth rotor", "26B conversion. Needs the third rotor already in. Peak power, peak thirst.", 1, 6800.0, 1.0, requires = "rotor_kit"),
     )
 
     fun byId(id: String): Upgrade = all.first { it.id == id }
+
+    fun forFamily(family: com.revline.idle.model.EngineFamily): List<Upgrade> =
+        all.filter { family.allows(it.id) }
 }
 
 object ResearchTree {
@@ -166,6 +180,10 @@ object ResearchTree {
         ResearchNode("nitrous_node", "Past the limit", "Nitrous oxide", "A shot adds oxygen the intake never measured, and fuel to match. The hit shows up on the dyno slip immediately. So does the heat in the chamber.", 12000.0, listOf("overlimit"), minPrestige = Block.V8.ordinal),
         ResearchNode("limiter_node", "Past the limit", "Rev limiter delete", "The tach keeps climbing. Mean piston speed does not care what number used to be the limiter.", 14000.0, listOf("overlimit"), minPrestige = Block.V8.ordinal),
         ResearchNode("overboost_node", "Past the limit", "Wastegate delete", "The wastegate spring is a limit, not a law. Past it the compressor, the charge temperature, and the rods are all guessing.", 18000.0, listOf("overlimit", "turbo_node"), minPrestige = Block.V8.ordinal),
+        ResearchNode("apex_science", "Rotary", "Apex seals", "Tip seals, corner seals, and why a Wankel dies when they go soft. Opens on the rotary rebuild.", 800.0, minPrestige = Block.ROTARY.ordinal),
+        ResearchNode("port_science", "Rotary", "Porting", "Street, bridge, and peripheral windows. The VE hill gets taller and narrower.", 2200.0, listOf("apex_science"), minPrestige = Block.ROTARY.ordinal),
+        ResearchNode("housing_science", "Rotary", "Housing coats", "Trochoid coatings that keep heat out of the coolant and in the exhaust.", 1600.0, listOf("apex_science"), minPrestige = Block.ROTARY.ordinal),
+        ResearchNode("rotor_kit", "Rotary", "Multi-rotor kit", "Adding a third and fourth rotor. More chambers, more mass, more fuel.", 9000.0, listOf("apex_science"), minPrestige = Block.ROTARY.ordinal),
     )
 
     fun byId(id: String): ResearchNode = all.first { it.id == id }

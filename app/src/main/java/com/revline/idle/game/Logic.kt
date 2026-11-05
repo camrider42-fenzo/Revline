@@ -163,7 +163,7 @@ object Logic {
      * Opening tools stay a nudge. The inlet and the cam carry the small-engine sheet.
      */
     private fun installedHp(block: Block, state: GameState): Double {
-        fun lvl(id: String) = state.upgrades[id] ?: 0
+        fun lvl(id: String) = if (block.family.allows(id)) (state.upgrades[id] ?: 0) else 0
         val latent = listOf(
             "jets", "fuel_pump", "studs", "cap", "radiator", "duct", "water_pump",
             "thermostat", "afr_map", "oil_cooler", "electric_pump", "inconel",
@@ -199,12 +199,16 @@ object Logic {
         vvl: Boolean,
         tune: Double,
         base: Double,
+        eccentric: Int = 0,
+        lightRotor: Int = 0,
     ): Double {
         val raised = base +
             180.0 * springs +
             380.0 * revKit +
             (if (vvl) 150.0 else 0.0) +
             450.0 * limiter +
+            200.0 * eccentric +
+            160.0 * lightRotor +
             tune
         return raised.coerceIn(base * 0.72, block.redlineCap())
     }
@@ -219,7 +223,8 @@ object Logic {
         val idle0 = if (race) block.idleRpm + 160.0 else block.idleRpm
         val flow0 = block.fuelFlow * if (race) 1.12 else 1.0
         val title0 = block.sheetTitle(race)
-        fun lvl(id: String) = state.upgrades[id] ?: 0
+        fun raw(id: String) = state.upgrades[id] ?: 0
+        fun lvl(id: String) = if (block.family.allows(id)) raw(id) else 0
         val filter = lvl("filter")
         val boot = lvl("boot")
         val lap = lvl("lap")
@@ -285,6 +290,16 @@ object Logic {
         val limiter = lvl("limiter")
         val dynoFuel = lvl("dyno_fuel")
         val abuse = listOf(nitrous, overboost, limiter, dynoFuel).count { it > 0 }
+        val apex = lvl("apex_seals")
+        val portStreet = lvl("port_street")
+        val portBridge = lvl("port_bridge")
+        val portPeri = lvl("port_peri")
+        val oilMeter = lvl("oil_meter")
+        val housingCoat = lvl("housing_coat")
+        val lightRotor = lvl("light_rotor")
+        val eccentric = lvl("eccentric")
+        val rotor3 = lvl("rotor3")
+        val rotor4 = lvl("rotor4")
 
         val induction = when {
             twin > 0 -> Induction.TWIN_TURBO
@@ -308,6 +323,10 @@ object Logic {
             spool -= 180.0
         }
         spool -= 160.0 * (state.perks["spool"] ?: 0)
+        if (block.family == com.revline.idle.model.EngineFamily.ROTARY) {
+            spool -= 420.0
+            if (induction != Induction.NA) boost += 0.8
+        }
         var bp = (1.0 - 0.045 * catback - 0.06 * headers - 0.05 * longTube - 0.012 * tip).coerceIn(0.35, 1.15)
         when (induction) {
             Induction.TURBO -> bp += 0.16
@@ -331,13 +350,21 @@ object Logic {
         var frac = frac0 + 0.012 * manifold + 0.022 * itb + 0.012 * headers +
             0.018 * longTube + 0.040 * cam + 0.015 * vvl + Tuners.value(state, "cam")
         val tune = Tuners.value(state, "redline")
-        val tach = redlineRpm(block, springs, revKit, limiter, vvl > 0, tune, redline0)
-        val breathing = redlineRpm(block, springs, 0, 0, vvl > 0, tune, redline0)
+        val tach = redlineRpm(block, springs, revKit, limiter, vvl > 0, tune, redline0, eccentric, lightRotor)
+        val breathing = redlineRpm(block, springs, 0, 0, vvl > 0, tune, redline0, eccentric = 0, lightRotor = lightRotor)
         // A higher tach does not move the cam. The peak stays at the rpm the springs set.
         frac *= breathing / tach
         var width = 3100.0 + 80.0 * cai - 140.0 * itb - 220.0 * cam + 650.0 * vvt + 400.0 * vvl
         var strength = 1.0 + 0.055 * springs + 0.12 * studs + 0.26 * pistons +
             0.16 * rods + 0.12 * crank + 0.36 * billet + 0.045 * wrench + 0.08 * (state.perks["fixtures"] ?: 0)
+        strength += 0.22 * apex + 0.08 * lightRotor + 0.10 * oilMeter
+        ve += 0.018 * portStreet + 0.030 * portBridge + 0.048 * portPeri
+        frac += 0.010 * portStreet + 0.028 * portBridge + 0.050 * portPeri
+        width += 180.0 * portStreet - 280.0 * portBridge - 520.0 * portPeri
+        if (block.family == com.revline.idle.model.EngineFamily.ROTARY) {
+            width *= 0.72
+            frac = (frac + 0.04).coerceAtMost(0.92)
+        }
         var flow = flow0 + 0.18 * jets + 0.10 * needle + 0.40 * pump + 0.32 * tbi + 0.60 * injectors + 0.95 * hpfp +
             0.06 * (state.perks["pump"] ?: 0)
         var timing = block.timingDeg + 2.05 * baseTiming + 2.25 * mapped + 0.70 * coils + 0.95 * gap
@@ -353,6 +380,7 @@ object Logic {
         val pumpFlow = 1.0 + 0.07 * waterPump + if (electric) 0.08 else 0.0
         var ua = (block.radiatorUa + 260.0 * radiator) * (1.0 + 0.10 * duct) * (0.92 + 0.08 * pumpFlow)
         if (waterless) ua *= 0.84
+        if (housingCoat > 0) ua *= 1.0 + 0.06 * housingCoat
         val stat = when (thermostat) {
             0 -> 88.0
             1 -> 82.0
@@ -365,7 +393,8 @@ object Logic {
         }
         val friction = (
             1.0 - 0.05 * crank - 0.035 * oilService - 0.028 * wrench - 0.022 * rings -
-                (if (synthetic) 0.04 else 0.0) - 0.012 * (state.perks["breakin"] ?: 0)
+                (if (synthetic) 0.04 else 0.0) - 0.012 * (state.perks["breakin"] ?: 0) -
+                0.025 * oilMeter - 0.030 * lightRotor
             ).coerceIn(0.72, 1.2)
         // Bolt-on economy parts are worth a few percent each in the real world.
         val economy = 1.0 + 0.5 * (
@@ -403,8 +432,14 @@ object Logic {
             cam = cam,
             ceramic = ceramic > 0,
         )
+        val rotors = when {
+            rotor4 > 0 && rotor3 > 0 -> 4
+            rotor3 > 0 -> 3
+            else -> block.cylinders
+        }
+        val rotaryHeat = if (block.family == com.revline.idle.model.EngineFamily.ROTARY) 1.22 else 1.0
         return EngineParams(
-            cylinders = block.cylinders,
+            cylinders = rotors,
             boreMm = (block.boreMm + block.boreMm * 0.038 * bore).coerceIn(block.boreMm * 0.9, block.boreMm * 1.25),
             strokeMm = block.strokeMm,
             compressionRatio = (comp0 + 0.48 * compression).coerceIn(7.5, 14.5),
@@ -450,7 +485,7 @@ object Logic {
             nitrousFraction = (0.34 * nitrous).coerceIn(0.0, 1.2),
             overboostPsi = (5.0 * overboost).coerceIn(0.0, 20.0),
             leanPull = (0.55 * dynoFuel).coerceIn(0.0, 2.0),
-            heatFactor = (1.0 + 0.28 * nitrous + 0.16 * overboost + 0.14 * dynoFuel + 0.10 * limiter).coerceIn(1.0, 3.2),
+            heatFactor = (rotaryHeat * (1.0 + 0.28 * nitrous + 0.16 * overboost + 0.14 * dynoFuel + 0.10 * limiter)).coerceIn(1.0, 3.2),
             rpmPower = (0.06 * limiter).coerceIn(0.0, 0.25),
             dynoFactor = (
                 (1.0 + 0.45 * nitrous + 0.28 * overboost + 0.22 * dynoFuel + 0.18 * limiter) *
@@ -477,6 +512,7 @@ object Logic {
             profitEconomy = profitEconomy,
             mpgScale = block.mpgScale(),
             mpgCap = block.mpgCap(),
+            family = block.family,
         )
     }
 
@@ -689,6 +725,7 @@ object Logic {
 
     fun canBuyUpgrade(state: GameState, id: String): Boolean {
         val u = Upgrades.all.find { it.id == id } ?: return false
+        if (!Block.forPrestige(state.prestiges).family.allows(id)) return false
         val level = state.upgrades[id] ?: 0
         if (level >= u.maxLevel) return false
         if (lockReason(state, id) != null) return false
@@ -826,7 +863,7 @@ object Logic {
     fun newGame(): GameState = GameState(money = startingMoney(0))
 
     /** Research per second at the 60% shop at the end of each block, from the research pace test. */
-    private val RACE_RP_RATE = doubleArrayOf(0.7, 0.8, 1.2, 1.9, 3.0, 4.9, 6.8, 8.9)
+    private val RACE_RP_RATE = doubleArrayOf(0.7, 0.8, 1.2, 1.9, 3.0, 4.9, 6.8, 8.9, 10.5)
     const val RACE_RP_HOURS = 3.0
     const val RACE_RP_STACK = 1.5
 

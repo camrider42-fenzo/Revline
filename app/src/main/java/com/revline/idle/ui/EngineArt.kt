@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import com.revline.idle.model.EngineFamily
 import com.revline.idle.model.EngineParams
 import com.revline.idle.model.Induction
 import com.revline.idle.model.Mixture
@@ -112,6 +113,10 @@ private fun DrawScope.drawEngine(
     exhaustGain: Float,
     throttle: Float,
 ) {
+    if (params.family == EngineFamily.ROTARY) {
+        drawRotary(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
+        return
+    }
     run {
         val w = size.width
         val h = size.height
@@ -847,4 +852,101 @@ private fun DrawScope.drawVee(
     if (params.airCooled) {
         glowLine(Cyan, Offset(valley.x - 20f, plenumTop - h * 0.05f), Offset(valley.x + 20f, plenumTop - h * 0.05f), stroke * 0.6f, 0.6f)
     }
+}
+
+
+/** Side-view Wankel: epitrochoid housing, triangular rotor, eccentric, glowing chambers. */
+private fun DrawScope.drawRotary(
+    params: EngineParams,
+    parts: Map<String, Int>,
+    stroke: Float,
+    angle: Float,
+    clock: Float,
+    spinRpm: Float,
+    hose: Color,
+    exhaust: Color,
+    exhaustGain: Float,
+    throttle: Float,
+) {
+    val w = size.width
+    val h = size.height
+    fun part(id: String) = parts[id] ?: 0
+    val rotors = params.cylinders.coerceIn(2, 4)
+    val pulse = 0.82f + 0.18f * sin(clock * (2.2f + spinRpm / 1800f))
+    val R = h * 0.22f
+    val e = R * 0.17f
+    val gap = w * 0.02f
+    val total = rotors * (R * 2.05f) + (rotors - 1) * gap
+    val originX = (w - total) * 0.5f + R * 1.05f
+    val cy = h * 0.52f
+
+    glowLine(White, Offset(originX - R * 0.9f, cy), Offset(originX + total - R * 1.1f, cy), stroke * 0.9f, 0.55f)
+
+    for (i in 0 until rotors) {
+        val cx = originX + i * (R * 2.05f + gap)
+        val rotorDeg = EngineMotion.rotorAngle(angle, i, rotors)
+        val eccRad = Math.toRadians(angle.toDouble() + i * (360.0 / rotors))
+        val ox = cx + (cos(eccRad) * e).toFloat()
+        val oy = cy + (sin(eccRad) * e).toFloat()
+
+        val housing = ArrayList<Offset>(72)
+        for (s in 0 until 72) {
+            val th = s * Math.PI * 2.0 / 72.0
+            val hx = cx + ((R + e) * cos(th) + e * cos(2.0 * th) * 0.15).toFloat()
+            val hy = cy + ((R + e) * sin(th) - e * sin(2.0 * th) * 0.15).toFloat()
+            housing += Offset(hx, hy)
+        }
+        for (s in 0 until housing.size) {
+            val a = housing[s]
+            val b = housing[(s + 1) % housing.size]
+            glowLine(White, a, b, stroke * 0.85f, 0.7f)
+        }
+
+        val portGlow = 0.55f + 0.35f * throttle * pulse
+        glowLine(Cyan, Offset(cx - R * 1.05f, cy - R * 0.15f), Offset(cx - R * 0.72f, cy - R * 0.35f), stroke * 1.1f, portGlow)
+        glowLine(exhaust, Offset(cx + R * 0.72f, cy - R * 0.35f), Offset(cx + R * 1.05f, cy - R * 0.15f), stroke * 1.1f, portGlow * exhaustGain)
+
+        val tips = Array(3) { face ->
+            val a = Math.toRadians((rotorDeg + face * 120.0))
+            Offset(ox + (cos(a) * R * 0.92).toFloat(), oy + (sin(a) * R * 0.92).toFloat())
+        }
+        for (face in 0 until 3) {
+            val phase = EngineMotion.rotaryFacePhase(rotorDeg, face)
+            val glow = when {
+                phase < 0.22f -> Cyan.copy(alpha = (0.25f + 0.45f * throttle) * pulse)
+                phase < 0.45f -> White.copy(alpha = 0.18f * pulse)
+                phase < 0.68f -> (if (throttle > 0.2f) Lime else Amber).copy(alpha = (0.35f + 0.55f * throttle) * pulse)
+                else -> exhaust.copy(alpha = 0.30f * exhaustGain * pulse)
+            }
+            val a = tips[face]
+            val b = tips[(face + 1) % 3]
+            glowLine(glow, a, b, stroke * 1.4f, 0.9f)
+            glowLine(glow, Offset(ox, oy), Offset((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), stroke * 0.7f, 0.5f)
+        }
+        for (face in 0 until 3) {
+            glowLine(White, tips[face], tips[(face + 1) % 3], stroke, 0.85f)
+        }
+        val sealOn = part("apex_seals") > 0
+        for (tip in tips) {
+            glowLine(if (sealOn) Lime else Amber, tip, Offset(tip.x * 0.04f + ox * 0.96f, tip.y * 0.04f + oy * 0.96f), stroke * 1.2f, 1f)
+        }
+        glowLine(Cyan, Offset(ox - e * 0.35f, oy), Offset(ox + e * 0.35f, oy), stroke, 0.8f)
+        glowLine(Cyan, Offset(ox, oy - e * 0.35f), Offset(ox, oy + e * 0.35f), stroke, 0.8f)
+        glowLine(White, Offset(cx - e * 0.5f, cy), Offset(cx + e * 0.5f, cy), stroke * 0.7f, 0.5f)
+    }
+
+    if (params.induction != Induction.NA) {
+        val tx = w * 0.08f
+        val ty = h * 0.12f
+        glowLine(Cyan, Offset(tx, ty), Offset(tx + w * 0.12f, ty), stroke, 0.8f)
+        glowLine(Cyan, Offset(tx, ty), Offset(tx, ty + h * 0.08f), stroke, 0.8f)
+        if (part("intercooler") > 0) {
+            glowLine(Cyan, Offset(tx + w * 0.14f, ty), Offset(tx + w * 0.26f, ty + h * 0.06f), stroke, 0.7f)
+        }
+    }
+    if (!params.airCooled) {
+        glowLine(hose, Offset(w * 0.78f, h * 0.18f), Offset(w * 0.92f, h * 0.18f), stroke, 0.75f)
+        glowLine(hose, Offset(w * 0.92f, h * 0.18f), Offset(w * 0.92f, h * 0.42f), stroke, 0.75f)
+    }
+    glowLine(White, Offset(w * 0.08f, h * 0.88f), Offset(w * 0.08f + rotors * w * 0.04f, h * 0.88f), stroke * 0.6f, 0.4f)
 }

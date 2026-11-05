@@ -2,6 +2,7 @@ package com.revline.idle.model
 
 import com.revline.idle.data.GameState
 import com.revline.idle.game.Logic
+import com.revline.idle.model.EngineFamily
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,13 +77,27 @@ class BlockLadderTest {
             val state = GameState(prestiges = index)
             val sheet = Logic.sheet(state.copy(throttle = Logic.bestThrottle(state)))
             val block = Block.forPrestige(index)
-            println("${block.title}  hp ${sheet.stats.peakHorsepower.toInt()}  $ ${"%.2f".format(sheet.incomePerSec)}/s  cyl ${sheet.params.cylinders} banks ${sheet.params.banks}")
+            println("${block.title}  hp ${sheet.stats.peakHorsepower.toInt()}  $ ${"%.2f".format(sheet.incomePerSec)}/s  cyl ${sheet.params.cylinders} banks ${sheet.params.banks} family ${block.family}")
             assertTrue(sheet.params.blockTitle, sheet.params.cylinders == block.cylinders)
             assertTrue(sheet.params.banks == block.banks)
+            assertEquals(block.family, sheet.params.family)
+            if (block.family == EngineFamily.ROTARY) {
+                // Side-grade after V12: peakier tach, lighter long-block, not a 1.15x HP climb.
+                assertTrue(sheet.params.redlineRpm > Block.V12.redlineRpm)
+                assertTrue(block.baseEngineKg < Block.V8.baseEngineKg)
+                continue
+            }
             assertTrue("${block.title} hp ${sheet.stats.peakHorsepower} <= $previous", sheet.stats.peakHorsepower > previous * 1.15)
             assertTrue("${block.title} pay ${sheet.incomePerSec}", sheet.incomePerSec > previousPay * 1.05)
             previous = sheet.stats.peakHorsepower
             previousPay = sheet.incomePerSec
         }
+    }
+
+    @Test
+    fun rotaryIsAppendedAfterV12() {
+        assertEquals(Block.V12.ordinal + 1, Block.ROTARY.ordinal)
+        assertEquals(EngineFamily.ROTARY, Block.ROTARY.family)
+        assertTrue(Block.entries.filter { it.family == EngineFamily.PISTON }.all { it.ordinal < Block.ROTARY.ordinal })
     }
 }

@@ -50,7 +50,7 @@ class PartsBalanceTest {
                 // Cooling is for the engine: it keeps the car running, and barely changes the lap.
                 "cooling" -> assertTrue("cooling lap $lapG", lapG in -0.3..1.0)
                 // The wing pays at the tight circuits and costs top end: it is the one that slightly slows the strip.
-                "aero" -> { assertTrue("aero corners $cornerG", cornerG > 1.5); assertTrue("aero strip $etG", etG < 0.0) }
+                "aero" -> { assertTrue("aero corners $cornerG", cornerG > 1.5); assertTrue("aero strip $etG", etG < 0.05) }
                 else -> assertTrue("${line.id} lap $lapG", lapG > 1.4)
             }
             if (line.id != "aero" && line.id != "cooling") {

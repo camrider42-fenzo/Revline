@@ -63,11 +63,15 @@ class ResearchPaceTest {
         assertTrue("the twin should not finish the notebook\n$report", owned[2] < ordinary)
         assertTrue("the ordinary notebook should close by the V6\n$report", owned[5] == ordinary)
         assertTrue("the V8 should open the past-the-limit branch\n$report", owned[6] > ordinary)
-        assertTrue("the branch should be finished on the V12\n$report", owned[7] == total)
+        val rotaryStudies = ResearchTree.all.count { it.minPrestige >= Block.ROTARY.ordinal }
+        assertTrue("the branch should be finished on the V12\n$report", owned[7] == total - rotaryStudies)
+        assertTrue("rotary studies finish on the rotary\n$report", owned[8] == total)
     }
 
     private fun play(start: GameState): Run {
-        val basket = BlockPaceTest.basketFor(BlockPaceTest.sixty, start.prestiges)
+        val rawBasket = if (Block.forPrestige(start.prestiges).family == com.revline.idle.model.EngineFamily.ROTARY)
+            BlockPaceTest.rotarySixty else BlockPaceTest.sixty
+        val basket = BlockPaceTest.basketFor(rawBasket, start.prestiges)
         var state = tune(start)
         var sheet = Logic.sheet(state)
         var seconds = 0.0
@@ -83,13 +87,18 @@ class ResearchPaceTest {
                 sheet = Logic.sheet(state)
                 continue
             }
-            val done = basket.all { (state.upgrades[it.key] ?: 0) >= it.value } && Logic.canPrestige(state)
+            val family = Block.forPrestige(state.prestiges).family
+            fun want(id: String, level: Int) = minOf(level, Upgrades.byId(id).maxLevel)
+            val done = basket.filterKeys { family.allows(it) }.all { (id, level) -> (state.upgrades[id] ?: 0) >= want(id, level) } &&
+                Logic.canPrestige(state)
             if (done) return Run(true, seconds / 3600.0, state, sheet.rpPerSec, Logic.dynoReward(sheet.rpPerSec, sheet.params.dynoFactor))
             val part = basket
-                .filter { (state.upgrades[it.key] ?: 0) < it.value && Logic.lockReason(state, it.key) == null }
+                .filter { (id, level) ->
+                    family.allows(id) && (state.upgrades[id] ?: 0) < want(id, level) && Logic.lockReason(state, id) == null
+                }
                 .minByOrNull { Logic.upgradeCost(state, it.key) }
                 ?.key
-                ?: Upgrades.all
+                ?: Upgrades.forFamily(family)
                     .filter { (state.upgrades[it.id] ?: 0) < it.maxLevel && Logic.lockReason(state, it.id) == null }
                     .minByOrNull { Logic.upgradeCost(state, it.id) }
                     ?.id

@@ -3,6 +3,7 @@ package com.revline.idle.game
 import com.revline.idle.data.GameState
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.model.Block
+import com.revline.idle.model.EngineFamily
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.exp
@@ -1124,14 +1125,21 @@ object Circuits {
     fun parCar(prestiges: Int): Car = parStates.getOrPut(prestiges.coerceIn(0, Block.entries.lastIndex)) {
         val p = prestiges.coerceIn(0, Block.entries.lastIndex)
         val body = Racing.groupChassis(p, Racing.Build.MEDIUM)
-        // The mpg-only parts do nothing on a circuit; leaving them out keeps the par car where it was before they existed.
-        val all = Upgrades.all.filter { it.id !in Logic.NEW_ECONOMY_IDS }
+        // Match DriverBuilds: pre-rotary catalog size for the 60% share, family-gated pool.
+        val family = Block.forPrestige(p).family
+        val catalog = Upgrades.all.filter {
+            it.id !in Logic.NEW_ECONOMY_IDS && it.id !in EngineFamily.ROTARY_ONLY
+        }
+        val pool = Upgrades.all.filter {
+            it.id !in Logic.NEW_ECONOMY_IDS && family.allows(it.id)
+        }
+        val count = (catalog.size * 0.6).toInt().coerceIn(0, pool.size)
         val state = GameState(
             prestiges = p,
             knowledge = p,
             racing = true,
             researched = ResearchTree.all.map { it.id }.toSet(),
-            upgrades = all.take((all.size * 0.6).toInt()).associate { it.id to it.maxLevel },
+            upgrades = pool.take(count).associate { it.id to it.maxLevel },
             chassis = body.id,
             chassisLevel = mapOf(body.id to 2),
             coolingSlots = Racing.slotMax(body, 2),

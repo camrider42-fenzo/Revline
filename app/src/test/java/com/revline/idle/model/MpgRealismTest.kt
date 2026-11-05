@@ -23,7 +23,10 @@ class MpgRealismTest {
 
     private fun builds(index: Int): Map<String, GameState> = mapOf(
         "stock" to GameState(prestiges = index),
-        "sixty" to GameState(prestiges = index, knowledge = index, researched = research, upgrades = BlockPaceTest.sixty),
+        "sixty" to GameState(
+            prestiges = index, knowledge = index, researched = research,
+            upgrades = if (Block.forPrestige(index).family == EngineFamily.ROTARY) BlockPaceTest.rotarySixty else BlockPaceTest.sixty,
+        ),
         "maxed" to GameState(prestiges = index, knowledge = index, researched = research, upgrades = maxed),
         "economy only" to GameState(prestiges = index, knowledge = index, researched = research, upgrades = econMaxed),
     )
@@ -31,7 +34,7 @@ class MpgRealismTest {
     @Test
     fun cruiseMpgStaysInTheRealWorldRangeForTheClass() {
         val bands = listOf(
-            30.0..100.0, 25.0..80.0, 25.0..70.0, 22.0..62.0, 18.0..55.0, 15.0..40.0, 12.0..32.0, 10.0..26.0,
+            30.0..100.0, 25.0..80.0, 25.0..70.0, 22.0..62.0, 18.0..55.0, 15.0..40.0, 12.0..32.0, 10.0..26.0, 12.0..36.0,
         )
         val misses = mutableListOf<String>()
         for (index in Block.entries.indices) {

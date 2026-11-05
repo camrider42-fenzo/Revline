@@ -56,6 +56,7 @@ import com.revline.idle.game.SheetAim
 import com.revline.idle.game.StatDelta
 import com.revline.idle.game.Upgrade
 import com.revline.idle.game.UpgradeMap
+import com.revline.idle.model.Block
 import com.revline.idle.game.Upgrades
 import com.revline.idle.model.EngineSim
 import com.revline.idle.model.FuelKind
@@ -89,7 +90,8 @@ fun PartsScreen(
     onGoal: (AimGoal) -> Unit,
 ) {
     val selected = remember { mutableStateOf<String?>(null) }
-    val layout = remember { UpgradeMap.bubbles() }
+    val family = Block.forPrestige(ui.game.prestiges).family
+    val layout = remember(family) { UpgradeMap.bubbles(family) }
     val pedalBucket = (ui.game.throttle * 20.0).toInt()
     val previews = remember(
         ui.game.upgrades,

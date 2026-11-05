@@ -147,6 +147,10 @@ object Racing {
         Chassis("p917", "Porsche 917K", 800.0, Drive.RWD, Place.MID, 0.36, 1.52, 2, 7, 4200.0, 24000.0, "800 kg class minimum", Build.LIGHT, 7, listOf(Place.MID), 7200.0, 0.86),
         Chassis("daytona", "Ferrari Daytona competizione", 1240.0, Drive.RWD, Place.FRONT, 0.40, 1.80, 3, 7, 2800.0, 20000.0, "1,240 kg dry", Build.MEDIUM, 7, listOf(Place.FRONT), 7800.0, 1.0),
         Chassis("jensen", "Jensen Interceptor", 1680.0, Drive.RWD, Place.FRONT, 0.46, 2.05, 5, 7, 2200.0, 22000.0, "about 1,680 kg", Build.HEAVY, 7, listOf(Place.FRONT), 9000.0, 1.12),
+        // Group 8 — rotary bay. Light RX-7-ish, mid Cosmo, heavy luxury coupe.
+        Chassis("rx7", "Mazda RX-7 FD", 1260.0, Drive.RWD, Place.FRONT, 0.38, 1.72, 3, 8, 3200.0, 24000.0, "about 1,260 kg", Build.LIGHT, 8, listOf(Place.FRONT), 2800.0, 0.90),
+        Chassis("cosmo", "Mazda Cosmo Sport", 1180.0, Drive.RWD, Place.FRONT, 0.40, 1.80, 3, 8, 2800.0, 22000.0, "about 1,180 kg", Build.MEDIUM, 8, listOf(Place.FRONT), 3200.0, 1.0),
+        Chassis("luxrotary", "Rotary luxury coupe", 1520.0, Drive.RWD, Place.FRONT, 0.44, 1.95, 4, 8, 2600.0, 26000.0, "about 1,520 kg", Build.HEAVY, 8, listOf(Place.FRONT), 4000.0, 1.10),
     )
 
     val gearboxes = listOf(
@@ -244,6 +248,8 @@ object Racing {
         val place: Place,
         /** What the race components do. Leave neutral for a ghost car. */
         val kit: Parts.Fx = Parts.NONE,
+        /** Calibrated long-block mass feeding car mass and front/rear bias. */
+        val engineKg: Double = 120.0,
     )
 
     data class Car(
@@ -253,6 +259,7 @@ object Racing {
         val pace: Double,
         val fade: Double,
         val fits: Boolean = true,
+        val engineKg: Double = spec.engineKg,
     )
 
     fun lengthOf(id: String): Length = Length.entries.find { it.id == id } ?: Length.QUARTER
@@ -329,6 +336,7 @@ object Racing {
             drive = drive,
             place = place,
             kit = if (circuit) Parts.kit(state) else Parts.kit(state) + Parts.stripKit(state),
+            engineKg = EngineWeight.kg(state),
         )
     }
 
@@ -342,7 +350,7 @@ object Racing {
         var mass = (body.kg * (1.0 - shaved)).coerceAtLeast(massFloor)
         mass -= body.kg * kit.shave
         mass += kit.addKg
-        mass += 35.0 + spec.displacementCc * 0.042
+        mass += spec.engineKg
         mass += spec.gearbox.kg + spec.axle.kg + spec.tire.kg
         val native = driveFor(body, spec.place)
         if (spec.drive != native) mass += 40.0
@@ -397,7 +405,7 @@ object Racing {
             Length.HALF -> Triple(0.36, 0.12, 0.52)
         }
         val pace = 1000.0 * accel.pow(accelExp) * launch.pow(launchExp) * vMax.pow(speedExp)
-        return Car(spec, mass, wheelHp, pace, fade, fits = !stuffed)
+        return Car(spec, mass, wheelHp, pace, fade, fits = !stuffed, engineKg = spec.engineKg)
     }
 
     /** The stake on the first long-block. Later blocks follow the shop's own price scale, so a stake stays the same few minutes of pay. */
@@ -409,7 +417,7 @@ object Racing {
      * Both drag stakes and circuit entries, prizes, fees and rebuilds follow this one number.
      */
     fun stakeCost(prestiges: Int): Double {
-        val p = prestiges.coerceIn(0, 7)
+        val p = prestiges.coerceIn(0, Block.entries.lastIndex)
         val raw = STAKE_BASE * Block.forPrestige(p).upgradePriceScale(p) / Block.forPrestige(0).upgradePriceScale(0)
         val step = 10.0.pow(floor(log10(raw)) - 1.0)
         return (raw / step).roundToInt() * step
@@ -791,7 +799,7 @@ object Racing {
         }
         val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders)
         val hp = block.hpGoal * frac
-        val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, if (tier == Tier.INTERNATIONAL) 2 else 0, box, axle, tire, body.slots, driveFor(body, body.place), body.place)
+        val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, if (tier == Tier.INTERNATIONAL) 2 else 0, box, axle, tire, body.slots, driveFor(body, body.place), body.place, engineKg = block.baseEngineKg)
         val built = assess(spec, lengthOf(state.raceLength))
         val skill = when (tier) {
             Tier.CLUB -> SKILL_CLUB
@@ -828,9 +836,9 @@ object Racing {
                 var pace: Double
                 do {
                     val hp = block.hpGoal * frac
-                    spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axle, tire, body.slots, driveFor(body, body.place), body.place)
+                    spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, 1, box, axle, tire, body.slots, driveFor(body, body.place), body.place, engineKg = block.baseEngineKg)
                     pace = assess(spec, length).pace
-                    if (pace >= floor || frac >= 3.2) break
+                    if (pace >= floor || frac >= 12.0) break
                     frac *= 1.05
                 } while (true)
                 val skill = LADDER_SKILL + LADDER_SKILL_STEP * index + if (national) LADDER_NATIONAL_BONUS else 0.0
@@ -854,7 +862,7 @@ object Racing {
         val hp = block.sheetHp(false) * frac
         val pool = chassis.filter { it.minPrestige <= state.prestiges && fits(it, cc) }
         val body = (listOf(mule) + pool).random(rng)
-        val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, rng.nextInt(0, 3), box, axle, tire, body.slots, driveFor(body, body.place), body.place)
+        val spec = Spec(hp, hp * 5252.0 / 3600.0, cc, body, rng.nextInt(0, 3), box, axle, tire, body.slots, driveFor(body, body.place), body.place, engineKg = block.baseEngineKg)
         val pace = assess(spec, lengthOf(state.raceLength)).pace
         val label = "${body.name}, ${box.name.lowercase(Locale.US)}, ${tire.name.lowercase(Locale.US)}, ${hp.toInt()} hp"
         val skill = if (built) STAKE_BUILT_SKILL + rng.nextDouble() * 0.12 else STAKE_STREET_SKILL + rng.nextDouble() * 0.15

@@ -211,5 +211,23 @@ internal object DragLooks {
             cuts = listOf(f(-.2f, .3f, -.2f, .78f), f(.4f, .54f, .5f, .4f)), bumpers = true, stripe = f(.4f, .44f),
             lamp = f(1.06f, .42f, .05f, .05f), tail = f(.34f, .11f),
         ),
+        "rx7" to DragLook(
+            body = tri(-.95f, .18f, .1f, -.95f, .4f, .25f, -.7f, .52f, .3f, -.35f, .72f, .35f, .05f, .78f, .35f, .35f, .52f, .2f, .7f, .48f, .25f, 1.2f, .36f, .25f, 1.2f, .18f, .1f),
+            glass = listOf(tri(-.55f, .56f, .1f, -.35f, .72f, .35f, .0f, .74f, .35f, .28f, .54f, .1f)),
+            cuts = listOf(f(-.1f, .28f, -.1f, .7f)), stripe = f(.32f, .42f),
+            lamp = f(1.1f, .4f, .055f, .04f), tail = f(.32f, .1f),
+        ),
+        "cosmo" to DragLook(
+            body = tri(-1.0f, .19f, .1f, -1.0f, .42f, .25f, -.78f, .52f, .3f, -.4f, .72f, .35f, .1f, .8f, .35f, .4f, .52f, .2f, .75f, .5f, .25f, 1.18f, .38f, .2f, 1.18f, .19f, .1f),
+            glass = listOf(tri(-.7f, .56f, .1f, -.45f, .74f, .35f, -.1f, .76f, .35f, .22f, .56f, .1f)),
+            cuts = listOf(f(-.15f, .3f, -.15f, .72f)), bumpers = true, stripe = f(.36f, .44f),
+            lamp = f(1.08f, .4f, .05f, .045f), tail = f(.33f, .1f),
+        ),
+        "luxrotary" to DragLook(
+            body = tri(-1.08f, .2f, .1f, -1.08f, .46f, .25f, -.95f, .52f, .3f, -.55f, .68f, .35f, -.35f, .84f, .35f, .15f, .84f, .3f, .45f, .56f, .2f, 1.15f, .5f, .2f, 1.22f, .4f, .2f, 1.22f, .2f, .1f),
+            glass = listOf(tri(-.8f, .58f, .1f, -.55f, .76f, .35f, -.3f, .8f, .35f, .1f, .8f, .3f, .35f, .58f, .1f)),
+            cuts = listOf(f(-.18f, .32f, -.18f, .8f), f(.4f, .56f, .5f, .42f)), bumpers = true, stripe = f(.42f, .46f),
+            lamp = f(1.12f, .42f, .05f, .05f), tail = f(.35f, .11f),
+        ),
     )
 }

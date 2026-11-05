@@ -166,11 +166,21 @@ class EconomyTest {
             upgrade.levelRequires.values.forEach { assertTrue(it in known) }
         }
         for (node in ResearchTree.all) node.requires.forEach { assertTrue(node.id, it in known) }
-        val open = GameState(researched = known)
-        val stock = Logic.paramsFrom(open)
-        for (upgrade in Upgrades.all) {
-            val next = Logic.paramsFrom(open.copy(upgrades = mapOf(upgrade.id to 1)))
-            assertNotEquals(upgrade.id, stock, next)
+        for (family in com.revline.idle.model.EngineFamily.entries) {
+            val prestige = when (family) {
+                com.revline.idle.model.EngineFamily.PISTON -> 0
+                com.revline.idle.model.EngineFamily.ROTARY -> com.revline.idle.model.Block.ROTARY.ordinal
+            }
+            val open = GameState(researched = known, prestiges = prestige)
+            val stock = Logic.paramsFrom(open)
+            for (upgrade in Upgrades.forFamily(family)) {
+                val fitted = when (upgrade.id) {
+                    "rotor4" -> mapOf("rotor3" to 1, "rotor4" to 1)
+                    else -> mapOf(upgrade.id to 1)
+                }
+                val next = Logic.paramsFrom(open.copy(upgrades = fitted))
+                assertNotEquals("${family}/${upgrade.id}", stock, next)
+            }
         }
     }
 

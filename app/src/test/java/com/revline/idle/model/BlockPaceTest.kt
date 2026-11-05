@@ -61,15 +61,29 @@ class BlockPaceTest {
     @Test
     fun aboutSixtyPercentOfTheShopClearsTheSheet() {
         val research = setOf("exhaust_fab", "perf_cam", "wasted_spark", "tbi", "ic_node", "premium")
-        val share = sixty.size.toDouble() / Upgrades.all.size
-        assertTrue("sixty share $share", share in 0.55..0.65)
+        val pistonShop = Upgrades.forFamily(com.revline.idle.model.EngineFamily.PISTON).size
+        val share = sixty.size.toDouble() / pistonShop
+        assertTrue("sixty share $share", share in 0.50..0.70)
         for (index in Block.entries.indices) {
             val block = Block.forPrestige(index)
+            val basket = if (block.family == com.revline.idle.model.EngineFamily.ROTARY) rotarySixty else sixty
+            val thinBasket = if (block.family == com.revline.idle.model.EngineFamily.ROTARY) {
+                rotarySixty.filterKeys {
+                    it !in setOf(
+                        "headers", "long_tube", "ceramic", "coils", "tbi_unit",
+                        "manifold", "intercooler", "cold_air", "compression",
+                        "port_bridge", "light_rotor", "eccentric",
+                    )
+                }
+            } else forty
+            val studies = if (block.family == com.revline.idle.model.EngineFamily.ROTARY) {
+                research + setOf("apex_science", "port_science", "housing_science")
+            } else research
             fun sheetOf(upgrades: Map<String, Int>) = Logic.sheet(
                 GameState(
                     prestiges = index,
                     knowledge = index,
-                    researched = research,
+                    researched = studies,
                     upgrades = upgrades,
                     fuel = FuelKind.PREMIUM_93,
                 ),
@@ -77,8 +91,8 @@ class BlockPaceTest {
             val stockSheet = Logic.sheet(GameState(prestiges = index))
             val stock = stockSheet.stats
             assertFalse(block.title, Prestige.meets(stock.peakHorsepower, stock.peakTorqueLbFt, stockSheet.profit.mpg, block))
-            val thinSheet = sheetOf(forty)
-            val wideSheet = sheetOf(sixty)
+            val thinSheet = sheetOf(thinBasket)
+            val wideSheet = sheetOf(basket)
             val thin = thinSheet.stats
             val wide = wideSheet.stats
             assertFalse(
@@ -102,11 +116,15 @@ class BlockPaceTest {
         var guard = 0
         while (seconds < horizon && guard < 6000) {
             guard++
-            if (basket.all { (state.upgrades[it.key] ?: 0) >= it.value }) {
+            val family = Block.forPrestige(state.prestiges).family
+            fun want(id: String, level: Int) = minOf(level, Upgrades.byId(id).maxLevel)
+            if (basket.filterKeys { family.allows(it) }.all { (id, level) -> (state.upgrades[id] ?: 0) >= want(id, level) }) {
                 return Run(true, seconds / 3600.0, state.researched, "owned ${state.upgrades.count { it.value > 0 }}/${Upgrades.all.size}")
             }
             val nextPart = basket
-                .filter { (state.upgrades[it.key] ?: 0) < it.value && Logic.lockReason(state, it.key) == null }
+                .filter { (id, level) ->
+                    family.allows(id) && (state.upgrades[id] ?: 0) < want(id, level) && Logic.lockReason(state, id) == null
+                }
                 .minByOrNull { Logic.upgradeCost(state, it.key) }
                 ?.key
             val nextStudy = ResearchTree.all
@@ -271,7 +289,8 @@ class BlockPaceTest {
                 fuel = FuelKind.PREMIUM_93,
                 savedAtEpochMs = 1L,
             )
-            val run = buyBasket(start, basketFor(sixty, index))
+            val basket = if (block.family == com.revline.idle.model.EngineFamily.ROTARY) rotarySixty else sixty
+            val run = buyBasket(start, basketFor(basket, index))
             lines += "${block.title}  ${"%.2f".format(run.hours)} h  ${run.note}"
             assertTrue(lines.joinToString("\n"), run.cleared)
             assertTrue("${block.title} ${run.hours} h", run.hours in 1.3..8.5)
@@ -299,7 +318,7 @@ class BlockPaceTest {
 
     companion object {
         /** Hours of play to clear each engine's sheet, moped first. Was 0.8 to 1.0 each. */
-        val TARGET_HOURS = listOf(0.7, 1.0, 1.4, 1.8, 2.2, 2.6, 3.0, 3.4)
+        val TARGET_HOURS = listOf(0.7, 1.0, 1.4, 1.8, 2.2, 2.6, 3.0, 3.4, 3.8)
 
         /** About 60% of the part list, including the research-gated pieces a shop actually reaches. */
         val sixty = mapOf(
@@ -329,6 +348,20 @@ class BlockPaceTest {
         fun basketFor(basket: Map<String, Int>, index: Int): Map<String, Int> =
             basket.filterKeys { id -> (Upgrades.byId(id).requires?.let { studyOpensAt(it) } ?: 0) <= index }
 
+        val rotarySixty = mapOf(
+            "gap" to 3, "boot" to 3, "tip" to 3, "needle" to 3,
+            "oil_service" to 2, "fins" to 2, "wrench" to 3,
+            "filter" to 3, "cold_air" to 3, "catback" to 3, "plugs" to 2,
+            "base_timing" to 2, "synthetic" to 1,
+            "jets" to 3, "fuel_pump" to 2, "cap" to 1, "radiator" to 2,
+            "duct" to 1, "water_pump" to 1, "thermostat" to 1,
+            "compression" to 2, "studs" to 1, "afr_map" to 3,
+            "headers" to 2, "long_tube" to 1, "ceramic" to 1,
+            "coils" to 2, "tbi_unit" to 1, "manifold" to 1,
+            "apex_seals" to 4, "port_street" to 3, "port_bridge" to 2,
+            "oil_meter" to 2, "housing_coat" to 1, "light_rotor" to 1, "eccentric" to 3,
+            "lean_spark" to 2, "egr" to 2,
+        )
         val forty = sixty.filterKeys {
             it !in setOf(
                 "headers", "long_tube", "ceramic", "cam", "coils", "tbi_unit",

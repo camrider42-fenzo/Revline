@@ -2,6 +2,7 @@ package com.revline.idle.game
 
 import com.revline.idle.data.GameState
 import com.revline.idle.model.Block
+import com.revline.idle.model.EngineFamily
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -110,8 +111,11 @@ class RaceStagingTest {
 
     @Test
     fun setupCarriesTheEnginesDisplacementSoEveryBlockHasItsOwnInertia() {
-        val rates = Block.entries.indices.map { RaceDrive.revRate(RaceDrive.setup(GameState(prestiges = it))) }
+        val piston = Block.entries.filter { it.family == EngineFamily.PISTON }
+        val rates = piston.map { RaceDrive.revRate(RaceDrive.setup(GameState(prestiges = it.ordinal))) }
         assertTrue("rates $rates", rates.zipWithNext().all { (a, b) -> b <= a + 1e-9 } && rates.first() > rates.last())
+        val rotary = RaceDrive.revRate(RaceDrive.setup(GameState(prestiges = Block.ROTARY.ordinal)))
+        assertTrue("rotary revs $rotary vs V12 ${rates.last()}", rotary > rates.last())
     }
 
     @Test

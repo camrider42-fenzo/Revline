@@ -5,6 +5,7 @@ import com.revline.idle.game.Logic
 import com.revline.idle.game.ResearchTree
 import com.revline.idle.game.Upgrades
 import com.revline.idle.model.Block
+import com.revline.idle.model.EngineFamily
 import com.revline.idle.model.EngineSim
 import com.revline.idle.model.FuelKind
 import com.revline.idle.model.Induction
@@ -91,7 +92,7 @@ class FullShopRunTest {
                 .filter { Logic.fuelUnlocked(state, it) }
                 .map { state.copy(fuel = it) }
                 .firstOrNull { Logic.canPrestige(it) }
-            if (prestiges < Block.V8.ordinal && ready != null) {
+            if (prestiges < Block.V12.ordinal && ready != null) {
                 val rebuilt = tune(Logic.prestige(ready))
                 val nextSheet = Logic.sheet(rebuilt)
                 notes.append(
@@ -157,16 +158,19 @@ class FullShopRunTest {
             .minByOrNull { it.cost }
             ?.id
 
-    private fun nextUpgrade(state: GameState): String? =
-        Upgrades.all
+    private fun nextUpgrade(state: GameState): String? {
+        val family = Block.forPrestige(state.prestiges).family
+        return Upgrades.forFamily(family)
             .filter { Logic.canBuyUpgrade(state, it.id) }
             .minByOrNull { Logic.upgradeCost(state, it.id) }
             ?.id
+    }
 
     private fun waitSeconds(state: GameState, sheet: com.revline.idle.game.Sheet): Double {
         var moneyGap = Double.POSITIVE_INFINITY
         var rpGap = Double.POSITIVE_INFINITY
-        for (upgrade in Upgrades.all) {
+        val family = Block.forPrestige(state.prestiges).family
+        for (upgrade in Upgrades.forFamily(family)) {
             val level = state.upgrades[upgrade.id] ?: 0
             if (level >= upgrade.maxLevel) continue
             if (Logic.lockReason(state, upgrade.id) != null) continue
@@ -184,8 +188,11 @@ class FullShopRunTest {
     }
 
     private fun complete(state: GameState): Boolean {
-        if (state.researched.size < ResearchTree.all.size) return false
-        return Upgrades.all.all { (state.upgrades[it.id] ?: 0) >= it.maxLevel }
+        // Full shop is the piston ladder through V12: rotary is a side-grade rebuild after.
+        if (state.prestiges < Block.V12.ordinal) return false
+        val openResearch = ResearchTree.all.filter { it.minPrestige <= Block.V12.ordinal }
+        if (!openResearch.all { it.id in state.researched }) return false
+        return Upgrades.forFamily(EngineFamily.PISTON).all { (state.upgrades[it.id] ?: 0) >= it.maxLevel }
     }
 
     private fun boostAtPedal(state: GameState, throttle: Double): Double {
