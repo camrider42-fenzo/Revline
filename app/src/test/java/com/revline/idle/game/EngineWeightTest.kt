@@ -38,19 +38,20 @@ class EngineWeightTest {
     fun partsAdjustEngineWeight() {
         val stock = GameState(prestiges = Block.INLINE_FOUR.ordinal)
         val turbo = stock.copy(upgrades = mapOf("turbo" to 1, "intercooler" to 1))
-        val light = GameState(prestiges = Block.ROTARY.ordinal, upgrades = mapOf("light_rotor" to 2))
+        val light = GameState(prestiges = Block.ROTARY.ladderStep, blockId = Block.ROTARY.name, upgrades = mapOf("light_rotor" to 2))
         assertTrue(EngineWeight.kg(turbo) > EngineWeight.kg(stock) + 0.4)
         assertTrue(EngineWeight.partDeltaKg(light) < -4.0)
         assertTrue(
-            EngineWeight.kg(GameState(prestiges = Block.ROTARY.ordinal, upgrades = mapOf("rotor4" to 1, "rotor3" to 1))) >
-                EngineWeight.kg(GameState(prestiges = Block.ROTARY.ordinal)) + 14.0,
+            EngineWeight.kg(GameState(prestiges = Block.ROTARY.ladderStep, blockId = Block.ROTARY.name, upgrades = mapOf("rotor4" to 1, "rotor3" to 1))) >
+                EngineWeight.kg(GameState(prestiges = Block.ROTARY.ladderStep, blockId = Block.ROTARY.name)) + 14.0,
         )
     }
 
     @Test
     fun engineWeightFeedsCarMassAndFrontBias() {
         val light = GameState(
-            prestiges = Block.ROTARY.ordinal,
+            prestiges = Block.ROTARY.ladderStep,
+            blockId = Block.ROTARY.name,
             chassis = "rx7",
             tire = "slick",
             transmission = "close",
@@ -75,7 +76,8 @@ class EngineWeightTest {
     @Test
     fun lighterEngineShortensEtAndLapTime() {
         val baseState = GameState(
-            prestiges = Block.ROTARY.ordinal,
+            prestiges = Block.ROTARY.ladderStep,
+            blockId = Block.ROTARY.name,
             chassis = "rx7",
             chassisLevel = mapOf("rx7" to 3),
             coolingSlots = 3,

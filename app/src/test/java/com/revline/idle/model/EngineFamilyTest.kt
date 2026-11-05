@@ -37,9 +37,9 @@ class EngineFamilyTest {
 
     @Test
     fun rotaryParamsIgnorePistonHardwareAndUsePorts() {
-        val base = GameState(prestiges = Block.ROTARY.ordinal, upgrades = mapOf("cam" to 4, "springs" to 5, "pistons" to 3))
+        val base = GameState(prestiges = Block.ROTARY.ladderStep, blockId = Block.ROTARY.name, upgrades = mapOf("cam" to 4, "springs" to 5, "pistons" to 3))
         val ported = base.copy(upgrades = mapOf("port_bridge" to 2, "apex_seals" to 3, "eccentric" to 2))
-        val stockHp = Logic.sheet(GameState(prestiges = Block.ROTARY.ordinal)).stats.peakHorsepower
+        val stockHp = Logic.sheet(GameState(prestiges = Block.ROTARY.ladderStep, blockId = Block.ROTARY.name)).stats.peakHorsepower
         val baseSheet = Logic.sheet(base)
         val portedSheet = Logic.sheet(ported)
         assertEquals(EngineFamily.ROTARY, baseSheet.params.family)

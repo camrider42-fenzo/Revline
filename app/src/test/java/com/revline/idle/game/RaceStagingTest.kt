@@ -114,7 +114,7 @@ class RaceStagingTest {
         val piston = Block.entries.filter { it.family == EngineFamily.PISTON }
         val rates = piston.map { RaceDrive.revRate(RaceDrive.setup(GameState(prestiges = it.ordinal))) }
         assertTrue("rates $rates", rates.zipWithNext().all { (a, b) -> b <= a + 1e-9 } && rates.first() > rates.last())
-        val rotary = RaceDrive.revRate(RaceDrive.setup(GameState(prestiges = Block.ROTARY.ordinal)))
+        val rotary = RaceDrive.revRate(RaceDrive.setup(GameState(prestiges = Block.ROTARY.ladderStep, blockId = Block.ROTARY.name)))
         assertTrue("rotary revs $rotary vs V12 ${rates.last()}", rotary > rates.last())
     }
 

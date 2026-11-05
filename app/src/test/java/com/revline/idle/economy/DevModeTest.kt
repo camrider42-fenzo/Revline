@@ -18,9 +18,10 @@ class DevModeTest {
         for (family in com.revline.idle.model.EngineFamily.entries) {
             val prestige = when (family) {
                 com.revline.idle.model.EngineFamily.PISTON -> 4
-                com.revline.idle.model.EngineFamily.ROTARY -> com.revline.idle.model.Block.ROTARY.ordinal
+                com.revline.idle.model.EngineFamily.ROTARY -> com.revline.idle.model.Block.ROTARY.ladderStep
             }
-            var state = GameState(devMode = true, researched = researched, prestiges = prestige)
+            val blockId = if (family == com.revline.idle.model.EngineFamily.ROTARY) com.revline.idle.model.Block.ROTARY.name else ""
+            var state = GameState(devMode = true, researched = researched, prestiges = prestige, blockId = blockId)
             for (upgrade in Upgrades.forFamily(family)) {
                 repeat(upgrade.maxLevel) {
                     assertEquals(0.0, Logic.upgradeCost(state, upgrade.id), 0.0)

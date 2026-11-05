@@ -4,8 +4,8 @@ import kotlin.math.pow
 
 /**
  * Long-blocks in rising stock power. Prestige count picks the ladder step;
- * [forPrestige] is the default (piston, or the classic 13B at the top).
- * Rotary alternatives share a step with a piston and are chosen via [of]
+ * [forPrestige] is the piston default at that step. Rotary alternatives share
+ * the step whose stock piston power is closest to theirs, chosen via [of]
  * + GameState.blockId. New rotaries append after ROTARY so ordinals 0..8 stay.
  */
 enum class Block(
@@ -55,12 +55,12 @@ enum class Block(
     V12("6.5L V12", 12, 2, 89.0, 87.0, 10.6, 8000.0, 900.0, 1.06, 0.62, 3800.0, 22.0, 4.20, false, 50.77, 800.0, 580.0, 6.4, baseEngineKg = 307.8, ladderStep = 7),
     // Appended after V12 — prestige ordinals for earlier blocks stay put.
     // Goals lean rpm/hp and apex-seal durability, not stump-pulling torque. Thirsty mpg.
-    ROTARY("1.3L 13B rotary", 2, 1, 80.0, 130.11, 9.7, 9000.0, 950.0, 1.08, 0.78, 2400.0, 18.0, 2.60, false, 55.0, 245.0, 170.0, 21.0, family = EngineFamily.ROTARY, baseEngineKg = 63.0, ladderStep = 8),
-    // Rotary alternatives at earlier ladder steps (pick via blockId). Ordinals keep growing past 8.
-    ROTARY_1R("0.6L single-rotor", 1, 1, 80.0, 130.11, 9.0, 8000.0, 1100.0, 0.92, 0.74, 420.0, 16.0, 0.70, false, 0.55, 58.0, 55.0, 60.0, family = EngineFamily.ROTARY, baseEngineKg = 32.0, ladderStep = 0),
+    // ladderStep follows closest stock piston power (not rotor count).
+    ROTARY("1.3L 13B rotary", 2, 1, 80.0, 130.11, 9.7, 9000.0, 950.0, 1.08, 0.78, 2400.0, 18.0, 2.60, false, 55.0, 245.0, 170.0, 21.0, family = EngineFamily.ROTARY, baseEngineKg = 63.0, ladderStep = 4),
+    ROTARY_1R("0.6L single-rotor", 1, 1, 80.0, 130.11, 9.0, 8000.0, 1100.0, 0.92, 0.74, 420.0, 16.0, 0.70, false, 0.55, 58.0, 55.0, 60.0, family = EngineFamily.ROTARY, baseEngineKg = 32.0, ladderStep = 2),
     ROTARY_RENESIS("1.3L Renesis 13B-MSP", 2, 1, 80.0, 130.11, 10.0, 8500.0, 900.0, 1.05, 0.72, 1600.0, 18.0, 1.40, false, 13.5, 240.0, 180.0, 22.0, family = EngineFamily.ROTARY, baseEngineKg = 68.0, ladderStep = 4),
-    ROTARY_20B("2.0L 20B three-rotor", 3, 1, 80.0, 130.11, 9.7, 8500.0, 900.0, 1.06, 0.76, 2600.0, 19.0, 2.90, false, 40.0, 580.0, 420.0, 16.0, family = EngineFamily.ROTARY, baseEngineKg = 92.0, ladderStep = 6),
-    ROTARY_26B("2.6L 26B four-rotor", 4, 1, 80.0, 130.11, 9.7, 8800.0, 950.0, 1.07, 0.76, 3400.0, 20.0, 3.80, false, 51.0, 800.0, 550.0, 14.0, family = EngineFamily.ROTARY, baseEngineKg = 118.0, ladderStep = 7),
+    ROTARY_20B("2.0L 20B three-rotor", 3, 1, 80.0, 130.11, 9.7, 8500.0, 900.0, 1.06, 0.76, 2600.0, 19.0, 2.90, false, 40.0, 580.0, 420.0, 16.0, family = EngineFamily.ROTARY, baseEngineKg = 92.0, ladderStep = 5),
+    ROTARY_26B("2.6L 26B four-rotor", 4, 1, 80.0, 130.11, 9.7, 8800.0, 950.0, 1.07, 0.76, 3400.0, 20.0, 3.80, false, 51.0, 800.0, 550.0, 14.0, family = EngineFamily.ROTARY, baseEngineKg = 118.0, ladderStep = 5),
     ;
 
     /**
@@ -206,7 +206,7 @@ enum class Block(
     fun sheetTitle(racing: Boolean): String = if (racing) "Race $title" else title
 
     companion object {
-        /** Highest prestige ladder step (classic 13B). Alternatives do not extend it. */
+        /** Highest prestige ladder step (top piston). Rotary alts do not extend it. */
         val maxLadderStep: Int get() = entries.maxOf { it.ladderStep }
 
         /** Long-blocks that share a prestige step (piston default + rotary alts). */
@@ -215,7 +215,7 @@ enum class Block(
 
         /**
          * Default long-block for a prestige step: the piston when both exist,
-         * else the classic 13B on the top step.
+         * else the first alternative on that step.
          */
         fun forPrestige(prestiges: Int): Block {
             val step = prestiges.coerceIn(0, maxLadderStep)

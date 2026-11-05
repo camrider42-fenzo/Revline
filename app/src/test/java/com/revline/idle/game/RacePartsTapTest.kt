@@ -76,7 +76,7 @@ class RacePartsTapTest {
     @Test
     fun everyPartCanBeReachedWithEnoughResourcesByTapping() {
         val order = listOf("box" to Racing.gearboxes.map { it.id }, "axle" to Racing.axles.map { it.id }, "tire" to Racing.tires.map { it.id }, "final" to Racing.finals.map { it.id })
-        var s = GameState(money = 1e12, researchPoints = 1e12, prestiges = 8)
+        var s = GameState(money = 1e12, researchPoints = 1e12, prestiges = Block.maxLadderStep)
         for ((kind, ids) in order) {
             for (id in ids) {
                 repeat(3) { if (fittedId(s, kind) != id) s = tap(s, kind, id) }

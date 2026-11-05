@@ -169,9 +169,10 @@ class EconomyTest {
         for (family in com.revline.idle.model.EngineFamily.entries) {
             val prestige = when (family) {
                 com.revline.idle.model.EngineFamily.PISTON -> 0
-                com.revline.idle.model.EngineFamily.ROTARY -> com.revline.idle.model.Block.ROTARY.ordinal
+                com.revline.idle.model.EngineFamily.ROTARY -> com.revline.idle.model.Block.ROTARY.ladderStep
             }
-            val open = GameState(researched = known, prestiges = prestige)
+            val blockId = if (family == com.revline.idle.model.EngineFamily.ROTARY) com.revline.idle.model.Block.ROTARY.name else ""
+            val open = GameState(researched = known, prestiges = prestige, blockId = blockId)
             val stock = Logic.paramsFrom(open)
             for (upgrade in Upgrades.forFamily(family)) {
                 val fitted = when (upgrade.id) {

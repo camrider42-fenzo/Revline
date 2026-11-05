@@ -63,9 +63,8 @@ class ResearchPaceTest {
         assertTrue("the twin should not finish the notebook\n$report", owned[2] < ordinary)
         assertTrue("the ordinary notebook should close by the V6\n$report", owned[5] == ordinary)
         assertTrue("the V8 should open the past-the-limit branch\n$report", owned[6] > ordinary)
-        val rotaryStudies = ResearchTree.all.count { it.minPrestige >= Block.ROTARY.ordinal }
-        assertTrue("the branch should be finished on the V12\n$report", owned[7] == total - rotaryStudies)
-        assertTrue("rotary studies finish on the rotary\n$report", owned[8] == total)
+        // Rotary studies unlock at the single-rotor step; by V12 the notebook is complete.
+        assertTrue("the notebook should finish on the V12\n$report", owned[7] == total)
     }
 
     private fun play(start: GameState): Run {

@@ -101,12 +101,12 @@ class BlockLadderTest {
         assertEquals(EngineFamily.ROTARY, Block.ROTARY.family)
         assertTrue(Block.entries.filter { it.family == EngineFamily.PISTON }.all { it.ordinal < Block.ROTARY.ordinal })
         assertTrue(Block.ROTARY_1R.ordinal > Block.ROTARY.ordinal)
-        assertEquals(0, Block.ROTARY_1R.ladderStep)
+        assertEquals(2, Block.ROTARY_1R.ladderStep)
         assertEquals(4, Block.ROTARY_RENESIS.ladderStep)
-        assertEquals(6, Block.ROTARY_20B.ladderStep)
-        assertEquals(7, Block.ROTARY_26B.ladderStep)
-        assertEquals(8, Block.ROTARY.ladderStep)
-        assertEquals(8, Block.maxLadderStep)
+        assertEquals(4, Block.ROTARY.ladderStep)
+        assertEquals(5, Block.ROTARY_20B.ladderStep)
+        assertEquals(5, Block.ROTARY_26B.ladderStep)
+        assertEquals(7, Block.maxLadderStep)
     }
 
     @Test

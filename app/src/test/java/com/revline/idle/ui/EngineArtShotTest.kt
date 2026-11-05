@@ -57,7 +57,8 @@ class EngineArtShotTest {
         if (tag != null && tag !in setOf("rotary-anim", "rotary", "rotary-anim-v2", "1")) return
         if (tag == null && System.getenv("CIRCUIT_GFX_DIR") == null) return
         val twin = GameState(
-            prestiges = Block.ROTARY.ordinal,
+            prestiges = Block.ROTARY.ladderStep,
+            blockId = Block.ROTARY.name,
             fuel = FuelKind.PREMIUM_93,
             upgrades = mapOf(
                 "filter" to 2, "apex_seals" to 3, "port_bridge" to 1, "oil_meter" to 2,

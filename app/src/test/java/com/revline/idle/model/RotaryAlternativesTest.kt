@@ -5,16 +5,25 @@ import com.revline.idle.game.Logic
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
-/** Rotary long-blocks sit as alternatives on piston ladder steps and keep the rotary family. */
+/** Rotary long-blocks sit on the piston step whose stock power is closest. */
 class RotaryAlternativesTest {
     private val alts = listOf(
-        Block.ROTARY_1R to 0,
+        Block.ROTARY_1R to 2,
         Block.ROTARY_RENESIS to 4,
-        Block.ROTARY_20B to 6,
-        Block.ROTARY_26B to 7,
-        Block.ROTARY to 8,
+        Block.ROTARY to 4,
+        Block.ROTARY_20B to 5,
+        Block.ROTARY_26B to 5,
     )
+
+    private fun stockHp(block: Block): Double {
+        val state = GameState(
+            prestiges = block.ladderStep,
+            blockId = if (block == Block.forPrestige(block.ladderStep)) "" else block.name,
+        )
+        return Logic.sheet(state.copy(throttle = Logic.bestThrottle(state))).stats.peakHorsepower
+    }
 
     @Test fun eachRotarySitsOnItsLadderStep() {
         for ((block, step) in alts) {
@@ -30,9 +39,39 @@ class RotaryAlternativesTest {
         }
     }
 
+    @Test fun rotaryPowerMatchesStepBandAndOrderIsMonotonic() {
+        val pistonHp = (0..Block.maxLadderStep).associateWith { step ->
+            val b = Block.forPrestige(step)
+            assertEquals(EngineFamily.PISTON, b.family)
+            stockHp(b)
+        }
+        val rotaries = Block.entries.filter { it.family == EngineFamily.ROTARY }
+            .sortedBy { stockHp(it) }
+        var prevHp = 0.0
+        var prevStep = -1
+        for (block in rotaries) {
+            val hp = stockHp(block)
+            assertTrue("${block.title} hp $hp <= prev $prevHp", hp >= prevHp)
+            assertTrue("${block.title} step ${block.ladderStep} < prev $prevStep", block.ladderStep >= prevStep)
+            val closest = pistonHp.minBy { (_, php) -> abs(php - hp) }.key
+            assertEquals("${block.title} hp $hp closest piston step", closest, block.ladderStep)
+            // Within band: closer to own step than to any other primary.
+            val own = pistonHp.getValue(block.ladderStep)
+            for ((step, php) in pistonHp) {
+                if (step == block.ladderStep) continue
+                assertTrue(
+                    "${block.title} hp $hp closer to step $step ($php) than own $own",
+                    abs(hp - own) <= abs(hp - php) + 1e-6,
+                )
+            }
+            prevHp = hp
+            prevStep = block.ladderStep
+        }
+    }
+
     @Test fun primaryLadderPowerIsMonotonicAcrossPistonSteps() {
         var previous = 0.0
-        for (step in 0..7) {
+        for (step in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(step)
             assertEquals(EngineFamily.PISTON, block.family)
             val state = GameState(prestiges = step)
@@ -58,9 +97,9 @@ class RotaryAlternativesTest {
         assertEquals(Block.ROTARY_RENESIS, Block.of(atFour.blockId, atFour.prestiges))
         val wrong = GameState(prestiges = 4, blockId = Block.ROTARY_20B.name)
         assertEquals(Block.INLINE_FOUR, Block.of(wrong.blockId, wrong.prestiges))
-        val fitted = Logic.fitBlock(GameState(prestiges = 0), Block.ROTARY_1R.name)
+        val fitted = Logic.fitBlock(GameState(prestiges = 2), Block.ROTARY_1R.name)
         assertEquals(Block.ROTARY_1R.name, fitted.blockId)
-        val back = Logic.fitBlock(fitted, Block.MOPED.name)
+        val back = Logic.fitBlock(fitted, Block.TWIN.name)
         assertEquals("", back.blockId)
     }
 }
