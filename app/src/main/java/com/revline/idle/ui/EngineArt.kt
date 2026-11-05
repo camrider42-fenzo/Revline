@@ -47,7 +47,7 @@ fun EngineArt(
             withFrameNanos { now ->
                 if (last != 0L) {
                     val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
-                    val follow = 1f - exp(-dt * 7f)
+                    val follow = 1f - exp(-dt * 11f)
                     spinRpm += (rpmState.value - spinRpm) * follow
                     clock += dt
                     if (rpmState.value > 1f) {
@@ -74,11 +74,29 @@ fun EngineArt(
         val calm = (1f - spinRpm / params.redlineRpm.toFloat()).coerceIn(0.15f, 1f)
         val lope = 2.2f + spinRpm / 900f
         translate(
-            left = stroke * 0.35f * calm * sin(clock * lope),
-            top = stroke * 0.45f * calm * sin(clock * lope * 1.7f + 0.6f),
+            left = stroke * 0.22f * calm * sin(clock * lope),
+            top = stroke * 0.28f * calm * sin(clock * lope * 1.55f + 0.6f),
         ) {
             drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
         }
+    }
+}
+
+internal object EngineArtDraw {
+    fun draw(
+        scope: DrawScope,
+        params: EngineParams,
+        parts: Map<String, Int>,
+        stroke: Float,
+        angle: Float,
+        clock: Float,
+        spinRpm: Float,
+        throttle: Float = 1f,
+        hose: Color = Cyan,
+        exhaust: Color = Amber,
+        exhaustGain: Float = 1f,
+    ) {
+        scope.drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
     }
 }
 
@@ -509,9 +527,11 @@ private fun DrawScope.drawEngine(
             if (burn > 0.02f) {
                 val room = (crown - deck).coerceAtLeast(2f)
                 val reach = skirt * (0.35f + 0.6f * (1f - burn))
-                glowLine(White, Offset(cx - reach * 0.55f, deck + room * 0.3f), Offset(cx + reach * 0.55f, deck + room * 0.3f), stroke, burn * 1.3f)
-                glowLine(Amber, Offset(cx - reach, deck + room * 0.55f), Offset(cx + reach, deck + room * 0.55f), stroke, burn * 1.1f)
-                glowLine(Red, Offset(cx - reach * 0.8f, deck + room * 0.8f), Offset(cx + reach * 0.8f, deck + room * 0.8f), stroke * 0.8f, burn * 0.8f)
+                glowCircle(Amber, skirt * 0.55f * burn, Offset(cx, deck + room * 0.45f), stroke, filled = true, gain = burn * 0.55f)
+                glowLine(White, Offset(cx - reach * 0.55f, deck + room * 0.25f), Offset(cx + reach * 0.55f, deck + room * 0.25f), stroke, burn * 1.45f)
+                glowLine(Amber, Offset(cx - reach, deck + room * 0.5f), Offset(cx + reach, deck + room * 0.5f), stroke, burn * 1.2f)
+                glowLine(Red, Offset(cx - reach * 0.85f, deck + room * 0.78f), Offset(cx + reach * 0.85f, deck + room * 0.78f), stroke * 0.85f, burn * 0.95f)
+                glowCircle(White, stroke * (0.4f + burn * 1.1f), Offset(cx, deck + room * 0.35f), stroke, filled = true, gain = burn * 0.9f)
             }
             val spark = EngineMotion.spark(cyc)
             if (spark > 0.03f) {
@@ -522,6 +542,11 @@ private fun DrawScope.drawEngine(
             glowLine(White, Offset(cx - skirt, crown + crownDrop), Offset(cx + skirt, crown + crownDrop), stroke)
             glowLine(White, Offset(cx - skirt, crown), Offset(cx - skirt, crown + crownDrop), stroke)
             glowLine(White, Offset(cx + skirt, crown), Offset(cx + skirt, crown + crownDrop), stroke)
+            // Ring lands and a wrist pin — same neon wire look, just more metal.
+            val ringGap = crownDrop * 0.28f
+            glowLine(Cyan, Offset(cx - skirt * 0.92f, crown + ringGap), Offset(cx + skirt * 0.92f, crown + ringGap), stroke * 0.45f, 0.75f)
+            glowLine(Cyan, Offset(cx - skirt * 0.88f, crown + ringGap * 1.85f), Offset(cx + skirt * 0.88f, crown + ringGap * 1.85f), stroke * 0.4f, 0.65f)
+            glowCircle(White, stroke * 0.7f, Offset(cx, crown + crownDrop * 0.55f), stroke * 0.55f, filled = true, gain = 0.55f)
             if (blur > 0.02f) {
                 for (ghost in 1..2) {
                     val g = Math.toRadians((cyc - ghost * 16f).toDouble())
@@ -546,6 +571,24 @@ private fun DrawScope.drawEngine(
             glowLine(White, fly, Offset(fly.x + (sin(a) * flyR * 0.82f).toFloat(), fly.y - (cos(a) * flyR * 0.82f).toFloat()), stroke * 0.6f, 0.55f)
         }
         glowCircle(Lime, stroke * 0.9f, Offset(fly.x + (sin(turn) * flyR).toFloat(), fly.y - (cos(turn) * flyR).toFloat()), stroke, filled = true, gain = 1.1f)
+        // Serpentine belt: crank pulley -> water pump -> tensioner, same wireframe glow.
+        val crankPulley = Offset(left - 2f, crankY)
+        val pumpPulley = Offset(left - w * 0.06f, h * 0.34f)
+        val tensioner = Offset(left - w * 0.02f, crankY - h * 0.10f)
+        val beltPulse = 0.75f + 0.25f * sin(clock * (1.8f + spinRpm / 2400f))
+        glowCircle(White, stroke * 2.8f, crankPulley, stroke * 0.7f, gain = 0.7f)
+        glowCircle(Cyan, stroke * 2.1f, pumpPulley, stroke * 0.65f, gain = 0.85f)
+        glowCircle(White, stroke * 1.5f, tensioner, stroke * 0.55f, gain = 0.6f)
+        glowLine(Amber, crankPulley, tensioner, stroke * 0.55f, beltPulse * 0.85f)
+        glowLine(Amber, tensioner, pumpPulley, stroke * 0.55f, beltPulse * 0.85f)
+        glowLine(Amber, pumpPulley, crankPulley, stroke * 0.55f, beltPulse * 0.85f)
+        val beltMark = (clock * (0.9f + spinRpm / 5000f)) % 1f
+        for (i in 0 until 3) {
+            val u = (beltMark + i / 3f) % 1f
+            val a = if (u < 0.33f) crankPulley to tensioner else if (u < 0.66f) tensioner to pumpPulley else pumpPulley to crankPulley
+            val t = if (u < 0.33f) u / 0.33f else if (u < 0.66f) (u - 0.33f) / 0.33f else (u - 0.66f) / 0.34f
+            glowCircle(Lime, stroke * 0.55f, Offset(a.first.x + (a.second.x - a.first.x) * t, a.first.y + (a.second.y - a.first.y) * t), stroke, filled = true, gain = 0.7f)
+        }
     }
 }
 

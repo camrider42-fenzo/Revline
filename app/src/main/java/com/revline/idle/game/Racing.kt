@@ -748,7 +748,7 @@ object Racing {
     }
 
     /** How well each class of opponent drives, as a share of a flawless pilot's reaction, launch, clutch and shifting. */
-    const val SKILL_CLUB = 0.45
+    const val SKILL_CLUB = 0.50
     const val SKILL_NATIONAL = 0.68
     const val SKILL_INTERNATIONAL = 0.84
     const val LADDER_SKILL = 0.45
@@ -762,7 +762,7 @@ object Racing {
     private fun classGhost(state: GameState, tier: Tier): Ghost {
         val block = Block.forPrestige(state.prestiges)
         val frac = when (tier) {
-            Tier.CLUB -> 0.42
+            Tier.CLUB -> 0.50
             Tier.NATIONAL -> 0.95
             Tier.INTERNATIONAL -> 0.63
         }

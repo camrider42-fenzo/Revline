@@ -125,7 +125,7 @@ object Logic {
     const val PROFIT_ECONOMY_GAIN = 1.6
 
     /** The four newer economy parts, all at their top level, add this much more on top of [PROFIT_ECONOMY_GAIN]. */
-    const val NEW_ECONOMY_GAIN = 0.8
+    const val NEW_ECONOMY_GAIN = 1.25
 
     fun profitStop(state: GameState, cap: Double = 1.0): ProfitStop {
         val params = paramsFrom(state)
@@ -167,7 +167,7 @@ object Logic {
         val latent = listOf(
             "jets", "fuel_pump", "studs", "cap", "radiator", "duct", "water_pump",
             "thermostat", "afr_map", "oil_cooler", "electric_pump", "inconel",
-            "waterless", "ceramic", "knock_box", "boost_controller", "torque_model", "meth",
+            "waterless", "ceramic", "knock_box", "boost_controller", "torque_model", "meth", "cold_air",
         ).sumOf { lvl(it) }
         fun tapered(levels: Int): Double {
             if (levels <= 0) return 0.0
@@ -178,7 +178,7 @@ object Logic {
             "lap", "gap", "boot", "tip", "needle", "oil_service", "fins", "wrench",
         ).sumOf { tapered(lvl(it)) }
         val shop = listOf(
-            "filter", "cold_air", "headers", "long_tube", "cam", "springs", "compression",
+            "filter", "headers", "long_tube", "cam", "springs", "compression",
         ).sumOf { lvl(it) }
         val cc = EngineSim.displacementCc(block.boreMm, block.strokeMm, block.cylinders).coerceAtLeast(40.0)
         val fade = (160.0 / cc).coerceIn(1.0, 1.8)
@@ -340,12 +340,12 @@ object Logic {
             0.16 * rods + 0.12 * crank + 0.36 * billet + 0.045 * wrench + 0.08 * (state.perks["fixtures"] ?: 0)
         var flow = flow0 + 0.18 * jets + 0.10 * needle + 0.40 * pump + 0.32 * tbi + 0.60 * injectors + 0.95 * hpfp +
             0.06 * (state.perks["pump"] ?: 0)
-        var timing = block.timingDeg + 1.6 * baseTiming + 1.8 * mapped + 0.55 * coils + 0.85 * gap
+        var timing = block.timingDeg + 2.05 * baseTiming + 2.25 * mapped + 0.70 * coils + 0.95 * gap
         if (torque) timing += 1.4
         timing += Tuners.value(state, "spark")
         var knock = 0.18 + if (knockBox > 0) 0.60 else 0.0
         if (torque) knock += 0.10
-        var ign = 0.95 + 0.025 * plugs + 0.015 * coils + 0.008 * gap + 0.012 * (state.perks["readers"] ?: 0)
+        var ign = 0.95 + 0.038 * plugs + 0.022 * coils + 0.010 * gap + 0.012 * (state.perks["readers"] ?: 0)
         var trim = 0.10 * afr
         if (torque) trim += 0.12
         val mixtureScrew = Tuners.value(state, "mixture")
@@ -364,7 +364,7 @@ object Logic {
             else -> 20.0
         }
         val friction = (
-            1.0 - 0.05 * crank - 0.035 * oilService - 0.028 * wrench -
+            1.0 - 0.05 * crank - 0.035 * oilService - 0.028 * wrench - 0.022 * rings -
                 (if (synthetic) 0.04 else 0.0) - 0.012 * (state.perks["breakin"] ?: 0)
             ).coerceIn(0.72, 1.2)
         // Bolt-on economy parts are worth a few percent each in the real world.
@@ -372,7 +372,7 @@ object Logic {
             0.025 * boot +
                 0.022 * tip +
                 0.028 * needle +
-                0.032 * cai +
+                0.024 * cai +
                 0.030 * catback +
                 0.030 * jets +
                 0.035 * afr +
@@ -384,10 +384,10 @@ object Logic {
             0.12 * part(boot, 4) +
                 0.10 * part(tip, 3) +
                 0.14 * part(needle, 3) +
-                0.18 * part(cai, 4) +
+                0.14 * part(cai, 4) +
                 0.14 * part(catback, 4) +
                 0.14 * part(jets, 4) +
-                0.18 * part(afr, 6)
+                0.22 * part(afr, 6)
             ) + NEW_ECONOMY_GAIN * (
             0.16 * part(rings, 3) +
                 0.24 * part(leanSpark, 3) +
@@ -426,7 +426,7 @@ object Logic {
             boostControllerPsi = controllerPsi,
             induction = induction,
             spoolRpm = spool.coerceIn(1400.0, 6000.0),
-            intercoolerEff = (if (ic <= 0) 0.0 else 0.30 + (ic - 1) * 0.15).coerceIn(0.0, 0.86),
+            intercoolerEff = (if (ic <= 0) 0.0 else 0.38 + (ic - 1) * 0.16).coerceIn(0.0, 0.90),
             friction = friction,
             internalsStrength = strength.coerceIn(0.8, 3.2),
             radiatorUa = ua.coerceIn(80.0, 8000.0),

@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.89.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.90.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -115,6 +115,10 @@ RACING LINE (1.89.0): circuit cars drive a smoothed racing line (inside at the a
 
 PAR FIT (1.88.2): the field par clamp now measures the same lap the circuit screen and the race use (your driver and orders), so the shown fit is always within ±10.0%.
 
+## 1.90.0
+
+Playthrough rebalance for racing and dyno: cold-air and FI spend share pulled down, low-tension rings actually cut friction, timing/ignition and intercooler do more per level, economy parts and early tools retuned, club ghosts and chassis parts nudged. Engine bay animation gets piston rings, a wrist pin, richer burn glow, and a serpentine belt — same neon wire style.
+
 FORCED INDUCTION (1.88.1): a turbo or supercharger no longer loses power on low-octane fuel without an intercooler. The ECU now backs the boost off until knock it cannot pull timing for is gone, so unsupported boost is limited toward the naturally aspirated figure instead of becoming detonation, and supported boost gains clearly.
 
 BALANCE (1.88.0): the circuit and drag parts are repriced so each costs about the same per point of lap (or quarter-mile) gain within its level: the seat swap and the weight line cost more, the wing, the alignment-free steering rack and the 50 shot cost less. Race rebuild targets are about half as far above street: x1.21 power and x1.09 torque, down from x1.42 and x1.18. A race rebuild costs research, three hours of that block's income, 1.5x more for each race rebuild in a row, and is blocked until you have it. The circuit field's par car is held within 10% of your car's speed on the planned lap, so a weak car gets an easier field and a strong one a harder field.
@@ -160,3 +164,4 @@ Under the track is a dash for your car: a tachometer (rpm from speed, the gear r
 ## Credits
 
 Circuit centrelines: bacinger/f1-circuits by Tomislav Bacinger, MIT licence (full text in `NOTICE.md`). Turn numbers, turn sides and the start/finish line were checked against Gridpedia's circuit maps. The race sim, the economy and the numbers are unchanged by the map.
+

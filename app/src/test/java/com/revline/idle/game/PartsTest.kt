@@ -79,8 +79,8 @@ class PartsTest {
         assertEquals(Parts.NONE, Parts.kit(GameState()))
         val s = GameState(kit = mapOf("brakes" to 2, "weight" to 1))
         val k = Parts.kit(s)
-        assertEquals(1.27 * 1.04, k.brake, 1e-9)
-        assertEquals(0.015, k.shave, 1e-9)
+        assertEquals(1.27 * 1.05, k.brake, 1e-9)
+        assertEquals(0.018, k.shave, 1e-9)
         assertEquals(Parts.lines.first { it.id == "brakes" }.level(2)!!.fx.addKg, k.addKg, 1e-9)
     }
 

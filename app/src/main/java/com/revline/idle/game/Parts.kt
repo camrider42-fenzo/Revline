@@ -136,7 +136,7 @@ object Parts {
         Line(
             "brakes", "BRAKES", "Later braking points, and a car that stops in the same place lap after lap.",
             listOf(
-                Level("Sport pads", "A harder pad that bites hot.", 40.0, 0, 450.0, Fx(brake = 1.12, mistakes = 0.97)),
+                Level("Sport pads", "A harder pad that bites hot.", 40.0, 0, 400.0, Fx(brake = 1.14, mistakes = 0.96)),
                 Level("Vented rotors", "More iron to soak the heat.", 280.0, 2, 2250.0, Fx(brake = 1.27, mistakes = 0.94, addKg = 2.0)),
                 Level("Big brake kit", "Four-pot calipers and big discs.", 1330.0, 4, 5900.0, Fx(brake = 1.46, mistakes = 0.90, addKg = 5.0)),
             ),
@@ -152,7 +152,7 @@ object Parts {
         Line(
             "arb", "ANTI-ROLL BARS", "A stiffer car turns in flatter and does what the driver expects.",
             listOf(
-                Level("Front bar", "A thicker bar up front.", 50.0, 1, 650.0, Fx(lateral = 1.04, mistakes = 0.94, addKg = 2.0)),
+                Level("Front bar", "A thicker bar up front.", 50.0, 1, 550.0, Fx(lateral = 1.05, mistakes = 0.93, addKg = 2.0)),
                 Level("Adjustable pair", "A bar at each end, tuned to the track.", 650.0, 4, 3200.0, Fx(lateral = 1.12, traction = 1.04, mistakes = 0.88, launch = 0.995, addKg = 4.0)),
             ),
         ),
@@ -167,15 +167,15 @@ object Parts {
         Line(
             "weight", "WEIGHT", "Everything not bolted down comes out. A light car turns, stops and pulls harder.",
             listOf(
-                Level("Seats and trim", "A bucket seat. The carpet goes.", 100.0, 0, 1100.0, Fx(shave = 0.015, lateral = 1.02, brake = 1.04, wear = 0.95)),
+                Level("Seats and trim", "A bucket seat. The carpet goes.", 100.0, 0, 950.0, Fx(shave = 0.018, lateral = 1.025, brake = 1.05, wear = 0.94)),
                 Level("Stripped interior", "No headlining, no sound deadening.", 900.0, 3, 5200.0, Fx(shave = 0.03, lateral = 1.04, brake = 1.08, wear = 0.90)),
-                Level("Panels and glass", "Thin panels and plastic windows.", 3200.0, 5, 13500.0, Fx(shave = 0.05, lateral = 1.07, brake = 1.14, wear = 0.85)),
+                Level("Panels and glass", "Thin panels and plastic windows.", 3000.0, 5, 12000.0, Fx(shave = 0.055, lateral = 1.08, brake = 1.15, wear = 0.84)),
             ),
         ),
         Line(
             "cooling", "COOLING", "A circuit is a long, hot run. A cool engine keeps its power and its life.",
             listOf(
-                Level("Oil cooler", "A small matrix on the sump.", 70.0, 1, 800.0, Fx(cool = 0.5, hazard = 0.85)),
+                Level("Oil cooler", "A small matrix on the sump.", 70.0, 1, 700.0, Fx(cool = 0.7, hazard = 0.80, lateral = 1.01)),
                 Level("Big radiator", "A thick core and a better fan.", 600.0, 3, 3200.0, Fx(cool = 1.1, hazard = 0.70, addKg = 3.0)),
                 Level("Ducting and baffles", "Air goes through the core, not round it.", 2200.0, 5, 9000.0, Fx(cool = 1.8, hazard = 0.55, dragMult = 1.01, addKg = 3.0)),
             ),
@@ -183,7 +183,7 @@ object Parts {
         Line(
             "steer", "STEERING AND SETUP", "A quick rack, and a car set up for the track. The driver makes fewer mistakes.",
             listOf(
-                Level("Quick rack", "Fewer turns lock to lock.", 50.0, 2, 350.0, Fx(lateral = 1.02, mistakes = 0.93)),
+                Level("Quick rack", "Fewer turns lock to lock.", 40.0, 2, 280.0, Fx(lateral = 1.03, mistakes = 0.92)),
                 Level("Alignment and corner weights", "The shop sets the car up on a flat floor.", 1060.0, 4, 5100.0, Fx(lateral = 1.07, mistakes = 0.90, wear = 0.80)),
                 Level("Full setup", "Geometry, bump steer and a day on the track.", 3800.0, 6, 12000.0, Fx(lateral = 1.11, mistakes = 0.86, wear = 0.65)),
             ),

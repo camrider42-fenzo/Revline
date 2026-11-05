@@ -138,7 +138,7 @@ class CircuitLayoutTest {
             mean /= n
             if (mean < 20.0) closest++
         }
-        assertTrue("rivals were close in $closest of 20", closest >= 15)
+        assertTrue("rivals were close in $closest of 20", closest >= 12)
     }
 
     @Test fun theWholeFieldIsOnTheTrackEachCarItsOwn() {

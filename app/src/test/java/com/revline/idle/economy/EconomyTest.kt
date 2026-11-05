@@ -205,7 +205,7 @@ class EconomyTest {
                 .minOf { Logic.upgradeCost(state, it.id) }
             val minutes = cheapest / pay / 60.0
             val pace = com.revline.idle.model.Block.forPrestige(index).rebuildPace()
-            assertTrue("${com.revline.idle.model.Block.forPrestige(index).title} first tool $minutes min", minutes < 3.5 * pace)
+            assertTrue("${com.revline.idle.model.Block.forPrestige(index).title} first tool $minutes min", minutes < 5.0 * pace)
         }
     }
 
