@@ -17,15 +17,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.revline.idle.game.Drivers
@@ -73,15 +74,18 @@ fun RaceScreen(
     val slots = car.spec.slots
     val slotMax = Racing.slotMax(body, level)
     var page by rememberSaveable { mutableStateOf("DRAG") }
+    val dragScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val circuitScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val pages = rememberSaveableStateHolder()
     val setup = RaceDrive.setup(state, ui.sheet)
     val forecast by produceState<Map<String, Drivers.Forecast>>(emptyMap(), setup) {
         value = withContext(Dispatchers.Default) { Drivers.forecast(setup).associateBy { it.driver.id } }
     }
-    key(page) {
+    pages.SaveableStateProvider(page) {
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(if (page == "DRAG") dragScroll else circuitScroll)
             .padding(12.dp),
     ) {
         Text("RACE", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
