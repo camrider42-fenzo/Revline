@@ -1,5 +1,6 @@
 package com.revline.idle.ui
 
+import com.revline.idle.model.EngineFamily
 import com.revline.idle.model.Induction
 import com.revline.idle.model.exhaustNote
 import org.junit.Assert.assertEquals
@@ -157,6 +158,51 @@ class EngineToneTest {
             assertEquals(EngineMotion.cycle(10f + offsets[index]), cycle, 0.01f)
         }
         assertEquals(8, EngineMotion.flameCycles(0f, 8, 2).size)
+    }
+
+
+    @Test
+    fun engineFamiliesProduceDistinctSynthParams() {
+        val rpm = 6000.0
+        val pistonFour = EngineTone.firingHz(EngineFamily.PISTON, 4, rpm)
+        val rotaryTwo = EngineTone.firingHz(EngineFamily.ROTARY, 2, rpm)
+        val rotaryOne = EngineTone.firingHz(EngineFamily.ROTARY, 1, rpm)
+        val rotaryFour = EngineTone.firingHz(EngineFamily.ROTARY, 4, rpm)
+        val pistonEight = EngineTone.firingHz(EngineFamily.PISTON, 8, rpm)
+        // Rotary fires once per rotor per shaft rev; a 2-rotor at 6k is 200 Hz, an I4 is 200 Hz too —
+        // but a 2-rotor matches an I4's rate while a 1-rotor is half and a 4-rotor is double.
+        assertEquals(200.0, pistonFour, 0.01)
+        assertEquals(200.0, rotaryTwo, 0.01)
+        assertEquals(100.0, rotaryOne, 0.01)
+        assertEquals(400.0, rotaryFour, 0.01)
+        assertEquals(400.0, pistonEight, 0.01)
+        assertTrue(rotaryFour > rotaryTwo)
+        assertTrue(rotaryTwo > rotaryOne)
+
+        val thumper = EngineTone.character(1, displacementCc = 250.0)
+        val i4 = EngineTone.character(4, banks = 1, displacementCc = 2000.0)
+        val v8 = EngineTone.character(8, banks = 2, displacementCc = 5000.0)
+        val rotary1 = EngineTone.character(1, family = EngineFamily.ROTARY, displacementCc = 600.0)
+        val rotary13b = EngineTone.character(2, family = EngineFamily.ROTARY, displacementCc = 1300.0)
+        val rotary26b = EngineTone.character(4, family = EngineFamily.ROTARY, displacementCc = 2600.0)
+        assertTrue("rotary raspier than I4", rotary13b.rasp > i4.rasp)
+        assertTrue("rotary buzzier than V8", rotary13b.buzz > v8.buzz)
+        assertTrue("1R raspier than 26B", rotary1.rasp > rotary26b.rasp)
+        assertTrue("1R lumpier than 26B", rotary1.lump > rotary26b.lump)
+        assertTrue("26B richer sub than 1R", rotary26b.sub > rotary1.sub)
+        assertTrue("thumper lumpier than I4", thumper.lump > i4.lump)
+        assertTrue("small motor higher pitch than big V8", thumper.pitch > v8.pitch)
+        assertTrue(
+            "layouts differ",
+            EngineTone.layoutOf(4, 1) != EngineTone.layoutOf(8, 2) &&
+                EngineTone.layoutOf(2, 1, EngineFamily.ROTARY) == EngineTone.Layout.ROTARY,
+        )
+        val na = EngineTone.airGain(Induction.NA, 1.0)
+        val sc = EngineTone.airGain(Induction.SUPERCHARGER, 1.0)
+        val turbo = EngineTone.airGain(Induction.TURBO, 1.0)
+        assertTrue(sc > na)
+        assertTrue(turbo > na)
+        assertTrue(sc != turbo)
     }
 
     private fun window(voice: EngineVoice, ear: EngineEar, angle: Float, count: Int): Float {

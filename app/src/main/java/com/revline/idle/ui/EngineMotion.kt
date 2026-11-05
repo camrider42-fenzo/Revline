@@ -1,5 +1,6 @@
 package com.revline.idle.ui
 
+import com.revline.idle.model.EngineFamily
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.pow
@@ -125,6 +126,32 @@ object EngineMotion {
     fun rotaryFacePhase(rotorDeg: Float, face: Int): Float {
         val a = ((rotorDeg + face * 120f) % 360f + 360f) % 360f
         return a / 360f
+    }
+
+    /** Crank/eccentric degrees in one firing period: 720 four-stroke, 360 rotary. */
+    fun periodDeg(family: EngineFamily): Float =
+        if (family == EngineFamily.ROTARY) 360f else 720f
+
+    /**
+     * Degrees since each chamber's last fire, for the speaker.
+     * Rotary: one pulse per rotor per eccentric revolution (period 360°).
+     * Piston: reuse the drawing's flame cycle degrees (0 at firing TDC, period 720°).
+     */
+    fun soundFlameCycles(
+        angleDeg: Float,
+        cylinders: Int,
+        banks: Int,
+        family: EngineFamily = EngineFamily.PISTON,
+    ): FloatArray {
+        val n = cylinders.coerceIn(1, 16)
+        if (family == EngineFamily.ROTARY) {
+            val a = ((angleDeg % 360f) + 360f) % 360f
+            return FloatArray(n) { i ->
+                val fireAt = i * (360f / n)
+                ((a - fireAt) % 360f + 360f) % 360f
+            }
+        }
+        return flameCycles(angleDeg, cylinders, banks)
     }
 
 }

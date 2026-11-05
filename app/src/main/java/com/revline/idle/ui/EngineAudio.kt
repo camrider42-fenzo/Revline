@@ -3,6 +3,7 @@ package com.revline.idle.ui
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import com.revline.idle.model.EngineFamily
 import com.revline.idle.model.EngineParams
 import com.revline.idle.model.Induction
 import java.util.concurrent.atomic.AtomicInteger
@@ -15,6 +16,7 @@ class EngineCrank {
     private val angleBits = AtomicInteger(20f.toRawBits())
     private val rpmBits = AtomicInteger(800f.toRawBits())
     private val boreBits = AtomicInteger(86f.toRawBits())
+    private val strokeBits = AtomicInteger(86f.toRawBits())
     private val crBits = AtomicInteger(9.5f.toRawBits())
     private val cylinders = AtomicInteger(4)
     private val banks = AtomicInteger(1)
@@ -22,11 +24,14 @@ class EngineCrank {
     private val running = AtomicInteger(1)
     private val induction = AtomicInteger(Induction.NA.ordinal)
     private val redlineBits = AtomicInteger(7000f.toRawBits())
+    private val idleBits = AtomicInteger(820f.toRawBits())
     private val openBits = AtomicInteger(0)
     private val raspBits = AtomicInteger(0)
     private val barkBits = AtomicInteger(0)
     private val lopeBits = AtomicInteger(0)
     private val limiter = AtomicInteger(0)
+    private val familyOrd = AtomicInteger(EngineFamily.PISTON.ordinal)
+    private val flatFlag = AtomicInteger(0)
 
     var angle: Float
         get() = Float.fromBits(angleBits.get())
@@ -40,6 +45,7 @@ class EngineCrank {
     fun publish(params: EngineParams, rpm: Float, throttle: Float, live: Boolean, limiterOn: Boolean = false) {
         rpmBits.set(rpm.toRawBits())
         boreBits.set(params.boreMm.toFloat().toRawBits())
+        strokeBits.set(params.strokeMm.toFloat().toRawBits())
         crBits.set(params.compressionRatio.toFloat().toRawBits())
         cylinders.set(params.cylinders)
         banks.set(params.banks)
@@ -47,11 +53,15 @@ class EngineCrank {
         running.set(if (live) 1 else 0)
         induction.set(params.induction.ordinal)
         redlineBits.set(params.redlineRpm.toFloat().toRawBits())
+        idleBits.set(params.idleRpm.toFloat().toRawBits())
         openBits.set(params.exhaustNote.open.toFloat().toRawBits())
         raspBits.set(params.exhaustNote.rasp.toFloat().toRawBits())
         barkBits.set(params.exhaustNote.bark.toFloat().toRawBits())
         lopeBits.set(params.exhaustNote.lope.toFloat().toRawBits())
         limiter.set(if (limiterOn) 1 else 0)
+        familyOrd.set(params.family.ordinal)
+        val title = params.blockTitle.lowercase()
+        flatFlag.set(if (params.banks >= 2 && ("boxer" in title || "flat" in title)) 1 else 0)
     }
 
     fun ear(): EngineEar = EngineEar(
@@ -69,6 +79,10 @@ class EngineCrank {
         exhaustBark = Float.fromBits(barkBits.get()).toDouble(),
         exhaustLope = Float.fromBits(lopeBits.get()).toDouble(),
         limiter = limiter.get() == 1,
+        family = EngineFamily.entries[familyOrd.get().coerceIn(0, EngineFamily.entries.lastIndex)],
+        strokeMm = Float.fromBits(strokeBits.get()).toDouble(),
+        idleRpm = Float.fromBits(idleBits.get()).toDouble(),
+        flat = flatFlag.get() == 1,
     )
 }
 
@@ -143,11 +157,12 @@ class EngineAudio(private val crank: EngineCrank) {
             val ear = crank.ear()
             val degPerSec = if (ear.running) ear.rpm.toFloat() * EngineMotion.SOUND_CRANK else 0f
             val step = degPerSec / rate
+            val period = EngineMotion.periodDeg(ear.family)
             for (i in buf.indices) {
                 val sample = voice.sample(ear, audioAngle, rate)
                 buf[i] = (sample * 28000f).toInt().coerceIn(-32767, 32767).toShort()
                 audioAngle += step
-                if (audioAngle >= 720f) audioAngle -= 720f
+                if (audioAngle >= period) audioAngle -= period
             }
             var wrote = 0
             while (wrote < buf.size && !stop) {
