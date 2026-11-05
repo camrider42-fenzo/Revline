@@ -21,6 +21,10 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Assemble and test
+        env:
+          # Shot tests write PNGs here. The defaults are under /workspace, which the runner cannot create.
+          CIRCUIT_GFX_DIR: ${{ github.workspace }}/circuit-gfx
+          DRAG_GFX_DIR: ${{ github.workspace }}/drag-gfx
         run: ./gradlew assembleDebug testDebugUnitTest --stacktrace
       - uses: actions/upload-artifact@v4
         with:
