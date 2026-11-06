@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -29,6 +30,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowLooper
+import java.util.concurrent.TimeUnit
 
 /** Drag and Circuit are separate pages. These tests drive the real RaceScreen. */
 @RunWith(RobolectricTestRunner::class)
@@ -101,8 +103,10 @@ class RacePagesTest {
         rule.onNodeWithText("The lap the car and driver have.", substring = true).assertExists()
         rule.onNodeWithText("PUSH").performSemanticsAction(SemanticsActions.OnClick)
         rule.onNodeWithText("Quicker every lap.", substring = true).assertExists()
-        rule.onNodeWithText("DRAG", substring = false).performSemanticsAction(SemanticsActions.OnClick)
-        rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        // The circuit page has a "CIRCUIT" heading as well as the tab. Wait until
+        // the drag page is up, or the next lookup sees both and fails.
+        openTab("DRAG", "DISTANCE")
+        openTab("CIRCUIT", "Free race.")
         rule.onNodeWithText("Free race.", substring = true).assertExists()
         rule.onNodeWithText("Quicker every lap.", substring = true).assertExists()
         settle()
@@ -119,10 +123,27 @@ class RacePagesTest {
         rule.onNodeWithText("Free race.", substring = true).assertDoesNotExist()
     }
 
+    /**
+     * The tab and the circuit heading share a label. Match the button, then let
+     * the main looper run the frame that actually swaps the page.
+     */
+    private fun openTab(tab: String, arrived: String) {
+        rule.onNode(hasText(tab) and hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
+        flush()
+        rule.waitUntil(5_000) {
+            rule.onAllNodes(hasText(arrived, substring = true)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     /** Finish the main-thread frame before the hierarchy is disposed or put back. */
     private fun settle() {
+        flush()
+    }
+
+    private fun flush() {
         rule.waitForIdle()
-        rule.runOnUiThread { ShadowLooper.idleMainLooper() }
+        rule.runOnUiThread { ShadowLooper.idleMainLooper(100, TimeUnit.MILLISECONDS) }
+        rule.mainClock.advanceTimeByFrame()
         rule.waitForIdle()
     }
 
