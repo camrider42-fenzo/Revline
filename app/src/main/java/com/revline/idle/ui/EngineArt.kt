@@ -991,6 +991,40 @@ private fun DrawScope.drawRotary(
         glowCircle(White, stroke * 0.45f, hc, stroke, filled = true, gain = 0.6f)
     }
 
+    // A single housing sits in the middle of the bay. The corner bracket the
+    // other rotaries use is clear of that housing, so the turbo itself is drawn
+    // on the exhaust side whenever one is fitted.
+    if (rotors == 1 && (params.induction == Induction.TURBO || params.induction == Induction.TWIN_TURBO)) {
+        val housingRight = originX + (R + e)
+        val count = if (params.induction == Induction.TWIN_TURBO) 2 else 1
+        val grown = 1f + 0.16f * (part("turbo") - 1).coerceAtLeast(0)
+        val rad = h * (if (count == 2) 0.045f else 0.062f) * grown
+        for (t in 0 until count) {
+            val tcx = housingRight + rad * 1.45f
+            val tcy = cy - h * 0.06f + t * rad * 2.3f
+            if (tcx + rad > w * 0.98f) continue
+            glowLine(exhaust, Offset(housingRight - e * 0.4f, cy - h * 0.02f), Offset(tcx - rad * 0.2f, tcy), stroke * 0.85f, 0.9f)
+            glowCircle(Cyan, rad, Offset(tcx, tcy), stroke, gain = 1.15f)
+            if (part("overboost") > 0) {
+                glowCircle(Red, rad * (1.28f + 0.06f * part("overboost")), Offset(tcx, tcy), stroke * 0.65f, gain = 0.85f)
+            }
+            for (trail in 2 downTo 0) {
+                val spin = Math.toRadians((-(angle * 7f) - trail * 14f + t * 40f).toDouble())
+                val gain = if (trail == 0) 1.15f else 0.28f
+                val blade = if (trail == 0) White else Cyan
+                for (k in 0 until 4) {
+                    val a = spin + k * Math.PI / 2.0
+                    glowLine(
+                        blade,
+                        Offset(tcx, tcy),
+                        Offset(tcx + (cos(a) * rad * 0.78f).toFloat(), tcy + (sin(a) * rad * 0.78f).toFloat()),
+                        stroke * 0.7f,
+                        gain,
+                    )
+                }
+            }
+        }
+    }
     if (params.induction != Induction.NA) {
         val tx = w * 0.08f
         val ty = h * 0.12f
