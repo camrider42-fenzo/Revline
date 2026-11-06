@@ -22,8 +22,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The single-rotor bay must show a turbo on the housing when one is fitted.
- * The corner bracket shared with the other rotaries sits clear of that housing.
+ * A fitted turbo is drawn on the housing. The old corner brackets and the
+ * loose bottom dash are not part of the engine.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -40,6 +40,32 @@ class RotaryTurboArtTest {
         assertTrue("no turbo ink beside a bare single rotor ($na)", na < 40)
         assertTrue("turbo ink beside the housing $turbo vs bare $na", turbo > na + 400)
     }
+
+    @Test
+    fun strayCornerMarksAreNotDrawnOnARotary() {
+        val single = render(state(mapOf("turbo" to 1)))
+        val bare = render(state(emptyMap()))
+        val twin = render(engine(Block.ROTARY, mapOf("turbo" to 1)))
+        val twinBare = render(engine(Block.ROTARY, emptyMap()))
+        for ((name, bmp) in listOf("1R turbo" to single, "1R bare" to bare, "13B turbo" to twin, "13B bare" to twinBare)) {
+            assertTrue("$name top-left ${lit(bmp, 0.04f, 0.04f, 0.30f, 0.28f)}", lit(bmp, 0.04f, 0.04f, 0.30f, 0.28f) < 40)
+            assertTrue("$name top-right ${lit(bmp, 0.86f, 0.10f, 0.98f, 0.30f)}", lit(bmp, 0.86f, 0.10f, 0.98f, 0.30f) < 40)
+            assertTrue("$name bottom-left ${lit(bmp, 0.04f, 0.82f, 0.24f, 0.96f)}", lit(bmp, 0.04f, 0.82f, 0.24f, 0.96f) < 40)
+        }
+        val onEngine = lit(twin, 0.76f, 0.35f, 0.92f, 0.62f) - lit(twinBare, 0.76f, 0.35f, 0.92f, 0.62f)
+        assertTrue("13B turbo stays on the housing ($onEngine)", onEngine > 300)
+        val pistonBare = render(engine(Block.THUMPER, emptyMap()))
+        val pistonTurbo = render(engine(Block.THUMPER, mapOf("turbo" to 1)))
+        val piston = lit(pistonTurbo, 0.55f, 0.15f, 0.85f, 0.55f) - lit(pistonBare, 0.55f, 0.15f, 0.85f, 0.55f)
+        assertTrue("piston turbo still draws ($piston)", piston > 300)
+    }
+
+    private fun engine(block: Block, upgrades: Map<String, Int>) = GameState(
+        prestiges = block.ladderStep,
+        blockId = block.name,
+        upgrades = upgrades,
+        researched = setOf("exhaust_fab", "turbo_node"),
+    )
 
     private fun state(upgrades: Map<String, Int>) = GameState(
         prestiges = Block.ROTARY_1R.ladderStep,
@@ -60,10 +86,14 @@ class RotaryTurboArtTest {
     }
 
     /** Exhaust side of a centered single housing on a 1000×480 bench. Empty unless a turbo is drawn there. */
-    private fun litBesideHousing(bmp: Bitmap): Int {
+    private fun litBesideHousing(bmp: Bitmap): Int = lit(bmp, 0.64f, 0.32f, 0.78f, 0.65f)
+
+    private fun lit(bmp: Bitmap, x0: Float, y0: Float, x1: Float, y1: Float): Int {
         var n = 0
-        for (y in (480 * 0.32f).toInt() until (480 * 0.65f).toInt()) {
-            for (x in (1000 * 0.64f).toInt() until (1000 * 0.78f).toInt()) {
+        val w = bmp.width
+        val h = bmp.height
+        for (y in (h * y0).toInt() until (h * y1).toInt()) {
+            for (x in (w * x0).toInt() until (w * x1).toInt()) {
                 val p = bmp.getPixel(x, y)
                 val r = (p shr 16) and 0xFF
                 val g = (p shr 8) and 0xFF
