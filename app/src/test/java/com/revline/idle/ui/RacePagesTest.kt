@@ -28,6 +28,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowLooper
 
 /** Drag and Circuit are separate pages. These tests drive the real RaceScreen. */
 @RunWith(RobolectricTestRunner::class)
@@ -83,6 +84,13 @@ class RacePagesTest {
         rule.onNodeWithText("A duct lets heat out", substring = true).assertIsDisplayed()
     }
 
+    /**
+     * State restoration disposes the composition, and the last step removes the
+     * screen from the window. The class graphics mode draws on a render thread,
+     * and that thread was still inside the view hierarchy when the window went
+     * away. This test does not read pixels, so it stays on the main looper.
+     */
+    @GraphicsMode(GraphicsMode.Mode.LEGACY)
     @Test fun circuitPickSurvivesTheOtherPageAndRotation() {
         val tester = StateRestorationTester(rule)
         val shown = androidx.compose.runtime.mutableStateOf(true)
@@ -97,16 +105,25 @@ class RacePagesTest {
         rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
         rule.onNodeWithText("Free race.", substring = true).assertExists()
         rule.onNodeWithText("Quicker every lap.", substring = true).assertExists()
+        settle()
         tester.emulateSavedInstanceStateRestore()
+        settle()
         rule.onNodeWithText("Free race.", substring = true).assertExists()
         rule.onNodeWithText("Quicker every lap.", substring = true).assertExists()
         rule.onNodeWithText("DISTANCE").assertDoesNotExist()
-        rule.runOnIdle { shown.value = false }
-        rule.waitForIdle()
-        rule.runOnIdle { shown.value = true }
-        rule.waitForIdle()
+        rule.runOnUiThread { shown.value = false }
+        settle()
+        rule.runOnUiThread { shown.value = true }
+        settle()
         rule.onNodeWithText("DISTANCE").assertIsDisplayed()
         rule.onNodeWithText("Free race.", substring = true).assertDoesNotExist()
+    }
+
+    /** Finish the main-thread frame before the hierarchy is disposed or put back. */
+    private fun settle() {
+        rule.waitForIdle()
+        rule.runOnUiThread { ShadowLooper.idleMainLooper() }
+        rule.waitForIdle()
     }
 
     @Test fun offscreenResultOpensOneReplayAndMovesTheVenueOnce() {
