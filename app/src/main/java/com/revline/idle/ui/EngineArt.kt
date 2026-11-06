@@ -114,7 +114,7 @@ private fun DrawScope.drawEngine(
     throttle: Float,
 ) {
     if (params.family == EngineFamily.ROTARY) {
-        drawRotary(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
+        drawRotary(params, parts, stroke, angle, clock, spinRpm, exhaust, exhaustGain, throttle)
         return
     }
     run {
@@ -863,7 +863,6 @@ private fun DrawScope.drawRotary(
     angle: Float,
     clock: Float,
     spinRpm: Float,
-    hose: Color,
     exhaust: Color,
     exhaustGain: Float,
     throttle: Float,
@@ -991,11 +990,12 @@ private fun DrawScope.drawRotary(
         glowCircle(White, stroke * 0.45f, hc, stroke, filled = true, gain = 0.6f)
     }
 
-    // A single housing sits in the middle of the bay. The corner bracket the
-    // other rotaries use is clear of that housing, so the turbo itself is drawn
-    // on the exhaust side whenever one is fitted.
-    if (rotors == 1 && (params.induction == Induction.TURBO || params.induction == Induction.TWIN_TURBO)) {
-        val housingRight = originX + (R + e)
+    // Forced induction sits on the housing. A corner bracket and a loose coolant
+    // stroke used to float in the bay with no part attached to them.
+    val lastCx = originX + (rotors - 1) * (housingSpan + gap)
+    val housingRight = lastCx + (R + e)
+    val housingLeft = originX - (R + e)
+    if (params.induction == Induction.TURBO || params.induction == Induction.TWIN_TURBO) {
         val count = if (params.induction == Induction.TWIN_TURBO) 2 else 1
         val grown = 1f + 0.16f * (part("turbo") - 1).coerceAtLeast(0)
         val rad = h * (if (count == 2) 0.045f else 0.062f) * grown
@@ -1004,6 +1004,14 @@ private fun DrawScope.drawRotary(
             val tcy = cy - h * 0.06f + t * rad * 2.3f
             if (tcx + rad > w * 0.98f) continue
             glowLine(exhaust, Offset(housingRight - e * 0.4f, cy - h * 0.02f), Offset(tcx - rad * 0.2f, tcy), stroke * 0.85f, 0.9f)
+            if (t == 0 && part("intercooler") > 0) {
+                val mid = Offset((housingRight + tcx) * 0.5f, (cy + tcy) * 0.5f - h * 0.03f)
+                val box = h * (0.035f + 0.008f * part("intercooler"))
+                glowLine(Cyan, Offset(mid.x - box, mid.y - box * 0.6f), Offset(mid.x + box, mid.y - box * 0.6f), stroke * 0.7f, 0.9f)
+                glowLine(Cyan, Offset(mid.x + box, mid.y - box * 0.6f), Offset(mid.x + box, mid.y + box * 0.6f), stroke * 0.7f, 0.9f)
+                glowLine(Cyan, Offset(mid.x + box, mid.y + box * 0.6f), Offset(mid.x - box, mid.y + box * 0.6f), stroke * 0.7f, 0.9f)
+                glowLine(Cyan, Offset(mid.x - box, mid.y + box * 0.6f), Offset(mid.x - box, mid.y - box * 0.6f), stroke * 0.7f, 0.9f)
+            }
             glowCircle(Cyan, rad, Offset(tcx, tcy), stroke, gain = 1.15f)
             if (part("overboost") > 0) {
                 glowCircle(Red, rad * (1.28f + 0.06f * part("overboost")), Offset(tcx, tcy), stroke * 0.65f, gain = 0.85f)
@@ -1024,20 +1032,18 @@ private fun DrawScope.drawRotary(
                 }
             }
         }
+    } else if (params.induction == Induction.SUPERCHARGER) {
+        val boxW = h * 0.11f
+        val boxH = h * 0.07f
+        val right = housingLeft - h * 0.015f
+        val left = (right - boxW).coerceAtLeast(stroke)
+        val top = cy - boxH
+        val bottom = cy + boxH * 0.15f
+        glowLine(Lime, Offset(left, top), Offset(right, top), stroke, 1f)
+        glowLine(Lime, Offset(right, top), Offset(right, bottom), stroke, 1f)
+        glowLine(Lime, Offset(right, bottom), Offset(left, bottom), stroke, 1f)
+        glowLine(Lime, Offset(left, bottom), Offset(left, top), stroke, 1f)
+        glowLine(Lime, Offset(right, cy), Offset(housingLeft + e, cy), stroke * 0.8f, 0.9f)
     }
-    if (params.induction != Induction.NA) {
-        val tx = w * 0.08f
-        val ty = h * 0.12f
-        glowLine(Cyan, Offset(tx, ty), Offset(tx + w * 0.12f, ty), stroke, 0.8f)
-        glowLine(Cyan, Offset(tx, ty), Offset(tx, ty + h * 0.08f), stroke, 0.8f)
-        if (part("intercooler") > 0) {
-            glowLine(Cyan, Offset(tx + w * 0.14f, ty), Offset(tx + w * 0.26f, ty + h * 0.06f), stroke, 0.7f)
-        }
-    }
-    if (!params.airCooled) {
-        glowLine(hose, Offset(w * 0.78f, h * 0.18f), Offset(w * 0.92f, h * 0.18f), stroke, 0.75f)
-        glowLine(hose, Offset(w * 0.92f, h * 0.18f), Offset(w * 0.92f, h * 0.42f), stroke, 0.75f)
-    }
-    glowLine(White, Offset(w * 0.08f, h * 0.88f), Offset(w * 0.08f + rotors * w * 0.04f, h * 0.88f), stroke * 0.6f, 0.4f)
 }
 
