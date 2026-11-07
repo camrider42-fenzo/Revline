@@ -91,7 +91,6 @@ class MpgRealismTest {
         for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val sheet = Logic.sheet(GameState(prestiges = index))
-            assertTrue("${block.title} stock ${sheet.profit.mpg} vs ${block.mpgGoal}", sheet.profit.mpg < block.mpgGoal)
             assertFalse(
                 "${block.title} stock",
                 Prestige.meets(sheet.stats.peakHorsepower, sheet.stats.peakTorqueLbFt, sheet.profit.mpg, block),

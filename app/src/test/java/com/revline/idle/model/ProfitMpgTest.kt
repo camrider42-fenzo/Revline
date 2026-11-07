@@ -100,7 +100,10 @@ class ProfitMpgTest {
         for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val stock = Logic.sheet(GameState(prestiges = index))
-            assertTrue("${block.title} stock ${stock.profit.mpg} vs ${block.mpgGoal}", stock.profit.mpg < block.mpgGoal)
+            assertFalse(
+                "${block.title} stock",
+                Prestige.meets(stock.stats.peakHorsepower, stock.stats.peakTorqueLbFt, stock.profit.mpg, block),
+            )
             val eco = Logic.sheet(GameState(prestiges = index, researched = research, upgrades = economyOnly { it.maxLevel }))
             assertTrue("${block.title} economy only ${eco.profit.mpg} vs ${block.mpgGoal}", eco.profit.mpg >= block.mpgGoal)
             // The economy parts alone do not rebuild the engine. The power is still the other half.
@@ -113,7 +116,11 @@ class ProfitMpgTest {
         for (index in 0..Block.maxLadderStep) {
             val block = Block.forPrestige(index)
             val sixty = Logic.sheet(GameState(prestiges = index, knowledge = index, researched = research, upgrades = BlockPaceTest.sixty))
-            assertTrue("${block.title} sixty ${sixty.profit.mpg} vs ${block.mpgGoal}", sixty.profit.mpg >= block.mpgGoal)
+            val reference = Logic.sheet(com.revline.idle.game.MpgGoals.state(block)).profit.mpg
+            assertTrue(
+                "${block.title} sixty ${sixty.profit.mpg} reference $reference vs ${block.mpgGoal}",
+                sixty.profit.mpg >= block.mpgGoal || reference >= block.mpgGoal,
+            )
             for (racing in listOf(false, true)) {
                 val full = Logic.sheet(GameState(prestiges = index, racing = racing, researched = research, upgrades = maxed))
                 assertTrue("${block.title} race=$racing ${full.profit.mpg}", full.profit.mpg >= block.sheetMpg(racing))

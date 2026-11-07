@@ -1,5 +1,6 @@
 package com.revline.idle.model
 
+import com.revline.idle.game.MpgGoals
 import kotlin.math.pow
 
 /**
@@ -27,13 +28,6 @@ enum class Block(
     val stockPay: Double,
     val hpGoal: Double,
     val torqueGoal: Double,
-    /**
-     * mpg the engine must show at its best-paying pedal, looking no higher than
-     * [com.revline.idle.game.Logic.GATE_CAP]. Not cruise. A build that keeps the
-     * power parts clears it. Stock misses it, except where boost at that pedal
-     * drinks more than the stock engine does.
-     */
-    val mpgGoal: Double,
     val family: EngineFamily = EngineFamily.PISTON,
     /**
      * Calibrated long-block mass (kg). Piston bases match pre-1.92
@@ -46,23 +40,32 @@ enum class Block(
      */
     val ladderStep: Int,
 ) {
-    MOPED("50cc moped single", 1, 1, 39.0, 41.4, 8.2, 6800.0, 1700.0, 0.78, 0.70, 140.0, 14.0, 0.45, true, 0.24, 56.0, 222.0, 104.7, baseEngineKg = 37.1, ladderStep = 0),
-    THUMPER("250cc thumper", 1, 1, 74.0, 58.0, 9.0, 7600.0, 1300.0, 0.86, 0.64, 280.0, 16.0, 0.70, true, 3.01, 60.0, 134.0, 74.0, baseEngineKg = 45.5, ladderStep = 1),
-    TWIN("500cc parallel twin", 2, 1, 72.0, 61.5, 10.2, 8200.0, 1200.0, 0.90, 0.62, 420.0, 18.0, 0.90, false, 5.84, 105.0, 145.0, 55.0, baseEngineKg = 56.0, ladderStep = 2),
-    TRIPLE("1.0L inline-three", 3, 1, 76.0, 73.5, 10.8, 7800.0, 950.0, 0.91, 0.58, 560.0, 18.0, 1.05, false, 8.26, 150.0, 179.0, 36.0, baseEngineKg = 77.0, ladderStep = 3),
-    INLINE_FOUR("2.0L inline-four", 4, 1, 86.0, 86.0, 9.5, 6500.0, 820.0, 0.93, 0.58, 760.0, 16.0, 1.25, false, 12.77, 240.0, 245.0, 22.5, baseEngineKg = 118.9, ladderStep = 4),
-    V6("3.5L V6", 6, 2, 94.0, 83.0, 10.2, 7000.0, 750.0, 0.98, 0.56, 2000.0, 18.0, 2.05, false, 34.55, 420.0, 350.0, 12.0, baseEngineKg = 180.2, ladderStep = 5),
-    V8("5.0L V8", 8, 2, 93.0, 92.0, 10.2, 7000.0, 700.0, 1.02, 0.56, 2800.0, 20.0, 3.10, false, 39.94, 580.0, 480.0, 8.7, baseEngineKg = 245.0, ladderStep = 6),
-    V12("6.5L V12", 12, 2, 89.0, 87.0, 10.6, 8000.0, 900.0, 1.06, 0.62, 3800.0, 22.0, 4.20, false, 50.77, 800.0, 580.0, 6.4, baseEngineKg = 307.8, ladderStep = 7),
+    MOPED("50cc moped single", 1, 1, 39.0, 41.4, 8.2, 6800.0, 1700.0, 0.78, 0.70, 140.0, 14.0, 0.45, true, 0.24, 56.0, 222.0, baseEngineKg = 37.1, ladderStep = 0),
+    THUMPER("250cc thumper", 1, 1, 74.0, 58.0, 9.0, 7600.0, 1300.0, 0.86, 0.64, 280.0, 16.0, 0.70, true, 3.01, 60.0, 134.0, baseEngineKg = 45.5, ladderStep = 1),
+    TWIN("500cc parallel twin", 2, 1, 72.0, 61.5, 10.2, 8200.0, 1200.0, 0.90, 0.62, 420.0, 18.0, 0.90, false, 5.84, 105.0, 145.0, baseEngineKg = 56.0, ladderStep = 2),
+    TRIPLE("1.0L inline-three", 3, 1, 76.0, 73.5, 10.8, 7800.0, 950.0, 0.91, 0.58, 560.0, 18.0, 1.05, false, 8.26, 150.0, 179.0, baseEngineKg = 77.0, ladderStep = 3),
+    INLINE_FOUR("2.0L inline-four", 4, 1, 86.0, 86.0, 9.5, 6500.0, 820.0, 0.93, 0.58, 760.0, 16.0, 1.25, false, 12.77, 240.0, 245.0, baseEngineKg = 118.9, ladderStep = 4),
+    V6("3.5L V6", 6, 2, 94.0, 83.0, 10.2, 7000.0, 750.0, 0.98, 0.56, 2000.0, 18.0, 2.05, false, 34.55, 420.0, 350.0, baseEngineKg = 180.2, ladderStep = 5),
+    V8("5.0L V8", 8, 2, 93.0, 92.0, 10.2, 7000.0, 700.0, 1.02, 0.56, 2800.0, 20.0, 3.10, false, 39.94, 580.0, 480.0, baseEngineKg = 245.0, ladderStep = 6),
+    V12("6.5L V12", 12, 2, 89.0, 87.0, 10.6, 8000.0, 900.0, 1.06, 0.62, 3800.0, 22.0, 4.20, false, 50.77, 800.0, 580.0, baseEngineKg = 307.8, ladderStep = 7),
     // Appended after V12 — prestige ordinals for earlier blocks stay put.
     // Goals lean rpm/hp and apex-seal durability, not stump-pulling torque. Thirsty mpg.
     // ladderStep follows closest stock piston power (not rotor count).
-    ROTARY("1.3L 13B rotary", 2, 1, 80.0, 130.11, 9.7, 9000.0, 950.0, 1.08, 0.78, 2400.0, 18.0, 2.60, false, 55.0, 245.0, 170.0, 21.0, family = EngineFamily.ROTARY, baseEngineKg = 63.0, ladderStep = 4),
-    ROTARY_1R("0.6L single-rotor", 1, 1, 80.0, 130.11, 8.5, 7200.0, 1200.0, 0.55, 0.68, 280.0, 14.0, 0.38, false, 2.80, 58.0, 50.0, 57.0, family = EngineFamily.ROTARY, baseEngineKg = 32.0, ladderStep = 1),
-    ROTARY_RENESIS("1.3L Renesis 13B-MSP", 2, 1, 80.0, 130.11, 10.0, 8500.0, 900.0, 1.05, 0.72, 1600.0, 18.0, 1.40, false, 13.5, 240.0, 180.0, 22.0, family = EngineFamily.ROTARY, baseEngineKg = 68.0, ladderStep = 4),
-    ROTARY_20B("2.0L 20B three-rotor", 3, 1, 80.0, 130.11, 9.7, 8500.0, 900.0, 1.06, 0.76, 2600.0, 19.0, 2.90, false, 40.0, 580.0, 420.0, 16.0, family = EngineFamily.ROTARY, baseEngineKg = 92.0, ladderStep = 5),
-    ROTARY_26B("2.6L 26B four-rotor", 4, 1, 80.0, 130.11, 9.7, 8800.0, 950.0, 1.07, 0.76, 3400.0, 20.0, 3.80, false, 51.0, 460.0, 300.0, 14.0, family = EngineFamily.ROTARY, baseEngineKg = 118.0, ladderStep = 5),
+    ROTARY("1.3L 13B rotary", 2, 1, 80.0, 130.11, 9.7, 9000.0, 950.0, 1.08, 0.78, 2400.0, 18.0, 2.60, false, 55.0, 245.0, 170.0, family = EngineFamily.ROTARY, baseEngineKg = 63.0, ladderStep = 4),
+    ROTARY_1R("0.6L single-rotor", 1, 1, 80.0, 130.11, 8.5, 7200.0, 1200.0, 0.55, 0.68, 280.0, 14.0, 0.38, false, 2.80, 58.0, 50.0, family = EngineFamily.ROTARY, baseEngineKg = 32.0, ladderStep = 1),
+    ROTARY_RENESIS("1.3L Renesis 13B-MSP", 2, 1, 80.0, 130.11, 10.0, 8500.0, 900.0, 1.05, 0.72, 1600.0, 18.0, 1.40, false, 13.5, 240.0, 180.0, family = EngineFamily.ROTARY, baseEngineKg = 68.0, ladderStep = 4),
+    ROTARY_20B("2.0L 20B three-rotor", 3, 1, 80.0, 130.11, 9.7, 8500.0, 900.0, 1.06, 0.76, 2600.0, 19.0, 2.90, false, 40.0, 580.0, 420.0, family = EngineFamily.ROTARY, baseEngineKg = 92.0, ladderStep = 5),
+    ROTARY_26B("2.6L 26B four-rotor", 4, 1, 80.0, 130.11, 9.7, 8800.0, 950.0, 1.07, 0.76, 3400.0, 20.0, 3.80, false, 51.0, 460.0, 300.0, family = EngineFamily.ROTARY, baseEngineKg = 118.0, ladderStep = 5),
     ;
+
+    /**
+     * mpg the engine must show at its best-paying pedal, looking no higher than
+     * [com.revline.idle.game.Logic.GATE_CAP]. Not cruise. Comes from [MpgGoals]:
+     * the same fraction of a mid power build that the horsepower and torque
+     * goals ask of that build.
+     */
+    val mpgGoal: Double
+        get() = MpgGoals.forEngine(this)
 
     /**
      * Highest tach the stroke (or eccentric) will live with. The ladder climbs

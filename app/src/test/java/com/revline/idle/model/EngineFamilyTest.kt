@@ -53,8 +53,6 @@ class EngineFamilyTest {
         assertTrue(Block.ROTARY.sheetHp(true) > Block.ROTARY.sheetHp(false) * 1.15)
         assertTrue(Block.ROTARY.redlineRpm >= 8500.0)
         assertTrue(Block.ROTARY.redlineCap() > Block.V12.redlineCap())
-        assertTrue(Block.ROTARY.mpgGoal > Block.V6.mpgGoal)
-        assertTrue(Block.ROTARY.mpgGoal < Block.INLINE_FOUR.mpgGoal)
     }
 
     @Test

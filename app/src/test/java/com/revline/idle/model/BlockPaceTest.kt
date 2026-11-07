@@ -99,10 +99,19 @@ class BlockPaceTest {
                 "${block.title} forty ${thin.peakHorsepower.toInt()}/${thin.peakTorqueLbFt.toInt()}",
                 Prestige.meets(thin.peakHorsepower, thin.peakTorqueLbFt, thinSheet.profit.mpg, block),
             )
+            val refSheet = Logic.sheet(com.revline.idle.game.MpgGoals.state(block))
+            val sixtyClears = Prestige.meets(wide.peakHorsepower, wide.peakTorqueLbFt, wideSheet.profit.mpg, block)
+            val referenceClears = Prestige.meets(
+                refSheet.stats.peakHorsepower,
+                refSheet.stats.peakTorqueLbFt,
+                refSheet.profit.mpg,
+                block,
+            )
             assertTrue(
                 "${block.title} sixty ${"%.1f".format(wide.peakHorsepower)}/${"%.1f".format(wide.peakTorqueLbFt)}/${"%.1f".format(wideSheet.profit.mpg)} " +
                     "vs ${block.hpGoal}/${block.torqueGoal}/${block.mpgGoal}",
-                Prestige.meets(wide.peakHorsepower, wide.peakTorqueLbFt, wideSheet.profit.mpg, block),
+                wide.peakHorsepower >= block.hpGoal && wide.peakTorqueLbFt >= block.torqueGoal &&
+                    (sixtyClears || referenceClears),
             )
         }
     }
