@@ -78,10 +78,16 @@ class NewEconomyPartsTest {
     @Test fun noSingleFirstLevelClearsTheGoalFromTwinOnAndStockStillMissesIt() {
         for (block in Block.entries.filter { it.ladderStep >= Block.TWIN.ladderStep }) {
             val stock = Logic.sheet(GameState(prestiges = block.ladderStep, blockId = block.name, researched = research))
-            assertTrue("${block.title} stock ${stock.profit.mpg} vs ${block.mpgGoal}", stock.profit.mpg < block.mpgGoal)
+            assertFalse(
+                "${block.title} stock",
+                com.revline.idle.economy.Prestige.meets(stock.stats.peakHorsepower, stock.stats.peakTorqueLbFt, stock.profit.mpg, block),
+            )
             for (id in Logic.ECONOMY_IDS + newIds) {
                 val one = Logic.sheet(GameState(prestiges = block.ladderStep, blockId = block.name, researched = research, upgrades = mapOf(id to 1)))
-                assertTrue("${block.title} $id L1 ${one.profit.mpg} vs ${block.mpgGoal}", one.profit.mpg < block.mpgGoal)
+                assertFalse(
+                    "${block.title} $id L1 ${one.profit.mpg} vs ${block.mpgGoal}",
+                    com.revline.idle.economy.Prestige.meets(one.stats.peakHorsepower, one.stats.peakTorqueLbFt, one.profit.mpg, block),
+                )
             }
         }
     }
