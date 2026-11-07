@@ -29,8 +29,9 @@ enum class Block(
     val torqueGoal: Double,
     /**
      * mpg the engine must show at its best-paying pedal, looking no higher than
-     * [com.revline.idle.game.Logic.GATE_CAP]. Not cruise. Stock misses it on every engine,
-     * the economy parts are what lift it, and a build with the parts and the power clears it.
+     * [com.revline.idle.game.Logic.GATE_CAP]. Not cruise. A build that keeps the
+     * power parts clears it. Stock misses it, except where boost at that pedal
+     * drinks more than the stock engine does.
      */
     val mpgGoal: Double,
     val family: EngineFamily = EngineFamily.PISTON,
@@ -57,7 +58,7 @@ enum class Block(
     // Goals lean rpm/hp and apex-seal durability, not stump-pulling torque. Thirsty mpg.
     // ladderStep follows closest stock piston power (not rotor count).
     ROTARY("1.3L 13B rotary", 2, 1, 80.0, 130.11, 9.7, 9000.0, 950.0, 1.08, 0.78, 2400.0, 18.0, 2.60, false, 55.0, 245.0, 170.0, 21.0, family = EngineFamily.ROTARY, baseEngineKg = 63.0, ladderStep = 4),
-    ROTARY_1R("0.6L single-rotor", 1, 1, 80.0, 130.11, 8.5, 7200.0, 1200.0, 0.55, 0.68, 280.0, 14.0, 0.38, false, 2.80, 58.0, 50.0, 64.5, family = EngineFamily.ROTARY, baseEngineKg = 32.0, ladderStep = 1),
+    ROTARY_1R("0.6L single-rotor", 1, 1, 80.0, 130.11, 8.5, 7200.0, 1200.0, 0.55, 0.68, 280.0, 14.0, 0.38, false, 2.80, 58.0, 50.0, 57.0, family = EngineFamily.ROTARY, baseEngineKg = 32.0, ladderStep = 1),
     ROTARY_RENESIS("1.3L Renesis 13B-MSP", 2, 1, 80.0, 130.11, 10.0, 8500.0, 900.0, 1.05, 0.72, 1600.0, 18.0, 1.40, false, 13.5, 240.0, 180.0, 22.0, family = EngineFamily.ROTARY, baseEngineKg = 68.0, ladderStep = 4),
     ROTARY_20B("2.0L 20B three-rotor", 3, 1, 80.0, 130.11, 9.7, 8500.0, 900.0, 1.06, 0.76, 2600.0, 19.0, 2.90, false, 40.0, 580.0, 420.0, 16.0, family = EngineFamily.ROTARY, baseEngineKg = 92.0, ladderStep = 5),
     ROTARY_26B("2.6L 26B four-rotor", 4, 1, 80.0, 130.11, 9.7, 8800.0, 950.0, 1.07, 0.76, 3400.0, 20.0, 3.80, false, 51.0, 460.0, 300.0, 14.0, family = EngineFamily.ROTARY, baseEngineKg = 118.0, ladderStep = 5),
