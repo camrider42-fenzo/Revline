@@ -52,8 +52,12 @@ class RotaryTurboArtTest {
             assertTrue("$name top-right ${lit(bmp, 0.86f, 0.10f, 0.98f, 0.30f)}", lit(bmp, 0.86f, 0.10f, 0.98f, 0.30f) < 40)
             assertTrue("$name bottom-left ${lit(bmp, 0.04f, 0.82f, 0.24f, 0.96f)}", lit(bmp, 0.04f, 0.82f, 0.24f, 0.96f) < 40)
         }
-        val onEngine = lit(twin, 0.76f, 0.35f, 0.92f, 0.62f) - lit(twinBare, 0.76f, 0.35f, 0.92f, 0.62f)
-        assertTrue("13B turbo stays on the housing ($onEngine)", onEngine > 300)
+        val near = RotorStack.centers(2, 1000f, 480f).first()
+        val beside = (near.x + 480f * 0.24f) / 1000f
+        val mid = near.y / 480f
+        val onEngine = lit(twin, beside, mid - 0.16f, beside + 0.16f, mid + 0.16f) -
+            lit(twinBare, beside, mid - 0.16f, beside + 0.16f, mid + 0.16f)
+        assertTrue("13B turbo stays on the near housing ($onEngine)", onEngine > 300)
         val pistonBare = render(engine(Block.THUMPER, emptyMap()))
         val pistonTurbo = render(engine(Block.THUMPER, mapOf("turbo" to 1)))
         val piston = lit(pistonTurbo, 0.55f, 0.15f, 0.85f, 0.55f) - lit(pistonBare, 0.55f, 0.15f, 0.85f, 0.55f)

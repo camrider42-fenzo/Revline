@@ -11,8 +11,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.semantics.contentDescription
@@ -876,7 +878,7 @@ private fun DrawScope.drawVee(
 }
 
 
-/** Side-view Wankel: epitrochoid housing, triangular rotor, eccentric, glowing chambers. */
+/** Side-view Wankel. Extra rotors stack up and back, the near one fully lit. */
 private fun DrawScope.drawRotary(
     params: EngineParams,
     parts: Map<String, Int>,
@@ -897,21 +899,37 @@ private fun DrawScope.drawRotary(
     val e = h * 0.030f
     val R = e * WankelGeometry.DEFAULT_R_OVER_E.toFloat()
     val housingSpan = (R + e) * 2.15f
-    val gap = w * 0.018f
-    val total = rotors * housingSpan + (rotors - 1) * gap
-    val originX = (w - total) * 0.5f + housingSpan * 0.5f
-    val cy = h * 0.54f
     val wall = Offset((R + e) * 0.09f, (R + e) * 0.05f)
-    groundPool(
-        Offset(originX + (total - housingSpan) / 2f, cy + (R + e) * 0.92f),
-        total * 0.32f,
-        h * 0.026f,
-    )
+    val centers = RotorStack.centers(rotors, w, h)
+    val near = centers.first()
+    val far = centers.last()
+    if (rotors == 1) {
+        groundPool(Offset(near.x, near.y + (R + e) * 0.92f), housingSpan * 0.32f, h * 0.026f)
+        glowLine(
+            White,
+            Offset(near.x - housingSpan * 0.45f, near.y),
+            Offset(near.x + housingSpan * 0.45f, near.y),
+            stroke * 0.7f,
+            0.45f,
+        )
+    } else {
+        val span = far - near
+        groundPool(
+            Offset((near.x + far.x) / 2f, near.y + (R + e) * 0.90f),
+            (R + e) * (0.72f + 0.18f * (rotors - 1)),
+            h * 0.028f,
+        )
+        glowLine(White, near - span * 0.16f, far + span * 0.16f, stroke * 0.7f, 0.4f)
+    }
 
-    glowLine(White, Offset(originX - housingSpan * 0.45f, cy), Offset(originX + total - housingSpan * 0.55f, cy), stroke * 0.7f, 0.45f)
-
-    for (i in 0 until rotors) {
-        val cx = originX + i * (housingSpan + gap)
+    for (i in rotors - 1 downTo 0) {
+        val cx = centers[i].x
+        val cy = centers[i].y
+        val depthGain = RotorStack.gain(i, rotors)
+        val faded = depthGain < 0.99f
+        if (faded) {
+            drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint().apply { alpha = depthGain })
+        }
         val shaftDeg = angle + i * (360f / rotors)
         val shaftRad = Math.toRadians(shaftDeg.toDouble())
         val rotorDeg = EngineMotion.rotorAngle(shaftDeg, 0, 1)
@@ -1021,13 +1039,14 @@ private fun DrawScope.drawRotary(
         glowLine(Cyan, Offset(rc.x - e * 0.55f, rc.y), Offset(rc.x + e * 0.55f, rc.y), stroke * 0.7f, 0.7f)
         glowLine(Cyan, Offset(rc.x, rc.y - e * 0.55f), Offset(rc.x, rc.y + e * 0.55f), stroke * 0.7f, 0.7f)
         glowCircle(White, stroke * 0.45f, hc, stroke, filled = true, gain = 0.6f)
+        if (faded) drawContext.canvas.restore()
     }
 
-    // Forced induction sits on the housing. A corner bracket and a loose coolant
-    // stroke used to float in the bay with no part attached to them.
-    val lastCx = originX + (rotors - 1) * (housingSpan + gap)
-    val housingRight = lastCx + (R + e)
-    val housingLeft = originX - (R + e)
+    // The turbo hangs on the near housing. The blower sits on the far one's intake side.
+    // A corner bracket and a loose coolant stroke used to float in the bay with no part attached to them.
+    val housingRight = near.x + (R + e)
+    val housingLeft = far.x - (R + e)
+    val mountY = near.y
     if (params.induction == Induction.TURBO || params.induction == Induction.TWIN_TURBO) {
         val count = if (params.induction == Induction.TWIN_TURBO) 2 else 1
         val grown = 1f + 0.16f * (part("turbo") - 1).coerceAtLeast(0)
@@ -1035,11 +1054,11 @@ private fun DrawScope.drawRotary(
         for (t in 0 until count) {
             val drift = EngineDepth.parallax(stroke, clock + t)
             val tcx = housingRight + rad * 1.45f + drift.x
-            val tcy = cy - h * 0.06f + t * rad * 2.3f + drift.y
+            val tcy = mountY - h * 0.06f + t * rad * 2.3f + drift.y
             if (tcx + rad > w * 0.98f) continue
-            glowLine(exhaust, Offset(housingRight - e * 0.4f, cy - h * 0.02f), Offset(tcx - rad * 0.2f, tcy), stroke * 0.85f, 0.9f)
+            glowLine(exhaust, Offset(housingRight - e * 0.4f, mountY - h * 0.02f), Offset(tcx - rad * 0.2f, tcy), stroke * 0.85f, 0.9f)
             if (t == 0 && part("intercooler") > 0) {
-                val mid = Offset((housingRight + tcx) * 0.5f, (cy + tcy) * 0.5f - h * 0.03f)
+                val mid = Offset((housingRight + tcx) * 0.5f, (mountY + tcy) * 0.5f - h * 0.03f)
                 val box = h * (0.035f + 0.008f * part("intercooler"))
                 drawSlab(mid.x - box, mid.y - box * 0.6f, mid.x + box, mid.y + box * 0.6f, EngineDepth.extrusion(box * 2f), Cyan, stroke, front = true)
                 glowLine(Cyan, Offset(mid.x - box, mid.y - box * 0.6f), Offset(mid.x + box, mid.y - box * 0.6f), stroke * 0.7f, 0.9f)
@@ -1073,14 +1092,14 @@ private fun DrawScope.drawRotary(
         val boxH = h * 0.07f
         val right = housingLeft - h * 0.015f
         val left = (right - boxW).coerceAtLeast(stroke)
-        val top = cy - boxH
-        val bottom = cy + boxH * 0.15f
+        val top = far.y - boxH
+        val bottom = far.y + boxH * 0.15f
         drawSlab(left, top, right, bottom, EngineDepth.extrusion(boxH * 2f), Lime, stroke, front = true)
         glowLine(Lime, Offset(left, top), Offset(right, top), stroke, 1f)
         glowLine(Lime, Offset(right, top), Offset(right, bottom), stroke, 1f)
         glowLine(Lime, Offset(right, bottom), Offset(left, bottom), stroke, 1f)
         glowLine(Lime, Offset(left, bottom), Offset(left, top), stroke, 1f)
-        glowLine(Lime, Offset(right, cy), Offset(housingLeft + e, cy), stroke * 0.8f, 0.9f)
+        glowLine(Lime, Offset(right, far.y), Offset(far.x - R, far.y), stroke * 0.8f, 0.9f)
     }
 }
 

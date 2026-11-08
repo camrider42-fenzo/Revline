@@ -132,6 +132,35 @@ internal fun DrawScope.shadeQuad(corners: List<Offset>, color: Color, alpha: Flo
     drawPath(path, color.copy(alpha = alpha))
 }
 
+/**
+ * Where each rotor housing sits. Index 0 is the near one, low and to the right,
+ * drawn last and at full brightness. Each step back moves up and to the left.
+ * A single rotor stays on the old center so its turbo and its corners do not move.
+ */
+internal object RotorStack {
+    fun step(height: Float): Offset {
+        val rise = height * 0.115f
+        return Offset(-rise * 0.84f, -rise)
+    }
+
+    fun centers(count: Int, width: Float, height: Float): List<Offset> {
+        val n = count.coerceIn(1, 4)
+        val anchor = Offset(width * 0.5f, height * 0.54f)
+        if (n == 1) return listOf(anchor)
+        val pace = step(height)
+        val front = anchor - pace * ((n - 1) / 2f)
+        return List(n) { i -> front + pace * i.toFloat() }
+    }
+
+    /** Near housing is full. The one at the back falls off. */
+    fun gain(index: Int, count: Int): Float {
+        val n = count.coerceIn(1, 4)
+        if (n <= 1) return 1f
+        val t = index.coerceIn(0, n - 1) / (n - 1).toFloat()
+        return 1f - 0.52f * t
+    }
+}
+
 internal fun List<Offset>.closedPath(): Path {
     val path = Path()
     if (isEmpty()) return path
