@@ -107,6 +107,8 @@ object RaceDrive {
         var jumped: Boolean = false,
         /** Seconds of nitrous used. */
         var nitrousS: Double = 0.0,
+        /** True on a step that opened the solenoid. The dash reads it. The strip does not. */
+        var shotOpen: Boolean = false,
         /** Tire temperature, 0..1. It comes up with the miles and the slip, and the grip comes with it. */
         var heat: Double = TIRE_COOL,
         // What the traction model saw on the last driven step, for the dash and the tests. Newtons, and the grip coefficient used.
@@ -309,6 +311,27 @@ object RaceDrive {
     fun shotActive(setup: Setup, run: Run, th: Double): Boolean =
         setup.shotFrac > 0.0 && th > 0.5 && run.distance >= setup.shotAtM && run.nitrousS < setup.bottleS
 
+    enum class BottlePhase { OFF, ARMED, ACTIVE, EMPTY }
+
+    /**
+     * What the drag dash draws. [fill] is the bottle still left, 1 full.
+     * A pass starts full ([fresh]). The tree does not spend it. It drains only while the solenoid is open.
+     */
+    data class Bottle(val phase: BottlePhase, val fill: Double, val secondsLeft: Double)
+
+    fun bottle(setup: Setup, run: Run, racing: Boolean): Bottle {
+        val fitted = setup.shotFrac > 1e-9 && setup.bottleS > 1e-9
+        if (!fitted) return Bottle(BottlePhase.OFF, 0.0, 0.0)
+        val left = (setup.bottleS - run.nitrousS).coerceAtLeast(0.0)
+        val fill = (left / setup.bottleS).coerceIn(0.0, 1.0)
+        val phase = when {
+            left <= 1e-4 -> BottlePhase.EMPTY
+            racing && run.shotOpen -> BottlePhase.ACTIVE
+            else -> BottlePhase.ARMED
+        }
+        return Bottle(phase, if (phase == BottlePhase.EMPTY) 0.0 else fill, if (phase == BottlePhase.EMPTY) 0.0 else left)
+    }
+
     internal fun shotAtLaunch(setup: Setup, th: Double): Boolean =
         setup.shotFrac > 0.0 && th > 0.5 && setup.shotAtM <= 0.5
 
@@ -380,6 +403,7 @@ object RaceDrive {
         run.time = clock
         run.nitrousS = bottle
         run.heat = heat
+        run.shotOpen = false
         if (run.distance > JUMP_M) run.jumped = true
         return run.jumped
     }
@@ -410,6 +434,7 @@ object RaceDrive {
     fun wheelspinLit(slip: Double): Boolean = slip > 0.05
 
     private fun drive(setup: Setup, run: Run, throttle: Double, shift: Boolean, dt: Double, clutch: Double) {
+        run.shotOpen = false
         if (run.distance >= setup.distanceM) return
         val stepDt = dt.coerceIn(0.0, 0.05)
         val th = throttle.coerceIn(0.0, 1.0)
@@ -450,7 +475,10 @@ object RaceDrive {
         val launching = run.gear == 1 && run.speed < 14.0 && !run.hooked
         if (launching) {
             val shotOn = shotActive(setup, run, th)
-            if (shotOn) run.nitrousS += stepDt
+            if (shotOn) {
+                run.nitrousS += stepDt
+                run.shotOpen = true
+            }
             val biteRpm = launchRpmFor(setup, th)
             val requested = launchForce(setup, th, engagement, overall, shotOn)
             val grip = holdN(setup, run, overall)
@@ -495,7 +523,10 @@ object RaceDrive {
             } else {
                 run.limiter = false
                 val shotOn = shotActive(setup, run, th)
-                if (shotOn) run.nitrousS += stepDt
+                if (shotOn) {
+                    run.nitrousS += stepDt
+                    run.shotOpen = true
+                }
                 val want = inGearForce(setup, run, th, engagement, overall, roadRpm, shotOn)
                 val grip = holdN(setup, run, overall)
                 note(setup, run, grip, overall)
