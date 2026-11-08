@@ -309,6 +309,10 @@ fun RaceMeet(
                 glowCircle(if (RaceDrive.wheelspinLit(frame.slip.toDouble())) Red else Lime, stroke * 2.2f, c, stroke, filled = true)
             }
             SpinLamp(RaceDrive.wheelspinLit(frame.slip.toDouble()), frame.slip, Modifier.align(Alignment.TopCenter))
+            NitrousGauge(
+                bottleOf(setup, frame),
+                Modifier.align(Alignment.TopStart).width(58.dp).fillMaxHeight().padding(top = 2.dp),
+            )
             }
             Box(Modifier.width(60.dp).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
                 SquareShift(if (auto != null) "AUTO" else if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT", canShift) { hands.shift = true }
@@ -431,6 +435,8 @@ private data class Frame(
     val done: Boolean = false,
     val won: Boolean = false,
     val jumped: Boolean = false,
+    val nitrousS: Double = 0.0,
+    val shotOpen: Boolean = false,
 )
 
 private fun snap(
@@ -457,7 +463,18 @@ private fun snap(
     rival = rivalPass.distanceAt(run.time, finish).toFloat().coerceAtMost(finish.toFloat()),
     done = done,
     won = won,
+    nitrousS = run.nitrousS,
+    shotOpen = run.shotOpen,
 )
+
+private fun bottleOf(setup: RaceDrive.Setup, frame: Frame): RaceDrive.Bottle {
+    val racing = frame.countdown <= 0f && frame.lights <= 0f && !frame.done && !frame.jumped
+    return RaceDrive.bottle(
+        setup,
+        RaceDrive.Run(distance = frame.distance, nitrousS = frame.nitrousS, shotOpen = frame.shotOpen),
+        racing,
+    )
+}
 
 private fun hookAdvice(setup: RaceDrive.Setup): String {
     val hook = RaceDrive.launchThrottle(setup)

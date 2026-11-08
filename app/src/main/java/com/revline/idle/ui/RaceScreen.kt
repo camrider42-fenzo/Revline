@@ -133,6 +133,24 @@ fun RaceScreen(
             )
         }
         if (page == "DRAG") {
+        val bottle = RaceDrive.bottle(setup, RaceDrive.fresh(setup), racing = false)
+        Row(
+            Modifier.fillMaxWidth().height(64.dp).padding(top = 8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            NitrousGauge(bottle, Modifier.width(72.dp).fillMaxHeight())
+            Text(
+                if (bottle.phase == RaceDrive.BottlePhase.OFF) {
+                    "No drag nitrous kit. The bottle stays dark until one is fitted."
+                } else {
+                    "Bottle ${String.format(Locale.US, "%.0f", setup.bottleS)}s. A new pass fills it. It drains while the shot is open."
+                },
+                color = if (bottle.phase == RaceDrive.BottlePhase.OFF) Olive else White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 8.dp).weight(1f),
+            )
+        }
         Text("DISTANCE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
         Text(
             "An eighth is the launch. A quarter is the gears. A half mile is the top end. The pace number follows that distance.",
