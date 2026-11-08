@@ -2,6 +2,7 @@ package com.revline.idle.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -71,35 +72,37 @@ internal fun DrawScope.drawSlab(
     glowLine(White, box.front[0], box.front[1], stroke * 0.4f, 0.45f)
 }
 
-/** A pulley or compressor: a back rim, a face, and a highlight on the near edge. */
+/**
+ * One disk, on the same center as the housing ring the caller draws.
+ * The face is lit toward the top-left and falls off toward the bottom-right.
+ * A short highlight sits on that same ring. There is no second outline and the
+ * disk does not drift.
+ */
 internal fun DrawScope.depthDisk(
     center: Offset,
     radius: Float,
     color: Color,
     stroke: Float,
-    clock: Float,
     snail: Boolean = false,
 ) {
     if (radius < 2f) return
-    val depth = Offset(radius * 0.36f, radius * 0.14f) + EngineDepth.parallax(stroke, clock) * 0.4f
-    val back = center + depth
-    if (snail) {
-        glowArc(
-            color, 24f, 300f,
-            Offset(back.x - radius * 1.15f, back.y - radius * 1.05f),
-            Size(radius * 2.45f, radius * 2.15f),
-            stroke * 0.65f,
-            0.4f,
-        )
-    }
-    glowCircle(color, radius * 0.96f, back, stroke * 0.6f, gain = 0.32f)
-    drawCircle(color.copy(alpha = 0.16f), radius * 0.88f, center)
+    val wash = if (snail) 0.32f else 0.22f
+    drawCircle(
+        brush = Brush.linearGradient(
+            colors = listOf(color.copy(alpha = wash), color.copy(alpha = wash * 0.16f)),
+            start = Offset(center.x - radius * 0.85f, center.y - radius * 0.85f),
+            end = Offset(center.x + radius * 0.85f, center.y + radius * 0.85f),
+        ),
+        radius = radius * 0.82f,
+        center = center,
+    )
+    // Same circle as the housing. 0° is 3 o'clock, so 200° is the upper left.
     glowArc(
-        White, 205f, 85f,
+        White, 200f, 70f,
         Offset(center.x - radius, center.y - radius),
         Size(radius * 2f, radius * 2f),
-        stroke * 0.4f,
-        0.42f,
+        stroke * 0.36f,
+        0.30f,
     )
 }
 
