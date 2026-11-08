@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -92,8 +93,28 @@ fun RaceMeet(
         settled = true
         onFinished(won, hands.run.time, rivalTime, jumped)
     }
-    DisposableEffect(Unit) {
-        onDispose { settle(false) }
+    val speaker = LocalEngineSpeaker.current
+    val hearNow by rememberUpdatedState(hear)
+    val paramsNow by rememberUpdatedState(params)
+    var spoken by remember { mutableFloatStateOf(Float.NaN) }
+    fun speak(rpm: Float, throttle: Float, limiter: Boolean, dt: Double, running: Boolean) {
+        val bus = speaker
+        val tone = paramsNow
+        if (!hearNow || !running) {
+            bus?.source = RaceAudio.Source.QUIET
+            if (hearNow) crank.publish(tone, if (spoken.isNaN()) rpm else spoken, 0f, false, false)
+            return
+        }
+        bus?.source = RaceAudio.Source.TRACK
+        if (spoken.isNaN()) spoken = crank.rpm.takeIf { it > 1f } ?: rpm
+        spoken = RaceAudio.smoothRpm(spoken, rpm, dt.toFloat())
+        crank.publish(tone, spoken, throttle, true, limiter)
+    }
+    DisposableEffect(speaker) {
+        onDispose {
+            settle(false)
+            speaker?.source = RaceAudio.Source.DYNO
+        }
     }
     LaunchedEffect(auto) {
         var last = 0L
@@ -110,10 +131,8 @@ fun RaceMeet(
                     clutchShown = auto.clutch.toFloat()
                     if (playerRolled.isNaN() && !auto.staging && auto.run.distance >= 0.15) playerRolled = auto.run.time
                     frame = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown)
-                    if (hear) {
-                        val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
-                        crank.publish(params, voiceRpm.toFloat(), auto.throttle.toFloat(), true, auto.run.limiter)
-                    }
+                    val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
+                    speak(voiceRpm.toFloat(), auto.throttle.toFloat(), auto.run.limiter, dt, running = true)
                     return@withFrameNanos
                 }
                 if (!hands.clutchHeld && hands.clutchTouched) {
@@ -126,10 +145,8 @@ fun RaceMeet(
                     if (countdown > 0f) countdown -= dt.toFloat() else lights -= dt.toFloat()
                     RaceDrive.stage(setup, hands.run, hands.throttle, dt, hands.clutch)
                     frame = snap(hands.run, lights, rivalPass, finish, done = false, won = false, countdown = countdown)
-                    if (hear) {
-                        val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
-                        crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
-                    }
+                    val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
+                    speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
                     return@withFrameNanos
                 }
                 val shift = hands.shift && hands.clutch > RaceDrive.SHIFT_PEDAL
@@ -137,12 +154,11 @@ fun RaceMeet(
                 RaceDrive.step(setup, hands.run, hands.throttle, shift, dt, hands.clutch)
                 if (playerRolled.isNaN() && hands.run.distance >= 0.15) playerRolled = hands.run.time
                 frame = snap(hands.run, 0f, rivalPass, finish, done = false, won = false)
-                if (hear) {
-                    val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
-                    crank.publish(params, voiceRpm.toFloat(), hands.throttle.toFloat(), true, hands.run.limiter)
-                }
+                val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
+                speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
             }
         }
+        speak(0f, 0f, false, 0.0, running = false)
         if (!settled && isActive && hands.run.jumped) {
             frame = snap(hands.run, 0f, rivalPass, finish, done = true, won = false).copy(jumped = true)
             delay(1500)

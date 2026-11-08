@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.game.CircuitPace
 import com.revline.idle.game.Circuits
+import com.revline.idle.model.EngineParams
 import com.revline.idle.game.Rivals
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -338,8 +340,11 @@ internal object ReplaySpeed {
     const val DEFAULT = 1
 
     /** Film seconds per real second at chip [index]. */
+    fun multiple(index: Int): Double = multiples[index.coerceIn(0, multiples.size - 1)]
+
+    /** Film seconds per real second at chip [index]. */
     @Suppress("UNUSED_PARAMETER")
-    fun multiplier(index: Int, replay: Replay): Double = multiples[index.coerceIn(0, multiples.size - 1)]
+    fun multiplier(index: Int, replay: Replay): Double = multiple(index)
 
     /** The film clock after [dt] real seconds; a paused film stays where it is. The clock counts at the normal rate, [Replay.speed] converts it to race time. */
     fun advance(clock: Float, dt: Float, playing: Boolean, multiplier: Double): Float =
@@ -370,6 +375,10 @@ internal fun CircuitReplayView(
     session: Any? = null,
     /** A pit call from the strategy sheet: the new orders and the lap they start on. Null hides the sheet. */
     onRevise: ((Circuits.Orders, Int) -> Unit)? = null,
+    /** The player's engine, so the speaker's tone matches the car. Null leaves the dyno note alone. */
+    ear: EngineParams? = null,
+    /** Who owns the speaker. Null in tests that only draw the film. */
+    voice: EngineSpeaker? = null,
 ) {
     val replay = remember(result) { Replay.build(result) } ?: return
     val replayNow by rememberUpdatedState(replay)
@@ -388,20 +397,46 @@ internal fun CircuitReplayView(
     var zoomed by rememberSaveable { mutableStateOf(false) }
     val speedNow by rememberUpdatedState(speedIndex)
     val pausedNow by rememberUpdatedState(paused)
+    val voiceNow by rememberUpdatedState(voice)
+    val earNow by rememberUpdatedState(ear)
+    DisposableEffect(voice) {
+        onDispose { voice?.source = RaceAudio.Source.DYNO }
+    }
     LaunchedEffect(key, run) {
         clock = -1.5f
         finished = false
         paused = false
         var last = 0L
+        var spoken = Float.NaN
         while (isActive && clock * replayNow.speed < replayNow.duration) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.05f)
                 last = now
-                clock = ReplaySpeed.advance(clock, dt, !pausedNow, ReplaySpeed.multiplier(speedNow, replayNow))
+                val playing = !pausedNow
+                clock = ReplaySpeed.advance(clock, dt, playing, ReplaySpeed.multiplier(speedNow, replayNow))
+                val speaker = voiceNow
+                val params = earNow
+                if (speaker != null && params != null) {
+                    val mode = RaceAudio.source(ReplaySpeed.multiplier(speedNow, replayNow), playing)
+                    speaker.source = mode
+                    if (mode == RaceAudio.Source.TRACK) {
+                        val at = max(0.0, clock * replayNow.speed)
+                        val dash = replayNow.you.dash(at)
+                        val target = (dash?.rpm ?: params.idleRpm).toFloat()
+                        if (spoken.isNaN()) spoken = speaker.crank.rpm.takeIf { it > 1f } ?: target
+                        spoken = RaceAudio.smoothRpm(spoken, target, dt)
+                        val braking = dash?.braking == true
+                        val limit = dash != null && RaceAudio.circuitLimiter(dash.rpm, dash.redline)
+                        speaker.crank.publish(params, spoken, RaceAudio.circuitThrottle(braking), true, limit)
+                    } else {
+                        spoken = Float.NaN
+                    }
+                }
             }
         }
         clock = ReplaySpeed.endClock(replayNow)
         finished = true
+        voiceNow?.source = RaceAudio.Source.QUIET
     }
     val t = max(0.0, clock * replay.speed)
     val youLaps = replay.you.progress(t)
