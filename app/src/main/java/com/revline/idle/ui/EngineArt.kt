@@ -389,12 +389,11 @@ private fun DrawScope.drawEngine(
         if (params.induction == Induction.TURBO || params.induction == Induction.TWIN_TURBO) {
             val count = if (params.induction == Induction.TWIN_TURBO) 2 else 1
             for (t in 0 until count) {
-                val drift = EngineDepth.parallax(stroke, clock + t)
-                val cx = right + w * 0.065f + drift.x
-                val cy = h * (0.34f + t * 0.13f) + drift.y
+                val cx = right + w * 0.065f
+                val cy = h * (0.34f + t * 0.13f)
                 val grown = 1f + 0.16f * (turboLvl - 1).coerceAtLeast(0)
                 val rad = h * (if (count == 2) 0.048f else 0.064f) * grown
-                depthDisk(Offset(cx, cy), rad, Cyan, stroke, clock + t, snail = true)
+                depthDisk(Offset(cx, cy), rad, Cyan, stroke, snail = true)
                 glowCircle(Cyan, rad, Offset(cx, cy), stroke, gain = 1.15f)
                 if (part("overboost") > 0) {
                     glowCircle(Red, rad * (1.28f + 0.06f * part("overboost")), Offset(cx, cy), stroke * 0.65f, gain = 0.85f)
@@ -580,7 +579,7 @@ private fun DrawScope.drawEngine(
         glowLine(White, Offset(left, crankY), fly, stroke * 0.75f, 0.85f)
         glowCircle(Lime, stroke * 1.7f, Offset(left, crankY), stroke, filled = true, gain = 0.55f + pulse * 0.3f)
         val turn = Math.toRadians(angle.toDouble())
-        depthDisk(fly, flyR, White, stroke, clock)
+        depthDisk(fly, flyR, White, stroke)
         glowCircle(White, flyR, fly, stroke * 0.8f, gain = 0.7f)
         for (spoke in 0 until 3) {
             val a = turn + spoke * 2.0 * Math.PI / 3.0
@@ -592,9 +591,9 @@ private fun DrawScope.drawEngine(
         val pumpPulley = Offset(left - w * 0.06f, h * 0.34f)
         val tensioner = Offset(left - w * 0.02f, crankY - h * 0.10f)
         val beltPulse = 0.75f + 0.25f * sin(clock * (1.8f + spinRpm / 2400f))
-        depthDisk(crankPulley, stroke * 2.8f, White, stroke, clock)
-        depthDisk(pumpPulley, stroke * 2.1f, Cyan, stroke, clock + 0.4f)
-        depthDisk(tensioner, stroke * 1.5f, White, stroke, clock + 0.8f)
+        depthDisk(crankPulley, stroke * 2.8f, White, stroke)
+        depthDisk(pumpPulley, stroke * 2.1f, Cyan, stroke)
+        depthDisk(tensioner, stroke * 1.5f, White, stroke)
         glowCircle(White, stroke * 2.8f, crankPulley, stroke * 0.7f, gain = 0.7f)
         glowCircle(Cyan, stroke * 2.1f, pumpPulley, stroke * 0.65f, gain = 0.85f)
         glowCircle(White, stroke * 1.5f, tensioner, stroke * 0.55f, gain = 0.6f)
@@ -818,7 +817,7 @@ private fun DrawScope.drawVee(
     val c = front
     val turn = Math.toRadians(angle.toDouble())
     val pulley = throwLen * 1.55f
-    depthDisk(c, pulley, White, stroke, clock)
+    depthDisk(c, pulley, White, stroke)
     glowCircle(White, pulley, c, stroke * 0.7f, gain = 0.5f)
     for (spoke in 0 until 3) {
         val a = turn + spoke * 2.0 * Math.PI / 3.0
@@ -1052,9 +1051,8 @@ private fun DrawScope.drawRotary(
         val grown = 1f + 0.16f * (part("turbo") - 1).coerceAtLeast(0)
         val rad = h * (if (count == 2) 0.045f else 0.062f) * grown
         for (t in 0 until count) {
-            val drift = EngineDepth.parallax(stroke, clock + t)
-            val tcx = housingRight + rad * 1.45f + drift.x
-            val tcy = mountY - h * 0.06f + t * rad * 2.3f + drift.y
+            val tcx = housingRight + rad * 1.45f
+            val tcy = mountY - h * 0.06f + t * rad * 2.3f
             if (tcx + rad > w * 0.98f) continue
             glowLine(exhaust, Offset(housingRight - e * 0.4f, mountY - h * 0.02f), Offset(tcx - rad * 0.2f, tcy), stroke * 0.85f, 0.9f)
             if (t == 0 && part("intercooler") > 0) {
@@ -1066,7 +1064,7 @@ private fun DrawScope.drawRotary(
                 glowLine(Cyan, Offset(mid.x + box, mid.y + box * 0.6f), Offset(mid.x - box, mid.y + box * 0.6f), stroke * 0.7f, 0.9f)
                 glowLine(Cyan, Offset(mid.x - box, mid.y + box * 0.6f), Offset(mid.x - box, mid.y - box * 0.6f), stroke * 0.7f, 0.9f)
             }
-            depthDisk(Offset(tcx, tcy), rad, Cyan, stroke, clock + t, snail = true)
+            depthDisk(Offset(tcx, tcy), rad, Cyan, stroke, snail = true)
             glowCircle(Cyan, rad, Offset(tcx, tcy), stroke, gain = 1.15f)
             if (part("overboost") > 0) {
                 glowCircle(Red, rad * (1.28f + 0.06f * part("overboost")), Offset(tcx, tcy), stroke * 0.65f, gain = 0.85f)
