@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
@@ -49,6 +51,7 @@ import com.revline.idle.UiModel
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.Aim
 import com.revline.idle.game.AimGoal
+import com.revline.idle.game.AimSpend
 import com.revline.idle.game.Bottleneck
 import com.revline.idle.game.Effect
 import com.revline.idle.game.Logic
@@ -88,6 +91,7 @@ fun PartsScreen(
     onRemove: (String) -> Unit,
     onFuel: (FuelKind) -> Unit,
     onGoal: (AimGoal) -> Unit,
+    onSpend: (AimSpend) -> Unit,
 ) {
     val selected = remember { mutableStateOf<String?>(null) }
     val family = Block.of(ui.game.blockId, ui.game.prestiges).family
@@ -130,6 +134,7 @@ fun PartsScreen(
         Bottleneck.suggest(ui.game, ui.sheet.stats, ui.sheet.profit.mpg, live, soakRate)
     }
     val aimGoal = AimGoal.from(ui.game.aimGoal)
+    val aimSpend = AimSpend.from(ui.game.aimSpend)
     val aim = remember(
         ui.game.upgrades,
         ui.game.researched,
@@ -138,9 +143,11 @@ fun PartsScreen(
         ui.game.tune,
         ui.game.perks,
         ui.game.aimGoal,
+        ui.game.aimSpend,
+        ui.game.money,
         ui.game.throttle,
     ) {
-        SheetAim.recommend(ui.game, aimGoal)
+        SheetAim.recommend(ui.game, aimGoal, aimSpend)
     }
     var focusTick by remember { mutableIntStateOf(0) }
     var pinned by remember { mutableStateOf<Effect?>(null) }
@@ -152,7 +159,7 @@ fun PartsScreen(
                 focusPart = null
                 focusTick++
             }
-            AimBar(aim, aimGoal, onGoal) {
+            AimBar(aim, aimGoal, aimSpend, onGoal, onSpend) {
                 val id = aim.upgradeId ?: return@AimBar
                 selected.value = id
                 pinned = UpgradeMap.effectOf(id)
@@ -462,7 +469,14 @@ private fun BottleneckBar(suggestion: com.revline.idle.game.Suggestion, onShow: 
 }
 
 @Composable
-private fun AimBar(aim: Aim, goal: AimGoal, onGoal: (AimGoal) -> Unit, onShow: () -> Unit) {
+private fun AimBar(
+    aim: Aim,
+    goal: AimGoal,
+    spend: AimSpend,
+    onGoal: (AimGoal) -> Unit,
+    onSpend: (AimSpend) -> Unit,
+    onShow: () -> Unit,
+) {
     val color = aim.upgradeId?.let { effectColor(UpgradeMap.effectOf(it)) } ?: Amber
     Column(
         Modifier
@@ -486,6 +500,29 @@ private fun AimBar(aim: Aim, goal: AimGoal, onGoal: (AimGoal) -> Unit, onShow: (
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) { onGoal(item) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            AimSpend.entries.forEach { item ->
+                val on = item == spend
+                Text(
+                    item.label,
+                    color = if (on) Black else color,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    modifier = Modifier
+                        .semantics { contentDescription = "aim spend ${item.name}${if (on) " on" else ""}" }
+                        .background(if (on) color else Black)
+                        .border(1.dp, color)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onSpend(item) }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }

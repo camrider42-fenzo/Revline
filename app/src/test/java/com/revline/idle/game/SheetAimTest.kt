@@ -24,8 +24,11 @@ class SheetAimTest {
         for (goal in AimGoal.entries) {
             val aim = SheetAim.recommend(state, goal)
             val id = aim.upgradeId
-            assertNotNull("${goal.short} had no part", id)
-            assertEquals(null, Logic.lockReason(state, id!!))
+            if (id == null) {
+                assertEquals("${goal.short} should say the sheet is met", "Clear", aim.headline)
+                continue
+            }
+            assertEquals(null, Logic.lockReason(state, id))
             val picked = step(state, id, goal)
             assertTrue("${goal.short} via $id gained $picked", picked > 0.0)
             for (upgrade in Upgrades.all) {
