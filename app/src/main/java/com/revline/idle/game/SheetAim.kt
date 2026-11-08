@@ -35,6 +35,107 @@ enum class AimGoal {
     }
 }
 
+/**
+ * How the next-part line spends toward the stat you picked.
+ * Best is the old line: the biggest step, cost only breaks a tie, and the price is shown.
+ */
+enum class AimSpend {
+    CHEAPEST,
+    AFFORDABLE,
+    ALMOST,
+    BEST,
+    ;
+
+    val label: String
+        get() = when (this) {
+            CHEAPEST -> "CHEAPEST"
+            AFFORDABLE -> "AFFORDABLE"
+            ALMOST -> "ALMOST AFFORDABLE"
+            BEST -> "BEST"
+        }
+
+    fun next(): AimSpend = entries[(ordinal + 1) % entries.size]
+
+    companion object {
+        /** A save from before the switch has no mode. It keeps the biggest step. */
+        fun from(raw: String): AimSpend = entries.firstOrNull { it.name == raw } ?: BEST
+    }
+}
+
+/** One unlocked next level, priced, and what the stat reads after it. */
+internal data class AimOffer(
+    val id: String,
+    val cost: Double,
+    val gain: Double,
+    val after: Double,
+)
+
+internal data class AimChoice(
+    val offer: AimOffer?,
+    val reaches: Boolean,
+    val short: Boolean,
+)
+
+/** Ranking for the next-part line. The sheet number is the target when the stat has one. */
+internal object AimSpends {
+    /** Cash covers at least this much of the price, and not the whole price. */
+    const val BAND = 0.8
+
+    fun covers(money: Double, cost: Double): Boolean = money + 1e-9 >= cost
+
+    /**
+     * The price is above the cash, and the cash still covers 80% of it.
+     * Exactly 80% is in. A hair under is out. A price the cash already covers is out.
+     */
+    fun almost(money: Double, cost: Double): Boolean {
+        if (cost <= 1e-9) return false
+        if (covers(money, cost)) return false
+        return money + 1e-9 >= BAND * cost
+    }
+
+    /** The sheet number is already met. Pay has no sheet number. */
+    fun met(before: Double, target: Double?): Boolean =
+        target != null && target - before < 0.05
+
+    fun choose(offers: List<AimOffer>, money: Double, mode: AimSpend, target: Double?): AimChoice {
+        val open = offers.filter { it.gain > 0.0 }
+        val pick = when (mode) {
+            AimSpend.BEST -> bestOf(open) { a, b -> a.gain > b.gain + 1e-9 || (close(a.gain, b.gain) && cheaper(a, b)) }
+            AimSpend.CHEAPEST -> {
+                val clearing = if (target == null) emptyList() else open.filter { it.after + 1e-9 >= target }
+                val pool = if (clearing.isNotEmpty()) clearing else open
+                bestOf(pool) { a, b -> a.cost < b.cost - 1e-9 || (close(a.cost, b.cost) && a.gain > b.gain + 1e-9) || (close(a.cost, b.cost) && close(a.gain, b.gain) && a.id < b.id) }
+            }
+            AimSpend.AFFORDABLE -> bestOf(open.filter { covers(money, it.cost) }) { a, b ->
+                a.after > b.after + 1e-9 || (close(a.after, b.after) && cheaper(a, b))
+            }
+            AimSpend.ALMOST -> bestOf(open.filter { almost(money, it.cost) }) { a, b ->
+                a.after > b.after + 1e-9 || (close(a.after, b.after) && cheaper(a, b))
+            }
+        }
+        val reaches = pick != null && target != null && pick.after + 1e-9 >= target
+        return AimChoice(pick, reaches, pick != null && target != null && !reaches)
+    }
+
+    private fun bestOf(offers: List<AimOffer>, beats: (AimOffer, AimOffer) -> Boolean): AimOffer? {
+        var chosen: AimOffer? = null
+        for (offer in offers) {
+            val current = chosen
+            if (current == null || beats(offer, current)) chosen = offer
+        }
+        return chosen
+    }
+
+    /** True when [a] should replace [b] on a tie of the main number: lower price, then the earlier id. */
+    private fun cheaper(a: AimOffer, b: AimOffer): Boolean {
+        if (a.cost < b.cost - 1e-9) return true
+        if (b.cost < a.cost - 1e-9) return false
+        return a.id < b.id
+    }
+
+    private fun close(a: Double, b: Double): Boolean = abs(a - b) <= 1e-9
+}
+
 /** The next level that lands nearest the rebuild number the engine is missing by the most. */
 data class Aim(
     val mark: SheetMark,
@@ -57,8 +158,8 @@ object SheetAim {
         return marks.minWith(compareBy<Pair<SheetMark, Double>> { it.second }.thenBy { it.first.ordinal }).first
     }
 
-    fun recommend(state: GameState, goal: AimGoal? = null): Aim {
-        if (goal != null) return toward(state, goal)
+    fun recommend(state: GameState, goal: AimGoal? = null, spend: AimSpend = AimSpend.BEST): Aim {
+        if (goal != null) return toward(state, goal, spend)
         val block = Block.of(state.blockId, state.prestiges)
         val nowParams = Logic.paramsFrom(state)
         val now = EngineSim.evaluate(nowParams)
@@ -127,16 +228,25 @@ object SheetAim {
         Logic.profitStop(params, stats, Prestige.multiplier(state.knowledge), Logic.GATE_CAP).mpg
 
     /**
-     * The open part whose next level raises [goal] the most.
-     * Horsepower and torque are the sheet peaks. mpg is read at the profit pedal, the way the rebuild sheet reads it. $/s is the contract at the pedal you are holding.
+     * The next unlocked level for [goal], ranked by [spend].
+     * Horsepower and torque are the sheet peaks. mpg is read at the profit pedal, the way the rebuild sheet reads it. $/s is the contract at the pedal you are holding, and it has no sheet number.
      */
-    private fun toward(state: GameState, goal: AimGoal): Aim {
+    private fun toward(state: GameState, goal: AimGoal, spend: AimSpend): Aim {
         val nowParams = Logic.paramsFrom(state)
         val now = EngineSim.evaluate(nowParams)
         val beforePay = if (goal == AimGoal.PAY) contract(state, now) else 0.0
         val beforeMpg = if (goal == AimGoal.CRUISE) profitMpg(state, nowParams, now) else 0.0
         val before = reading(now, beforePay, beforeMpg, goal)
-        var best: Gain? = null
+        val target = sheetTarget(state, goal)
+        if (AimSpends.met(before, target)) {
+            return Aim(
+                markOf(goal),
+                null,
+                "Clear",
+                "${goal.short} is already on the sheet, at ${fmt(goal, before)}.",
+            )
+        }
+        val offers = ArrayList<AimOffer>()
         for (upgrade in Upgrades.all) {
             val level = state.upgrades[upgrade.id] ?: 0
             if (level >= upgrade.maxLevel) continue
@@ -149,34 +259,49 @@ object SheetAim {
             val after = reading(next, afterPay, afterMpg, goal)
             val gain = after - before
             if (gain < floor(goal)) continue
-            val pick = Gain(upgrade.id, gain, after, Logic.upgradeCost(state, upgrade.id))
-            if (best == null || pick.beats(best)) best = pick
+            offers += AimOffer(upgrade.id, Logic.upgradeCost(state, upgrade.id), gain, after)
         }
-        val chosen = best
+        val choice = AimSpends.choose(offers, state.money, spend, target)
+        val chosen = choice.offer
         if (chosen == null) {
-            return Aim(
-                markOf(goal),
-                null,
-                goal.short,
-                "Nothing unlocked raises ${goal.short} from ${fmt(goal, before)}.",
-            )
+            return Aim(markOf(goal), null, goal.short, none(goal, spend, before, state.money))
         }
         val name = Upgrades.byId(chosen.id).name
-        return Aim(
-            markOf(goal),
-            chosen.id,
-            name,
-            "${goal.short}  ${fmt(goal, before)} → ${fmt(goal, chosen.after)}. ${formatDollars(chosen.cost)}.",
-        )
+        val move = "${goal.short}  ${fmt(goal, before)} → ${fmt(goal, chosen.after)}"
+        if (spend == AimSpend.BEST) {
+            return Aim(markOf(goal), chosen.id, name, "$move. ${formatDollars(chosen.cost)}.")
+        }
+        return Aim(markOf(goal), chosen.id, name, "$move. ${why(spend, choice, goal, target, chosen.cost)}")
     }
 
-    private data class Gain(val id: String, val gain: Double, val after: Double, val cost: Double) {
-        fun beats(other: Gain): Boolean {
-            if (gain > other.gain + 1e-9) return true
-            if (gain < other.gain - 1e-9) return false
-            if (cost < other.cost - 1e-6) return true
-            if (cost > other.cost + 1e-6) return false
-            return id < other.id
+    private fun none(goal: AimGoal, spend: AimSpend, before: Double, money: Double): String {
+        val hand = formatDollars(money)
+        return when (spend) {
+            AimSpend.AFFORDABLE -> "Nothing that raises ${goal.short} is affordable. $hand on hand."
+            AimSpend.ALMOST -> "Nothing that raises ${goal.short} is within 20% over $hand."
+            else -> "Nothing unlocked raises ${goal.short} from ${fmt(goal, before)}."
+        }
+    }
+
+    private fun why(spend: AimSpend, choice: AimChoice, goal: AimGoal, target: Double?, cost: Double): String {
+        val price = formatDollars(cost)
+        val short = if (choice.short && target != null) " Still short of ${fmt(goal, target)}." else ""
+        val lead = when (spend) {
+            AimSpend.CHEAPEST -> if (choice.reaches) "Cheapest that clears the sheet." else "Cheapest step."
+            AimSpend.AFFORDABLE -> if (choice.reaches) "Best you can buy now." else "Best the cash reaches."
+            AimSpend.ALMOST -> "Within 20% of the cash."
+            AimSpend.BEST -> ""
+        }
+        return "$lead$short $price."
+    }
+
+    private fun sheetTarget(state: GameState, goal: AimGoal): Double? {
+        val block = Block.of(state.blockId, state.prestiges)
+        return when (goal) {
+            AimGoal.POWER -> block.sheetHp(state.racing)
+            AimGoal.TORQUE -> block.sheetTorque(state.racing)
+            AimGoal.CRUISE -> block.sheetMpg(state.racing)
+            AimGoal.PAY -> null
         }
     }
 

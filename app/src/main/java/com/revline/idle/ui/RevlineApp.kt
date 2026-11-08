@@ -146,7 +146,7 @@ fun RevlineApp(vm: GameViewModel) {
                 } else {
                     when (tab.value) {
                         Tab.BENCH -> BenchScreen(ui, vm::startDyno, vm::setThrottle)
-                        Tab.PARTS -> PartsScreen(ui, vm::buy, vm::remove, vm::fuel, vm::setAimGoal)
+                        Tab.PARTS -> PartsScreen(ui, vm::buy, vm::remove, vm::fuel, vm::setAimGoal, vm::setAimSpend)
                         Tab.TUNE -> TuneScreen(ui, vm::nudgeTune, vm::setDragTune)
                         Tab.STUDY -> StudyScreen(ui, vm::research)
                         Tab.RACE -> RaceScreen(

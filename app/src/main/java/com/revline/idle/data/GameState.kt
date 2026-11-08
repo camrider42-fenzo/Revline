@@ -68,6 +68,11 @@ data class GameState(
     val batterySaver: Boolean = false,
     /** What the next-part line is chasing: POWER, TORQUE, CRUISE, or PAY. */
     val aimGoal: String = "POWER",
+    /**
+     * How that line spends: CHEAPEST, AFFORDABLE, ALMOST, or BEST.
+     * Old saves omit this and keep BEST, the biggest step the line used to pick.
+     */
+    val aimSpend: String = "BEST",
     /** Epoch ms until which a blown engine pays no contract. */
     val downUntilEpochMs: Long = 0L,
     val breakdowns: Int = 0,

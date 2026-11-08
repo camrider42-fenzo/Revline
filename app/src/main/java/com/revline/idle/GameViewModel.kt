@@ -10,6 +10,7 @@ import com.revline.idle.data.GameState
 import com.revline.idle.data.SaveRepository
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.game.AimGoal
+import com.revline.idle.game.AimSpend
 import com.revline.idle.game.Drivers.Driver
 import com.revline.idle.game.Drivers
 import com.revline.idle.game.Logic
@@ -230,6 +231,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleDevMode() = mutate { it.copy(devMode = !it.devMode) }
     fun toggleBatterySaver() = mutate { it.copy(batterySaver = !it.batterySaver) }
     fun setAimGoal(goal: AimGoal) = mutate { it.copy(aimGoal = goal.name) }
+    fun setAimSpend(spend: AimSpend) = mutate { it.copy(aimSpend = spend.name) }
     fun studyRace(id: String) = race {
         val next = Racing.study(it, id)
         next to if (next != it) "Studied ${Racing.studies.first { s -> s.id == id }.name}. Tap again to fit it." else Racing.studyBlocked(it, id)

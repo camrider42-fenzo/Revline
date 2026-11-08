@@ -2,7 +2,7 @@
 
 An offline idle shop where the contract pays from a running engine model. You buy parts, study a tech tree, and occasionally scrap the long-block for Engineering Knowledge. Nothing here phones home. There are no ads and no API keys.
 
-The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a black bubble map you drag and pinch. Two strips sit at the top. The first names the bottleneck: a head that is still soaking, a dyno note, the short number on the rebuild sheet, or the bay with the most left once the sheet is clear. Tapping it moves the map to that bay. The second names the next level for the goal you picked: horsepower, torque, cruise mpg, or dollars per second. (The cruise goal there is the road-load number. The rebuild sheet reads mpg at the profit pedal.) Tapping a goal on that strip switches it. Tapping it opens that part. A fitted part can be pulled one level at a time, and the price of that level comes back. Bubbles are grouped by what the part changes: power, economy, boost, cooling, or durability. The groups sit close together. Studying turbocharging, supercharging, or twins opens that part for purchase. Nothing bolts on by itself: a lone small turbo on a big block can make less than the same block breathing on its own, so boost is a choice you can preview first.
+The screen is pure black (`#000000`). Instrument lines are drawn as a bright core with a soft halo: white structure, lime for money and horsepower, cyan for coolant and boost, amber for torque and oil, red for redline, heat, and a floored pedal. The parts bay is a black bubble map you drag and pinch. Two strips sit at the top. The first names the bottleneck: a head that is still soaking, a dyno note, the short number on the rebuild sheet, or the bay with the most left once the sheet is clear. Tapping it moves the map to that bay. The second names the next level for the goal you picked: horsepower, torque, cruise mpg, or dollars per second. (The cruise goal there is the road-load number. The rebuild sheet reads mpg at the profit pedal.) Tapping a goal on that strip switches it. Under the goals, Cheapest, Affordable, Almost affordable, and Best change which part that line names. Cheapest is the lowest price that clears the sheet number, or the cheapest step when nothing clears it alone. Affordable is the best step the cash can buy, and it says so when that cash cannot clear the number. Almost affordable is a part priced at most 20% over the cash, and it leaves out parts the cash already covers. Best is the biggest step, whatever it costs, which is what the line did before. The choice is saved with the game. An old save opens on Best. Tapping the line opens that part. A fitted part can be pulled one level at a time, and the price of that level comes back. Bubbles are grouped by what the part changes: power, economy, boost, cooling, or durability. The groups sit close together. Studying turbocharging, supercharging, or twins opens that part for purchase. Nothing bolts on by itself: a lone small turbo on a big block can make less than the same block breathing on its own, so boost is a choice you can preview first.
 
 ## Build
 
@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.93.13). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.93.14). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -114,6 +114,10 @@ SHIFT POINT NEVER REACHED (1.86.0): with a Short shifter and the Shift rpm knob 
 RACING LINE (1.89.0): circuit cars drive a smoothed racing line (inside at the apex) and only step a lane aside while alongside another car, then ease back; sides lock until clear, so nothing wiggles. Follow mode centers on your car only. 16x and 32x replay chips. Kerbs cover only the apex and exit and pull in on tight hairpins.
 
 PAR FIT (1.88.2): the field par clamp now measures the same lap the circuit screen and the race use (your driver and orders), so the shown fit is always within ±10.0%.
+
+## 1.93.14
+
+The next-part line can spend four ways. Cheapest names the lowest price that clears the sheet number. Affordable names the best step the cash on hand can buy, and says when that still falls short. Almost affordable names a part within 20% over the cash, and skips parts that are already affordable. Best names the biggest step and shows the price, which is what the line did before. The choice is saved. An old save opens on Best. Pay, the sheet, and the speaker are unchanged.
 
 ## 1.93.13
 
