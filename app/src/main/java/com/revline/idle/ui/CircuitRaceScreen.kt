@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.revline.idle.game.Circuits
+import com.revline.idle.model.EngineParams
 
 /**
  * The race on its own full screen: the track map, the tachometer and speedometer, the speed control, and at the flag each car's
@@ -28,17 +29,19 @@ import com.revline.idle.game.Circuits
  */
 @Composable
 internal fun CircuitRaceScreen(
-    result: Circuits.Result, yourId: String, yourMid: Boolean, session: Any? = null, onRevise: ((Circuits.Orders, Int) -> Unit)? = null, onClose: () -> Unit,
+    result: Circuits.Result, yourId: String, yourMid: Boolean, session: Any? = null, onRevise: ((Circuits.Orders, Int) -> Unit)? = null,
+    ear: EngineParams? = null, voice: EngineSpeaker? = null, onClose: () -> Unit,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        CircuitRaceBody(result, yourId, yourMid, session, onRevise, onClose)
+        CircuitRaceBody(result, yourId, yourMid, session, onRevise, ear, voice, onClose)
     }
 }
 
 /** The screen's contents, filling whatever it is given. */
 @Composable
 internal fun CircuitRaceBody(
-    result: Circuits.Result, yourId: String, yourMid: Boolean, session: Any? = null, onRevise: ((Circuits.Orders, Int) -> Unit)? = null, onClose: () -> Unit,
+    result: Circuits.Result, yourId: String, yourMid: Boolean, session: Any? = null, onRevise: ((Circuits.Orders, Int) -> Unit)? = null,
+    ear: EngineParams? = null, voice: EngineSpeaker? = null, onClose: () -> Unit,
 ) {
     run {
         // Wide or near-square (a landscape phone, the unfolded Fold) puts the map beside the dials; a tall narrow screen stacks them.
@@ -52,7 +55,7 @@ internal fun CircuitRaceBody(
             }, endContent = { m ->
                 val replay = remember(result) { Replay.build(result) }
                 if (replay != null) BestLapTraces(replay, m, fit = true)
-            }, session = session, onRevise = onRevise)
+            }, session = session, onRevise = onRevise, ear = ear, voice = voice)
         }
     }
 }

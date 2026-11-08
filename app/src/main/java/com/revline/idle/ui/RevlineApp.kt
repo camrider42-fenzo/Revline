@@ -70,10 +70,10 @@ private enum class Tab(val label: String) {
 @Composable
 fun RevlineApp(vm: GameViewModel) {
     val ui = vm.ui
-    val crank = rememberEngineCrank(vm)
-    EngineSoundtrack(crank, ui.game.batterySaver)
+    val speaker = rememberEngineSpeaker(vm)
+    EngineSoundtrack(speaker.crank, ui.game.batterySaver)
     val tab = remember { androidx.compose.runtime.mutableStateOf(Tab.BENCH) }
-    CompositionLocalProvider(LocalBatterySaver provides ui.game.batterySaver) {
+    CompositionLocalProvider(LocalBatterySaver provides ui.game.batterySaver, LocalEngineSpeaker provides speaker) {
     RevlineTheme {
         Scaffold(
             containerColor = Black,
@@ -133,7 +133,7 @@ fun RevlineApp(vm: GameViewModel) {
                         strip.setup,
                         strip.field,
                         vm::finishMeet,
-                        crank,
+                        speaker.crank,
                         ui.sheet.params,
                         hear = !ui.game.batterySaver,
                         yourId = ui.game.chassis,
@@ -190,18 +190,22 @@ fun RevlineApp(vm: GameViewModel) {
 }
 
 @Composable
-private fun rememberEngineCrank(vm: GameViewModel): EngineCrank {
-    val crank = remember { EngineCrank() }
+private fun rememberEngineSpeaker(vm: GameViewModel): EngineSpeaker {
+    val speaker = remember { EngineSpeaker(EngineCrank()) }
     val params = vm.ui.sheet.params
     val rpm = vm.ui.rpm.toFloat()
     val throttle = if (vm.ui.phase == DynoPhase.IDLE) vm.ui.game.throttle.toFloat() else 1f
     val live = !vm.ui.game.batterySaver &&
         !(Logic.stalled(vm.ui.game.throttle) && vm.ui.phase == DynoPhase.IDLE)
-    val onStrip = vm.ui.strip != null
-    LaunchedEffect(params, rpm, throttle, live, vm.ui.limiter, onStrip) {
-        if (!onStrip) crank.publish(params, rpm, throttle, live, limiterOn = vm.ui.limiter && live)
+    val source = speaker.source
+    LaunchedEffect(params, rpm, throttle, live, vm.ui.limiter, source) {
+        when (source) {
+            RaceAudio.Source.DYNO -> speaker.crank.publish(params, rpm, throttle, live, limiterOn = vm.ui.limiter && live)
+            RaceAudio.Source.QUIET -> speaker.crank.publish(params, rpm, 0f, false, limiterOn = false)
+            RaceAudio.Source.TRACK -> Unit
+        }
     }
-    return crank
+    return speaker
 }
 
 @Composable

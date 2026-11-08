@@ -859,7 +859,11 @@ private fun CircuitSection(
             if (r.log.rows.isNotEmpty()) {
                 LineButton("Watch the race", true, { onWatching(true) }, Modifier.padding(top = 4.dp))
                 remember(r) { Replay.build(r) }?.let { BestLapTraces(it, Modifier.padding(vertical = 4.dp)) }
-                if (watching) CircuitRaceScreen(r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID", session = o.run?.seed, onRevise = onRevise) { onWatching(false) }
+                if (watching) CircuitRaceScreen(
+                    r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID",
+                    session = o.run?.seed, onRevise = onRevise,
+                    ear = ui.sheet.params, voice = LocalEngineSpeaker.current,
+                ) { onWatching(false) }
             }
             Text(
                 "Laps " + r.lapTimes.joinToString("  ") { Circuits.clock(it) },
