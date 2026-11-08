@@ -180,6 +180,7 @@ private fun DrawScope.drawEngine(
         val radT = h * 0.22f
         val radB = h * 0.62f
         if (!params.airCooled) {
+        drawSlab(radL, radT, radR, radB, EngineDepth.extrusion(radB - radT), Cyan, stroke)
         glowLine(White, Offset(radL, radT), Offset(radR, radT), stroke, 0.7f)
         glowLine(White, Offset(radR, radT), Offset(radR, radB), stroke, 0.7f)
         glowLine(White, Offset(radR, radB), Offset(radL, radB), stroke, 0.7f)
@@ -235,6 +236,10 @@ private fun DrawScope.drawEngine(
         val tailX = collectorX + w * (0.03f + 0.012f * catLvl)
         val tailDrop = h * 0.012f * tipLvl
         if (params.banks < 2) {
+        val caseTop = h * 0.33f
+        val caseBottom = crankY + h * 0.06f
+        groundPool(Offset((left + right) / 2f, caseBottom + h * 0.035f), (right - left) * 0.42f, h * 0.028f)
+        drawSlab(left - 6f, caseTop, right, caseBottom, EngineDepth.extrusion(caseBottom - caseTop), White, stroke)
         glowLine(White, Offset(left - 6f, h * 0.40f), Offset(right, h * 0.40f), stroke, pulse)
         glowLine(White, Offset(left - 6f, h * 0.33f), Offset(right - 8f, h * 0.33f), stroke, 0.85f)
         glowLine(White, Offset(left - 6f, h * 0.33f), Offset(left - 6f, h * 0.40f), stroke, 0.85f)
@@ -382,10 +387,12 @@ private fun DrawScope.drawEngine(
         if (params.induction == Induction.TURBO || params.induction == Induction.TWIN_TURBO) {
             val count = if (params.induction == Induction.TWIN_TURBO) 2 else 1
             for (t in 0 until count) {
-                val cx = right + w * 0.065f
-                val cy = h * (0.34f + t * 0.13f)
+                val drift = EngineDepth.parallax(stroke, clock + t)
+                val cx = right + w * 0.065f + drift.x
+                val cy = h * (0.34f + t * 0.13f) + drift.y
                 val grown = 1f + 0.16f * (turboLvl - 1).coerceAtLeast(0)
                 val rad = h * (if (count == 2) 0.048f else 0.064f) * grown
+                depthDisk(Offset(cx, cy), rad, Cyan, stroke, clock + t, snail = true)
                 glowCircle(Cyan, rad, Offset(cx, cy), stroke, gain = 1.15f)
                 if (part("overboost") > 0) {
                     glowCircle(Red, rad * (1.28f + 0.06f * part("overboost")), Offset(cx, cy), stroke * 0.65f, gain = 0.85f)
@@ -416,6 +423,7 @@ private fun DrawScope.drawEngine(
         if (params.induction == Induction.SUPERCHARGER && params.banks < 2) {
             val grow = 1f + 0.16f * (scLvl - 1).coerceAtLeast(0)
             val scR = left + w * 0.08f + w * 0.20f * grow
+            drawSlab(left + w * 0.08f, h * 0.28f, scR, h * 0.36f, EngineDepth.extrusion(h * 0.08f), Lime, stroke, front = true)
             glowLine(Lime, Offset(left + w * 0.08f, h * 0.28f), Offset(scR, h * 0.28f), stroke, 1.1f)
             glowLine(Lime, Offset(scR, h * 0.28f), Offset(scR, h * 0.36f), stroke, 1.1f)
             glowLine(Lime, Offset(scR, h * 0.36f), Offset(left + w * 0.08f, h * 0.36f), stroke, 1.1f)
@@ -460,7 +468,7 @@ private fun DrawScope.drawEngine(
 
         abuseMarks(parts, w, h, stroke)
         if (params.banks >= 2) {
-            drawVee(params, parts, stroke, angle, exhaust, exhaustGain, perBank)
+            drawVee(params, parts, stroke, angle, clock, exhaust, exhaustGain, perBank)
             return@run
         }
         val headerOut = headerLvl > 0
@@ -570,6 +578,7 @@ private fun DrawScope.drawEngine(
         glowLine(White, Offset(left, crankY), fly, stroke * 0.75f, 0.85f)
         glowCircle(Lime, stroke * 1.7f, Offset(left, crankY), stroke, filled = true, gain = 0.55f + pulse * 0.3f)
         val turn = Math.toRadians(angle.toDouble())
+        depthDisk(fly, flyR, White, stroke, clock)
         glowCircle(White, flyR, fly, stroke * 0.8f, gain = 0.7f)
         for (spoke in 0 until 3) {
             val a = turn + spoke * 2.0 * Math.PI / 3.0
@@ -581,6 +590,9 @@ private fun DrawScope.drawEngine(
         val pumpPulley = Offset(left - w * 0.06f, h * 0.34f)
         val tensioner = Offset(left - w * 0.02f, crankY - h * 0.10f)
         val beltPulse = 0.75f + 0.25f * sin(clock * (1.8f + spinRpm / 2400f))
+        depthDisk(crankPulley, stroke * 2.8f, White, stroke, clock)
+        depthDisk(pumpPulley, stroke * 2.1f, Cyan, stroke, clock + 0.4f)
+        depthDisk(tensioner, stroke * 1.5f, White, stroke, clock + 0.8f)
         glowCircle(White, stroke * 2.8f, crankPulley, stroke * 0.7f, gain = 0.7f)
         glowCircle(Cyan, stroke * 2.1f, pumpPulley, stroke * 0.65f, gain = 0.85f)
         glowCircle(White, stroke * 1.5f, tensioner, stroke * 0.55f, gain = 0.6f)
@@ -676,6 +688,7 @@ private fun DrawScope.drawVee(
     parts: Map<String, Int>,
     stroke: Float,
     angle: Float,
+    clock: Float,
     exhaust: Color,
     exhaustGain: Float,
     perBank: Int,
@@ -803,6 +816,7 @@ private fun DrawScope.drawVee(
     val c = front
     val turn = Math.toRadians(angle.toDouble())
     val pulley = throwLen * 1.55f
+    depthDisk(c, pulley, White, stroke, clock)
     glowCircle(White, pulley, c, stroke * 0.7f, gain = 0.5f)
     for (spoke in 0 until 3) {
         val a = turn + spoke * 2.0 * Math.PI / 3.0
@@ -811,6 +825,12 @@ private fun DrawScope.drawVee(
     glowCircle(Lime, stroke * 0.9f, Offset(c.x + (sin(turn) * pulley).toFloat(), c.y - (cos(turn) * pulley).toFloat()), stroke, filled = true, gain = 1.1f)
     val sumpTop = c.y + throwLen * 0.4f
     val sumpBottom = c.y + h * 0.13f
+    val sumpL = Offset(c.x - h * 0.21f, sumpTop)
+    val sumpR = Offset(c.x + h * 0.21f, sumpTop)
+    val lip = EngineDepth.extrusion(h * 0.2f)
+    groundPool(Offset(c.x, sumpBottom + h * 0.02f), h * 0.22f, h * 0.025f)
+    shadeQuad(listOf(sumpL, sumpR, Offset(c.x + h * 0.16f, sumpBottom), Offset(c.x - h * 0.16f, sumpBottom)), White, EngineDepth.faceAlpha(EngineDepth.Face.FRONT))
+    shadeQuad(listOf(sumpL, sumpR, sumpR + lip, sumpL + lip), White, EngineDepth.faceAlpha(EngineDepth.Face.TOP))
     glowLine(White, Offset(c.x - h * 0.21f, sumpTop), Offset(c.x - h * 0.16f, sumpBottom), stroke * 0.85f, 0.65f)
     glowLine(White, Offset(c.x - h * 0.16f, sumpBottom), Offset(c.x + h * 0.16f, sumpBottom), stroke * 0.85f, 0.65f)
     glowLine(White, Offset(c.x + h * 0.16f, sumpBottom), Offset(c.x + h * 0.21f, sumpTop), stroke * 0.85f, 0.65f)
@@ -822,6 +842,7 @@ private fun DrawScope.drawVee(
     val blower = params.induction == Induction.SUPERCHARGER
     val boxW = if (blower) plenumW * (1.15f + 0.12f * (part("supercharger") - 1).coerceAtLeast(0)) else plenumW
     val boxTop = if (blower) plenumTop - h * 0.04f else plenumTop
+    drawSlab(valley.x - boxW, boxTop, valley.x + boxW, valley.y - h * 0.02f, EngineDepth.extrusion(boxW * 2f), Lime, stroke, front = true)
     glowLine(Lime, Offset(valley.x - boxW, boxTop), Offset(valley.x + boxW, boxTop), stroke, 1.05f)
     glowLine(Lime, Offset(valley.x + boxW, boxTop), Offset(valley.x + boxW, valley.y - h * 0.02f), stroke, 1.05f)
     glowLine(Lime, Offset(valley.x + boxW, valley.y - h * 0.02f), Offset(valley.x - boxW, valley.y - h * 0.02f), stroke, 1.05f)
@@ -880,6 +901,12 @@ private fun DrawScope.drawRotary(
     val total = rotors * housingSpan + (rotors - 1) * gap
     val originX = (w - total) * 0.5f + housingSpan * 0.5f
     val cy = h * 0.54f
+    val wall = Offset((R + e) * 0.09f, (R + e) * 0.05f)
+    groundPool(
+        Offset(originX + (total - housingSpan) / 2f, cy + (R + e) * 0.92f),
+        total * 0.32f,
+        h * 0.026f,
+    )
 
     glowLine(White, Offset(originX - housingSpan * 0.45f, cy), Offset(originX + total - housingSpan * 0.55f, cy), stroke * 0.7f, 0.45f)
 
@@ -891,8 +918,10 @@ private fun DrawScope.drawRotary(
 
         fun toScreen(p: WankelGeometry.Pt): Offset = Offset(cx + p.x.toFloat(), cy + p.y.toFloat())
 
-        // Epitrochoid housing bore.
+        // Epitrochoid housing bore. The dim copy is the far wall of the same housing.
         val housing = WankelGeometry.sampleHousing(R.toDouble(), e.toDouble(), 120)
+        val frontWall = housing.map(::toScreen)
+        glowPath(White, frontWall.map { it + wall }.closedPath(), stroke * 0.7f, 0.28f)
         for (s in housing.indices) {
             val a = toScreen(housing[s])
             val b = toScreen(housing[(s + 1) % housing.size])
@@ -933,6 +962,10 @@ private fun DrawScope.drawRotary(
                 else -> exhaust.copy(alpha = 0.28f * exhaustGain * pulse)
             }
             val flank = WankelGeometry.sampleFlank(shaftRad, face, R.toDouble(), e.toDouble(), 18)
+            val edge = flank.map(::toScreen)
+            val hub = toScreen(WankelGeometry.rotorCenter(shaftRad, e.toDouble()))
+            shadeFan(hub + wall, edge.map { it + wall }, glow, 0.16f)
+            shadeFan(hub, edge, glow, 0.30f)
             for (k in 0 until flank.lastIndex) {
                 glowLine(glow, toScreen(flank[k]), toScreen(flank[k + 1]), stroke * 1.35f, 0.95f)
             }
@@ -1000,18 +1033,21 @@ private fun DrawScope.drawRotary(
         val grown = 1f + 0.16f * (part("turbo") - 1).coerceAtLeast(0)
         val rad = h * (if (count == 2) 0.045f else 0.062f) * grown
         for (t in 0 until count) {
-            val tcx = housingRight + rad * 1.45f
-            val tcy = cy - h * 0.06f + t * rad * 2.3f
+            val drift = EngineDepth.parallax(stroke, clock + t)
+            val tcx = housingRight + rad * 1.45f + drift.x
+            val tcy = cy - h * 0.06f + t * rad * 2.3f + drift.y
             if (tcx + rad > w * 0.98f) continue
             glowLine(exhaust, Offset(housingRight - e * 0.4f, cy - h * 0.02f), Offset(tcx - rad * 0.2f, tcy), stroke * 0.85f, 0.9f)
             if (t == 0 && part("intercooler") > 0) {
                 val mid = Offset((housingRight + tcx) * 0.5f, (cy + tcy) * 0.5f - h * 0.03f)
                 val box = h * (0.035f + 0.008f * part("intercooler"))
+                drawSlab(mid.x - box, mid.y - box * 0.6f, mid.x + box, mid.y + box * 0.6f, EngineDepth.extrusion(box * 2f), Cyan, stroke, front = true)
                 glowLine(Cyan, Offset(mid.x - box, mid.y - box * 0.6f), Offset(mid.x + box, mid.y - box * 0.6f), stroke * 0.7f, 0.9f)
                 glowLine(Cyan, Offset(mid.x + box, mid.y - box * 0.6f), Offset(mid.x + box, mid.y + box * 0.6f), stroke * 0.7f, 0.9f)
                 glowLine(Cyan, Offset(mid.x + box, mid.y + box * 0.6f), Offset(mid.x - box, mid.y + box * 0.6f), stroke * 0.7f, 0.9f)
                 glowLine(Cyan, Offset(mid.x - box, mid.y + box * 0.6f), Offset(mid.x - box, mid.y - box * 0.6f), stroke * 0.7f, 0.9f)
             }
+            depthDisk(Offset(tcx, tcy), rad, Cyan, stroke, clock + t, snail = true)
             glowCircle(Cyan, rad, Offset(tcx, tcy), stroke, gain = 1.15f)
             if (part("overboost") > 0) {
                 glowCircle(Red, rad * (1.28f + 0.06f * part("overboost")), Offset(tcx, tcy), stroke * 0.65f, gain = 0.85f)
@@ -1039,6 +1075,7 @@ private fun DrawScope.drawRotary(
         val left = (right - boxW).coerceAtLeast(stroke)
         val top = cy - boxH
         val bottom = cy + boxH * 0.15f
+        drawSlab(left, top, right, bottom, EngineDepth.extrusion(boxH * 2f), Lime, stroke, front = true)
         glowLine(Lime, Offset(left, top), Offset(right, top), stroke, 1f)
         glowLine(Lime, Offset(right, top), Offset(right, bottom), stroke, 1f)
         glowLine(Lime, Offset(right, bottom), Offset(left, bottom), stroke, 1f)
