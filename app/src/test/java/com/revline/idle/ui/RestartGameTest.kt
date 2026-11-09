@@ -7,11 +7,11 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.revline.idle.GameViewModel
 import com.revline.idle.data.GameState
+import com.revline.idle.data.SaveCodec
 import com.revline.idle.data.SaveRepository
 import com.revline.idle.game.Logic
 import java.io.File
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -40,10 +40,12 @@ class RestartGameTest {
         assertEquals(Logic.newGame(), vm.ui.game)
         assertEquals(Logic.sheet(Logic.newGame()), vm.ui.sheet)
         assertEquals(null, vm.ui.circuitOutcome)
-        assertFalse("the save folder is gone", dir.exists())
-        assertEquals(GameState(), SaveRepository(dir).load())
-        // Relaunching now finds nothing to load and opens a new game too.
+        val left = File(dir, "revline_save.json")
+        assertTrue("reset leaves a complete save", left.isFile)
+        assertEquals(Logic.newGame(), SaveCodec.decode(left.readText()))
+        // Relaunching reads that file and opens the new game, not the wiped one.
         assertEquals(Logic.newGame().money, GameViewModel(app).ui.game.money, 0.0)
+        assertEquals(0, GameViewModel(app).ui.game.knowledge)
         // The new game plays on: a change after the reset is a change to the fresh game.
         vm.toggleDevMode()
         assertNotEquals(Logic.newGame(), vm.ui.game)

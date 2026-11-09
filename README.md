@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.93.14). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.93.15). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -103,7 +103,7 @@ The drawing runs a real four-stroke cycle slowed down so the pistons stay visibl
 
 DEV MODE at the bottom of the REBUILD tab makes every part level and every study free for testing. Study gates still apply. A red DEV tag sits next to the title while it is on, and the switch is saved and survives rebuilds.
 
-A red RESTART GAME button sits right under the dev switch. It asks first (Reset in red, or Cancel, which does nothing). Reset deletes the whole save folder, the only place the app keeps anything (it uses no preferences), starts a brand-new game in memory with no relaunch, and drops any race or save that was already under way so the old game cannot come back.
+A red RESTART GAME button sits right under the dev switch. It asks first (Reset in red, or Cancel, which does nothing). Reset writes a brand-new game over the save and shows it, with no relaunch. The previous file stays until that write is in place, so a restart cannot leave a half-written save as the only copy. A save that will not open is kept, and the game falls back to the last good copy or to whatever prefix of the file still reads.
 
 DRAG PARTS (1.84.0) sit under a DRAG PARTS heading on the Drag page, and each is a study then a purchase like the rest. They fit the strip only. The circuit and the rivals never see them. Launch control (3 levels) holds the tires near the edge of grip and trims a spin, so a flat-footed launch does not light them up. A transbrake holds the car on the button and lets it go with a hit sized to the tires. Wheelie bars raise the point where the nose comes up (a wheelie wastes drive), at the cost of weight and a little drag. A light flywheel revs faster for a lower ET and a higher trap speed, but bogs the launch. A short shifter (2 levels) saves shift time, though a clumsy hand misses more gates. A line lock heats sticky tires for more grip. A drag nitrous kit (3 levels) adds a shot for a limited bottle, and when it opens decides what it is worth. Drag radials and drag slicks already existed as tires, so they are not repeated. The engine's own nitrous upgrade is separate from the strip kit.
 
@@ -114,6 +114,10 @@ SHIFT POINT NEVER REACHED (1.86.0): with a Short shifter and the Shift rpm knob 
 RACING LINE (1.89.0): circuit cars drive a smoothed racing line (inside at the apex) and only step a lane aside while alongside another car, then ease back; sides lock until clear, so nothing wiggles. Follow mode centers on your car only. 16x and 32x replay chips. Kerbs cover only the apex and exit and pull in on tight hairpins.
 
 PAR FIT (1.88.2): the field par clamp now measures the same lap the circuit screen and the race use (your driver and orders), so the shown fit is always within ±10.0%.
+
+## 1.93.15
+
+Restart writes a complete new game before it forgets the old one, and opening the app no longer dies on a save that was cut off mid-write. A damaged file is kept. The last good copy is tried next, then whatever prefix of the file still reads. Pay, the sheet, and the speaker are unchanged.
 
 ## 1.93.14
 

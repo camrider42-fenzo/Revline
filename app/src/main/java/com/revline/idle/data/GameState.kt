@@ -7,6 +7,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 @Serializable
 data class GameState(
@@ -112,10 +115,115 @@ object SaveCodec {
     fun encode(state: GameState): String = json.encodeToString(state)
 
     /** A save with no version field is from before versions existed: version 1, whatever a new GameState defaults to. */
-    fun decode(text: String): GameState {
+    fun decode(text: String): GameState = decodeOrNull(text) ?: throw IllegalArgumentException("save does not decode")
+
+    /** Strict read. Null when the text is not a whole save. Never throws. */
+    fun decodeOrNull(text: String): GameState? = try {
+        scrub(migrate(decodeTree(text)))
+    } catch (_: Throwable) {
+        null
+    }
+
+    /**
+     * A save cut off mid-write. Keeps the longest prefix that is still a save
+     * (missing fields stay at their defaults) and drops a half-written tail.
+     * Null when nothing in the text is a save. Never throws.
+     */
+    fun salvage(text: String): GameState? {
+        decodeOrNull(text)?.let { return it }
+        var body = text
+        repeat(64) {
+            val trimmed = dropIncompleteTail(body)
+            decodeOrNull(closeOpen(trimmed))?.let { return it }
+            val cut = trimmed.lastIndexOf('\n')
+            if (cut <= 0) return null
+            body = trimmed.substring(0, cut)
+        }
+        return null
+    }
+
+    private fun decodeTree(text: String): GameState {
         val tree = json.parseToJsonElement(text)
         val stamped = if (tree is JsonObject && "version" !in tree) JsonObject(tree + ("version" to JsonPrimitive(1))) else tree
-        return migrate(json.decodeFromJsonElement(GameState.serializer(), stamped))
+        return json.decodeFromJsonElement(GameState.serializer(), stamped)
+    }
+
+    /** Non-finite numbers cannot ride into the bench. A normal save has none. */
+    private fun scrub(state: GameState): GameState {
+        fun d(v: Double) = if (v.isFinite()) v else 0.0
+        val tune = state.tune
+        val drag = state.dragTune
+        val cleanTune = if (tune.values.all { it.isFinite() }) tune else tune.mapValues { d(it.value) }
+        val cleanDrag = if (drag.values.all { it.isFinite() }) drag else drag.mapValues { d(it.value) }
+        if (state.money.isFinite() && state.runEarnings.isFinite() && state.researchPoints.isFinite() &&
+            state.throttle.isFinite() && state.soakC.isFinite() && cleanTune === tune && cleanDrag === drag
+        ) {
+            return state
+        }
+        return state.copy(
+            money = d(state.money),
+            runEarnings = d(state.runEarnings),
+            researchPoints = d(state.researchPoints),
+            throttle = d(state.throttle),
+            soakC = d(state.soakC),
+            tune = cleanTune,
+            dragTune = cleanDrag,
+        )
+    }
+
+    private fun dropIncompleteTail(text: String): String {
+        val t = text.trimEnd()
+        if (t.isEmpty()) return t
+        val nl = t.lastIndexOf('\n')
+        val last = if (nl >= 0) t.substring(nl + 1) else t
+        return if (lineComplete(last)) t else if (nl >= 0) t.substring(0, nl) else ""
+    }
+
+    private fun lineComplete(line: String): Boolean {
+        val last = line.trim()
+        if (last.isEmpty()) return true
+        var inString = false
+        var escape = false
+        for (c in last) {
+            if (inString) {
+                if (escape) escape = false
+                else if (c == '\\') escape = true
+                else if (c == '"') inString = false
+            } else if (c == '"') {
+                inString = true
+            }
+        }
+        if (inString || escape) return false
+        val end = last.last()
+        return end == '{' || end == '[' || end == '}' || end == ']' || end == ',' || end == '"' ||
+            end.isDigit() || last.endsWith("true") || last.endsWith("false") || last.endsWith("null")
+    }
+
+    /** Closes whatever `{` and `[` the prefix left open, after a trailing comma. */
+    private fun closeOpen(text: String): String {
+        var s = text.trimEnd()
+        if (s.endsWith(",")) s = s.dropLast(1).trimEnd()
+        var braces = 0
+        var brackets = 0
+        var inString = false
+        var escape = false
+        for (c in s) {
+            if (inString) {
+                if (escape) escape = false
+                else if (c == '\\') escape = true
+                else if (c == '"') inString = false
+                continue
+            }
+            when (c) {
+                '"' -> inString = true
+                '{' -> braces++
+                '}' -> braces--
+                '[' -> brackets++
+                ']' -> brackets--
+            }
+        }
+        if (inString) s += "\""
+        return s + "]".repeat(brackets.coerceAtLeast(0)) + "}".repeat(braces.coerceAtLeast(0))
     }
 
     /**
@@ -143,28 +251,106 @@ object SaveCodec {
 
 class SaveRepository(private val dir: File) {
     private val file = File(dir, "revline_save.json")
+    private val bak = File(dir, "revline_save.json.bak")
+    private val bad = File(dir, "revline_save.json.bad")
+    private val tmp = File(dir, "revline_save.json.tmp")
 
+    /**
+     * The best save that will open. A whole file wins. A file cut off mid-write
+     * keeps whatever prefix still reads. The previous good file is next.
+     * A damaged file is copied aside and left where it is. Never throws.
+     */
     fun load(): GameState {
-        if (!file.exists()) return GameState()
-        return try {
-            SaveCodec.decode(file.readText())
-        } catch (_: Exception) {
-            GameState()
+        val main = readTextOrNull(file)
+        if (main != null) {
+            SaveCodec.decodeOrNull(main)?.let { return it }
+            preserveDamaged()
+            val salvaged = SaveCodec.salvage(main)
+            if (salvaged != null && hasProgress(salvaged)) return salvaged
+        }
+        val previous = readTextOrNull(bak)
+        if (previous != null) {
+            SaveCodec.decodeOrNull(previous)?.let { return it }
+            val salvaged = SaveCodec.salvage(previous)
+            if (salvaged != null && hasProgress(salvaged)) return salvaged
+        }
+        val pending = readTextOrNull(tmp)
+        if (pending != null) {
+            SaveCodec.decodeOrNull(pending)?.let { return it }
+            val salvaged = SaveCodec.salvage(pending)
+            if (salvaged != null && hasProgress(salvaged)) return salvaged
+        }
+        if (main != null) SaveCodec.salvage(main)?.let { return it }
+        return GameState()
+    }
+
+    /**
+     * Writes the whole save to a temp file, then moves it onto the live file.
+     * The previous live file is renamed to the backup first, so a kill during
+     * the move still has a complete save to open. [retainPrevious] keeps that
+     * backup. A restart passes false and drops it only after the new file is in place.
+     */
+    fun save(state: GameState, retainPrevious: Boolean = true) {
+        val text = SaveCodec.encode(state)
+        dir.mkdirs()
+        writeAtomic(tmp, text)
+        val current = readTextOrNull(file)
+        val currentWhole = current != null && SaveCodec.decodeOrNull(current) != null
+        if (current != null && !currentWhole) preserveDamaged()
+        if (retainPrevious && currentWhole) moveAtomic(file, bak)
+        moveAtomic(tmp, file)
+        if (!retainPrevious) bak.delete()
+    }
+
+    /** Copies a live file that did not read cleanly. Does not delete it. */
+    fun preserveDamaged() {
+        if (!file.isFile || file.length() == 0L || bad.exists()) return
+        try {
+            dir.mkdirs()
+            val copy = File(dir, "revline_save.json.bad.copy")
+            writeStream(copy, file.readBytes())
+            moveAtomic(copy, bad)
+        } catch (_: Throwable) {
         }
     }
 
-    /** Deletes everything the app has saved: the save file, a half-written temp file and anything else in the save folder. */
-    fun clear() {
-        dir.deleteRecursively()
+    private fun hasProgress(state: GameState): Boolean =
+        state.money != 0.0 || state.savedAtEpochMs != 0L || state.knowledge != 0 || state.prestiges != 0 ||
+            state.upgrades.isNotEmpty() || state.researched.isNotEmpty() || state.runEarnings != 0.0
+
+    private fun readTextOrNull(target: File): String? {
+        if (!target.isFile || target.length() == 0L) return null
+        return try {
+            target.readText()
+        } catch (_: Throwable) {
+            null
+        }
     }
 
-    fun save(state: GameState) {
-        dir.mkdirs()
-        val tmp = File(dir, "revline_save.json.tmp")
-        tmp.writeText(SaveCodec.encode(state))
-        if (!tmp.renameTo(file)) {
-            file.writeText(tmp.readText())
-            tmp.delete()
+    private fun writeAtomic(target: File, text: String) {
+        val scratch = File(target.parentFile, target.name + ".writing")
+        writeStream(scratch, text.toByteArray(Charsets.UTF_8))
+        moveAtomic(scratch, target)
+    }
+
+    private fun writeStream(target: File, bytes: ByteArray) {
+        target.parentFile?.mkdirs()
+        FileOutputStream(target).use { out ->
+            out.write(bytes)
+            out.flush()
+            try {
+                out.fd.sync()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun moveAtomic(from: File, to: File) {
+        val options = arrayOf(StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        try {
+            Files.move(from.toPath(), to.toPath(), *options)
+        } catch (_: Throwable) {
+            Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
 }

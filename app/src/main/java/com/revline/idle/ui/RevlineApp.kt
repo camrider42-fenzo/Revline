@@ -777,7 +777,7 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
     }
 }
 
-/** The "Restart game" button and its confirmation: Reset wipes every save, Cancel closes the popup and does nothing. */
+/** The "Restart game" button and its confirmation: Reset writes a new game over the save, Cancel closes the popup and does nothing. */
 @Composable
 internal fun RestartGame(onReset: () -> Unit) {
     var asking by remember { mutableStateOf(false) }
