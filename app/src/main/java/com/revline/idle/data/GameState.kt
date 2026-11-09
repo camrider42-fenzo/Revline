@@ -69,7 +69,7 @@ data class GameState(
     val devMode: Boolean = false,
     /** Stops the bench drawing and the speaker. The contract keeps paying. */
     val batterySaver: Boolean = false,
-    /** What the next-part line is chasing: POWER, TORQUE, CRUISE, or PAY. */
+    /** What the next-part line is chasing: POWER, TORQUE, CRUISE, PAY, or COOLING. An old save keeps the one it had. */
     val aimGoal: String = "POWER",
     /**
      * How that line spends: CHEAPEST, AFFORDABLE, ALMOST, or BEST.

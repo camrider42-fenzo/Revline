@@ -57,6 +57,10 @@ data class StatDelta(
     /** Change in mpg at the profit pedal, which is what the rebuild sheet uses. */
     val profitMpg: Double = 0.0,
     val payPerSec: Double,
+    /** Change in the hottest coolant, oil, and exhaust on the wide-open sweep. */
+    val peakCoolantC: Double = 0.0,
+    val peakOilC: Double = 0.0,
+    val peakEgtC: Double = 0.0,
 )
 
 enum class ResearchStatus { OWNED, LOCKED, OPEN }
@@ -785,6 +789,9 @@ object Logic {
             cruiseMpg = next.stats.cruiseMpg - now.stats.cruiseMpg,
             profitMpg = next.profit.mpg - now.profit.mpg,
             payPerSec = next.incomePerSec - now.incomePerSec,
+            peakCoolantC = next.stats.peakCoolantC - now.stats.peakCoolantC,
+            peakOilC = next.stats.peakOilC - now.stats.peakOilC,
+            peakEgtC = next.stats.peakEgtC - now.stats.peakEgtC,
         )
     }
 

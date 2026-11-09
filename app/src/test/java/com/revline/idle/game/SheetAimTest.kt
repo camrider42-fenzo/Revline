@@ -52,6 +52,7 @@ class SheetAimTest {
             AimGoal.TORQUE -> stats.peakTorqueLbFt
             AimGoal.CRUISE -> Logic.sheet(from).profit.mpg
             AimGoal.PAY -> Logic.sheet(from).incomePerSec
+            AimGoal.COOLING -> EngineSim.heatMarginC(Logic.paramsFrom(from), stats)
         }
         return read(after, next) - read(before, state)
     }
