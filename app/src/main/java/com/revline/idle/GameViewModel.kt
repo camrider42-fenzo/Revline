@@ -72,7 +72,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = SaveRepository(File(app.filesDir, "revline"))
     private val saveMutex = Mutex()
     /** Counts resets, so a save or a race that was already under way when the game was wiped cannot bring the old game back. */
-    private var epoch = 0
+    @Volatile private var epoch = 0
     var ui by mutableStateOf(blank())
         private set
     private var phase = DynoPhase.IDLE
@@ -83,12 +83,30 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private var rpm = Logic.IDLE_RPM
 
     init {
-        val now = System.currentTimeMillis()
-        val (loaded, msg) = Logic.applyOffline(openOrNew(), now)
-        val sheet = Logic.sheet(loaded)
-        rpm = Logic.targetRpm(sheet.params.redlineRpm, loaded.throttle, sheet.params.idleRpm)
-        ui = UiModel(loaded, sheet, rpm, DynoPhase.IDLE, msg)
+        ui = boot(System.currentTimeMillis())
         viewModelScope.launch { loop() }
+    }
+
+    /**
+     * Opens the save, or a new game when the save cannot be built into a bench.
+     * A damaged file stays on disk. This does not throw: a throw here is a crash
+     * on every later launch, because the same file is still there.
+     */
+    private fun boot(now: Long): UiModel {
+        try {
+            val (loaded, msg) = Logic.applyOffline(openOrNew(), now)
+            val sheet = Logic.sheet(loaded)
+            val tach = Logic.targetRpm(sheet.params.redlineRpm, loaded.throttle, sheet.params.idleRpm)
+            if (!tach.isFinite() || !sheet.incomePerSec.isFinite()) error("bench")
+            rpm = tach
+            return UiModel(loaded, sheet, tach, DynoPhase.IDLE, msg)
+        } catch (t: Throwable) {
+            repo.preserveDamaged()
+            val game = Logic.newGame()
+            val sheet = Logic.sheet(game)
+            rpm = Logic.targetRpm(sheet.params.redlineRpm, game.throttle, sheet.params.idleRpm)
+            return UiModel(game, sheet, rpm, DynoPhase.IDLE, null)
+        }
     }
 
     private fun publish(next: UiModel) {
@@ -103,6 +121,15 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val nowNs = System.nanoTime()
             val dt = ((nowNs - last) / 1e9).coerceIn(0.0, if (saver) 1.25 else 0.5)
             last = nowNs
+            try {
+                tick(dt)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+            }
+        }
+    }
+
+    private fun tick(dt: Double) {
             clock += dt
             val spun = advanceRpm(dt, ui.sheet.params.redlineRpm, ui.game.throttle, ui.sheet.params.idleRpm)
             val opening = if (phase == DynoPhase.IDLE) ui.game.throttle else 1.0
@@ -142,7 +169,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 sinceSave = 0.0
                 save()
             }
-        }
     }
 
     private fun advanceRpm(dt: Double, redline: Double, throttle: Double, idle: Double): Double {
@@ -387,12 +413,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Wipes every saved byte and starts a new game in memory, so the app needs no relaunch. The save folder is the only place the app
-     * persists anything (no preferences), and nothing queued before the reset can write the old game back.
+     * Writes a complete new game over the save, then shows it. The old file stays
+     * until that write has moved into place, and a save already in flight cannot
+     * put the old game back. Nothing is relaunched and nothing is deleted first.
      */
     fun resetGame() {
         epoch++
-        runBlocking { saveMutex.withLock { repo.clear() } }
         phase = DynoPhase.IDLE
         pullT = 0.0
         onLimiter = false
@@ -400,21 +426,45 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val fresh = Logic.newGame()
         val sheet = Logic.sheet(fresh)
         rpm = Logic.targetRpm(sheet.params.redlineRpm, fresh.throttle, sheet.params.idleRpm)
+        runBlocking(Dispatchers.IO) {
+            saveMutex.withLock {
+                try {
+                    repo.save(fresh, retainPrevious = false)
+                } catch (_: Throwable) {
+                }
+            }
+        }
         publish(UiModel(fresh, sheet, rpm, DynoPhase.IDLE, null))
     }
 
     private fun save() {
         val snapshot = ui.game
         val born = epoch
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             saveMutex.withLock {
-                if (born == epoch) withContext(Dispatchers.IO) { repo.save(snapshot) }
+                if (born == epoch) {
+                    try {
+                        repo.save(snapshot)
+                    } catch (_: Throwable) {
+                    }
+                }
             }
         }
     }
 
     override fun onCleared() {
-        repo.save(ui.game.copy(savedAtEpochMs = System.currentTimeMillis()))
+        val snapshot = ui.game.copy(savedAtEpochMs = System.currentTimeMillis())
+        val born = epoch
+        runBlocking(Dispatchers.IO) {
+            saveMutex.withLock {
+                if (born == epoch) {
+                    try {
+                        repo.save(snapshot)
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
         super.onCleared()
     }
 
