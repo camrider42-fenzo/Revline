@@ -43,12 +43,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revline.idle.DynoPhase
 import com.revline.idle.GameViewModel
+import com.revline.idle.RevlineCrash
 import com.revline.idle.UiModel
 import com.revline.idle.economy.Prestige
 import com.revline.idle.economy.formatCompact
@@ -73,6 +75,8 @@ fun RevlineApp(vm: GameViewModel) {
     val speaker = rememberEngineSpeaker(vm)
     EngineSoundtrack(speaker.crank, ui.game.batterySaver)
     val tab = remember { androidx.compose.runtime.mutableStateOf(Tab.BENCH) }
+    val context = LocalContext.current
+    var crashNote by remember { mutableStateOf(RevlineCrash.read(context)) }
     CompositionLocalProvider(LocalBatterySaver provides ui.game.batterySaver, LocalEngineSpeaker provides speaker) {
     RevlineTheme {
         Scaffold(
@@ -182,6 +186,34 @@ fun RevlineApp(vm: GameViewModel) {
                 text = { Text(ui.offline, fontFamily = FontFamily.Monospace) },
                 confirmButton = {
                     LineButton("Bank it", true, vm::dismissOffline)
+                },
+            )
+        }
+        val note = crashNote
+        if (note != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    RevlineCrash.clear(context)
+                    crashNote = null
+                },
+                containerColor = Black,
+                titleContentColor = Red,
+                textContentColor = White,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                modifier = Modifier.border(1.dp, Red),
+                title = { Text("Last launch closed", fontFamily = FontFamily.Monospace) },
+                text = {
+                    Text(
+                        note.lineSequence().take(24).joinToString("\n"),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        RevlineCrash.clear(context)
+                        crashNote = null
+                    }) { Text("Dismiss", color = White, fontFamily = FontFamily.Monospace) }
                 },
             )
         }

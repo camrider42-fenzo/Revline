@@ -14,6 +14,14 @@ class EngineDepthTest {
         val small = EngineDepth.extrusion(40f)
         assertTrue(small.x > 0f && small.y < 0f)
         assertTrue("a small part keeps a small lip (${small.x}, ${small.y})", small.x < 8f && -small.y < 10f)
+        // Unfolded fold: the 280dp bay is about 735px tall and the crankcase
+        // span is ~0.46 of that, past the point where 8% of the part exceeds
+        // the 26px cap. That used to throw and close the app.
+        for (span in listOf(338f, 400f, 735f, 1600f)) {
+            val wide = EngineDepth.extrusion(span)
+            assertTrue("wide lip $span runs right (${wide.x})", wide.x in 0f..22f)
+            assertTrue("wide lip $span rises (${wide.y})", wide.y in -26f..-1f)
+        }
     }
 
     @Test fun theTopFaceIsTheBrightPlane() {

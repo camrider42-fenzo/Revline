@@ -154,21 +154,26 @@ class EngineAudio(private val crank: EngineCrank) {
         val buf = ShortArray(frames)
         var audioAngle = 0f
         while (!stop) {
-            val ear = crank.ear()
-            val degPerSec = if (ear.running) ear.rpm.toFloat() * EngineMotion.SOUND_CRANK else 0f
-            val step = degPerSec / rate
-            val period = EngineMotion.periodDeg(ear.family)
-            for (i in buf.indices) {
-                val sample = voice.sample(ear, audioAngle, rate)
-                buf[i] = (sample * 28000f).toInt().coerceIn(-32767, 32767).toShort()
-                audioAngle += step
-                if (audioAngle >= period) audioAngle -= period
-            }
-            var wrote = 0
-            while (wrote < buf.size && !stop) {
-                val n = track.write(buf, wrote, buf.size - wrote)
-                if (n <= 0) break
-                wrote += n
+            try {
+                val ear = crank.ear()
+                val degPerSec = if (ear.running) ear.rpm.toFloat() * EngineMotion.SOUND_CRANK else 0f
+                val step = degPerSec / rate
+                val period = EngineMotion.periodDeg(ear.family)
+                for (i in buf.indices) {
+                    val sample = voice.sample(ear, audioAngle, rate)
+                    buf[i] = (sample * 28000f).toInt().coerceIn(-32767, 32767).toShort()
+                    audioAngle += step
+                    if (audioAngle >= period) audioAngle -= period
+                }
+                var wrote = 0
+                while (wrote < buf.size && !stop) {
+                    val n = track.write(buf, wrote, buf.size - wrote)
+                    if (n <= 0) break
+                    wrote += n
+                }
+            } catch (error: Throwable) {
+                com.revline.idle.RevlineCrash.record(error)
+                break
             }
         }
     }

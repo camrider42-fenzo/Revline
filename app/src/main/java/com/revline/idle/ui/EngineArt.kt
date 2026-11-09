@@ -80,7 +80,11 @@ fun EngineArt(
             left = stroke * 0.22f * calm * sin(clock * lope),
             top = stroke * 0.28f * calm * sin(clock * lope * 1.55f + 0.6f),
         ) {
-            drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
+            try {
+                drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
+            } catch (error: Throwable) {
+                com.revline.idle.RevlineCrash.record(error)
+            }
         }
     }
 }
