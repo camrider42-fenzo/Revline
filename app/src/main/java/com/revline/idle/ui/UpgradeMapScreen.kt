@@ -146,6 +146,8 @@ fun PartsScreen(
         ui.game.aimSpend,
         ui.game.money,
         ui.game.throttle,
+        ui.game.blockId,
+        ui.game.racing,
     ) {
         SheetAim.recommend(ui.game, aimGoal, aimSpend)
     }
@@ -485,7 +487,10 @@ private fun AimBar(
             .border(1.dp, color)
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             AimGoal.entries.forEach { item ->
                 val on = item == goal
                 Text(
@@ -494,6 +499,7 @@ private fun AimBar(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     modifier = Modifier
+                        .semantics { contentDescription = "aim goal ${item.name}${if (on) " on" else ""}" }
                         .background(if (on) color else Black)
                         .border(1.dp, color)
                         .clickable(
@@ -600,6 +606,29 @@ private fun Forecast(ui: UiModel, delta: StatDelta) {
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 2.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 2.dp)) {
+        TempChip("Coolant", delta.peakCoolantC)
+        TempChip("Oil", delta.peakOilC)
+        TempChip("EGT", delta.peakEgtC)
+    }
+}
+
+/** Wide-open temperature change. Under half a degree reads as 0, the same cutoff as [signed]. Cooler is lime, hotter is red. */
+internal fun tempEffectText(deltaC: Double): String = "${signed(deltaC, 0)}°C"
+
+@Composable
+private fun TempChip(label: String, deltaC: Double) {
+    val text = tempEffectText(deltaC)
+    Text(
+        "$label $text",
+        color = when {
+            text == "0°C" -> White
+            deltaC < 0.0 -> Lime
+            else -> Red
+        },
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
     )
 }
 

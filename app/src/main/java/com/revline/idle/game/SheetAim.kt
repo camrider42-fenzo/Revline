@@ -18,6 +18,7 @@ enum class AimGoal {
     TORQUE,
     CRUISE,
     PAY,
+    COOLING,
     ;
 
     val short: String
@@ -26,6 +27,7 @@ enum class AimGoal {
             TORQUE -> "TQ"
             CRUISE -> "MPG@\$"
             PAY -> "$/s"
+            COOLING -> "COOL"
         }
 
     fun next(): AimGoal = entries[(ordinal + 1) % entries.size]
@@ -229,22 +231,23 @@ object SheetAim {
 
     /**
      * The next unlocked level for [goal], ranked by [spend].
-     * Horsepower and torque are the sheet peaks. mpg is read at the profit pedal, the way the rebuild sheet reads it. $/s is the contract at the pedal you are holding, and it has no sheet number.
+     * Horsepower and torque are the sheet peaks. mpg is read at the profit pedal, the way the rebuild sheet reads it. $/s is the contract at the pedal you are holding, and it has no sheet number. Cooling is degrees under the tightest temperature limit on the wide-open sweep. Zero is the limit.
      */
     private fun toward(state: GameState, goal: AimGoal, spend: AimSpend): Aim {
         val nowParams = Logic.paramsFrom(state)
         val now = EngineSim.evaluate(nowParams)
         val beforePay = if (goal == AimGoal.PAY) contract(state, now) else 0.0
         val beforeMpg = if (goal == AimGoal.CRUISE) profitMpg(state, nowParams, now) else 0.0
-        val before = reading(now, beforePay, beforeMpg, goal)
+        val beforeMargin = EngineSim.heatMarginC(nowParams, now)
+        val before = reading(now, beforePay, beforeMpg, beforeMargin, goal)
         val target = sheetTarget(state, goal)
         if (AimSpends.met(before, target)) {
-            return Aim(
-                markOf(goal),
-                null,
-                "Clear",
-                "${goal.short} is already on the sheet, at ${fmt(goal, before)}.",
-            )
+            val detail = if (goal == AimGoal.COOLING) {
+                "Coolant, oil, and exhaust are inside their limits. The tightest is ${fmt(goal, before)}."
+            } else {
+                "${goal.short} is already on the sheet, at ${fmt(goal, before)}."
+            }
+            return Aim(markOf(goal), null, "Clear", detail)
         }
         val offers = ArrayList<AimOffer>()
         for (upgrade in Upgrades.all) {
@@ -256,7 +259,7 @@ object SheetAim {
             val next = EngineSim.evaluate(nextParams)
             val afterPay = if (goal == AimGoal.PAY) contract(nextState, next) else 0.0
             val afterMpg = if (goal == AimGoal.CRUISE) profitMpg(nextState, nextParams, next) else 0.0
-            val after = reading(next, afterPay, afterMpg, goal)
+            val after = reading(next, afterPay, afterMpg, EngineSim.heatMarginC(nextParams, next), goal)
             val gain = after - before
             if (gain < floor(goal)) continue
             offers += AimOffer(upgrade.id, Logic.upgradeCost(state, upgrade.id), gain, after)
@@ -276,16 +279,19 @@ object SheetAim {
 
     private fun none(goal: AimGoal, spend: AimSpend, before: Double, money: Double): String {
         val hand = formatDollars(money)
+        val verb = if (goal == AimGoal.COOLING) "cools the engine" else "raises ${goal.short}"
         return when (spend) {
-            AimSpend.AFFORDABLE -> "Nothing that raises ${goal.short} is affordable. $hand on hand."
-            AimSpend.ALMOST -> "Nothing that raises ${goal.short} is within 20% over $hand."
-            else -> "Nothing unlocked raises ${goal.short} from ${fmt(goal, before)}."
+            AimSpend.AFFORDABLE -> "Nothing that $verb is affordable. $hand on hand."
+            AimSpend.ALMOST -> "Nothing that $verb is within 20% over $hand."
+            else -> "Nothing unlocked $verb from ${fmt(goal, before)}."
         }
     }
 
     private fun why(spend: AimSpend, choice: AimChoice, goal: AimGoal, target: Double?, cost: Double): String {
         val price = formatDollars(cost)
-        val short = if (choice.short && target != null) " Still short of ${fmt(goal, target)}." else ""
+        val short = if (choice.short && target != null) {
+            if (goal == AimGoal.COOLING) " Still over the limit." else " Still short of ${fmt(goal, target)}."
+        } else ""
         val lead = when (spend) {
             AimSpend.CHEAPEST -> if (choice.reaches) "Cheapest that clears the sheet." else "Cheapest step."
             AimSpend.AFFORDABLE -> if (choice.reaches) "Best you can buy now." else "Best the cash reaches."
@@ -302,6 +308,8 @@ object SheetAim {
             AimGoal.TORQUE -> block.sheetTorque(state.racing)
             AimGoal.CRUISE -> block.sheetMpg(state.racing)
             AimGoal.PAY -> null
+            // Zero is the limit itself. A positive margin is already under it.
+            AimGoal.COOLING -> 0.0
         }
     }
 
@@ -313,11 +321,12 @@ object SheetAim {
             Block.of(state.blockId, state.prestiges).payScale()
     }
 
-    private fun reading(stats: EngineStats, pay: Double, profitMpg: Double, goal: AimGoal): Double = when (goal) {
+    private fun reading(stats: EngineStats, pay: Double, profitMpg: Double, marginC: Double, goal: AimGoal): Double = when (goal) {
         AimGoal.POWER -> stats.peakHorsepower
         AimGoal.TORQUE -> stats.peakTorqueLbFt
         AimGoal.CRUISE -> profitMpg
         AimGoal.PAY -> pay
+        AimGoal.COOLING -> marginC
     }
 
     private fun floor(goal: AimGoal): Double = when (goal) {
@@ -325,6 +334,7 @@ object SheetAim {
         AimGoal.TORQUE -> 0.05
         AimGoal.CRUISE -> 0.05
         AimGoal.PAY -> 1e-6
+        AimGoal.COOLING -> 0.05
     }
 
     private fun markOf(goal: AimGoal): SheetMark = when (goal) {
@@ -332,6 +342,7 @@ object SheetAim {
         AimGoal.TORQUE -> SheetMark.TORQUE
         AimGoal.CRUISE -> SheetMark.CRUISE
         AimGoal.PAY -> SheetMark.POWER
+        AimGoal.COOLING -> SheetMark.POWER
     }
 
     private fun fmt(goal: AimGoal, value: Double): String = when (goal) {
@@ -339,6 +350,11 @@ object SheetAim {
         AimGoal.TORQUE -> String.format(Locale.US, "%.1f lb-ft", value)
         AimGoal.CRUISE -> String.format(Locale.US, "%.1f mpg", value)
         AimGoal.PAY -> "${formatDollars(value)}/s"
+        AimGoal.COOLING -> if (value >= -0.05) {
+            String.format(Locale.US, "%.0f° under", value.coerceAtLeast(0.0))
+        } else {
+            String.format(Locale.US, "%.0f° over", -value)
+        }
     }
 
     private data class Pick(

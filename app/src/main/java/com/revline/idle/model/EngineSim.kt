@@ -230,6 +230,25 @@ object EngineSim {
         Coolant.GLYCOL_50 -> boilingPointC(params.capPsi, 0.50)
     }
 
+    /** The reliability sweep calls a coolant over this hot. Boiling point, minus 12°C. */
+    fun coolantLimitC(params: EngineParams): Double = coolantBoilingPointC(params) - 12.0
+
+    /** Synthetic oil holds to 160°C. Mineral oil is called over at 145°C. */
+    fun oilLimitC(params: EngineParams): Double = if (params.syntheticOil) 160.0 else 145.0
+
+    /** Inconel valves move the exhaust limit from 900°C to 980°C. */
+    fun egtLimitC(params: EngineParams): Double = if (params.inconelValves) 980.0 else 900.0
+
+    /**
+     * Degrees under the tightest of the three limits, on the wide-open sweep.
+     * Negative means that channel is over its limit.
+     */
+    fun heatMarginC(params: EngineParams, stats: EngineStats): Double = minOf(
+        coolantLimitC(params) - stats.peakCoolantC,
+        oilLimitC(params) - stats.peakOilC,
+        egtLimitC(params) - stats.peakEgtC,
+    )
+
     fun ottoEfficiency(compressionRatio: Double): Double {
         val cr = compressionRatio.coerceAtLeast(6.0)
         return 1.0 - cr.pow(1.0 - GAMMA_HOT)
@@ -370,20 +389,19 @@ object EngineSim {
             score -= knock * 5.4
             notes += "Knock"
         }
-        val boil = coolantBoilingPointC(params)
-        val coolantLimit = boil - 12.0
+        val coolantLimit = coolantLimitC(params)
         val coolant = curve.maxOf { it.coolantTempC }
         if (coolant > coolantLimit) {
             score -= (coolant - coolantLimit) * 0.85
             notes += "Coolant ${coolant.toInt()}°C"
         }
-        val oilLimit = if (params.syntheticOil) 160.0 else 145.0
+        val oilLimit = oilLimitC(params)
         val oil = curve.maxOf { it.oilTempC }
         if (oil > oilLimit) {
             score -= (oil - oilLimit) * 0.45
             notes += "Oil ${oil.toInt()}°C"
         }
-        val egtLimit = if (params.inconelValves) 980.0 else 900.0
+        val egtLimit = egtLimitC(params)
         val egt = curve.maxOf { it.egtC }
         if (egt > egtLimit) {
             score -= (egt - egtLimit) * 0.12
