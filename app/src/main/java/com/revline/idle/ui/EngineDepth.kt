@@ -31,8 +31,13 @@ internal object EngineDepth {
      */
     fun extrusion(span: Float): Offset {
         val d = span.coerceAtLeast(1f)
-        val rise = (d * 0.16f).coerceIn(d * 0.08f, 26f)
-        val run = (d * 0.11f).coerceIn(d * 0.06f, 22f)
+        // 16% of the part, and never past the cap. Once the part is already
+        // taller than the cap, the floor is the cap too: coerceIn throws when
+        // its minimum is above its maximum, which is what closed the app on
+        // the unfolded fold (a 280dp bay is ~735px, and the crankcase span
+        // then asks for a floor of ~27px against a 26px cap).
+        val rise = (d * 0.16f).coerceAtMost(26f).coerceAtLeast(minOf(d * 0.08f, 26f))
+        val run = (d * 0.11f).coerceAtMost(22f).coerceAtLeast(minOf(d * 0.06f, 22f))
         return Offset(run, -rise)
     }
 

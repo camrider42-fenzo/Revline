@@ -11,6 +11,7 @@ import com.revline.idle.ui.RevlineApp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RevlineCrash.install(this)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(0xFF000000.toInt()),
             navigationBarStyle = SystemBarStyle.dark(0xFF000000.toInt()),
