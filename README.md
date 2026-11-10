@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.94.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.94.1). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -114,6 +114,10 @@ SHIFT POINT NEVER REACHED (1.86.0): with a Short shifter and the Shift rpm knob 
 RACING LINE (1.89.0): circuit cars drive a smoothed racing line (inside at the apex) and only step a lane aside while alongside another car, then ease back; sides lock until clear, so nothing wiggles. Follow mode centers on your car only. 16x and 32x replay chips. Kerbs cover only the apex and exit and pull in on tight hairpins.
 
 PAR FIT (1.88.2): the field par clamp now measures the same lap the circuit screen and the race use (your driver and orders), so the shown fit is always within ±10.0%.
+
+## 1.94.1
+
+A car only races when the engine on the bench fits its bay. The bay is the published displacement on the car, and the shop mule takes every engine. Quick, ladder, stake, and a circuit all use the same car. When the engine does not fit the one you picked, they line the shop mule up instead and the race page names it: Shop mule (engine doesn't fit the car you picked). The car you picked stays selected. It comes back on its own once an engine that fits is on the stand. An old save that had a car the engine will not fit keeps that car and races the mule. Nothing is refunded.
 
 ## 1.94.0
 

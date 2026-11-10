@@ -103,7 +103,7 @@ data class GameState(
 data class SeasonRecord(val season: Int, val position: Int, val points: Int, val champion: String)
 
 /** 1: one tire for drag and circuit. 2: separate drag and circuit tires, race components. 3: circuit race counter (weather) and the championship season. */
-const val SAVE_VERSION = 3
+const val SAVE_VERSION = 4
 
 object SaveCodec {
     private val json = Json {
@@ -229,10 +229,12 @@ object SaveCodec {
     /**
      * A version 1 save had one tire for every kind of race. The drag tire stays as it was. The circuit gets the nearest
      * tire of its own for every tire the save had studied, bought or fitted, so nothing is lost and nothing is refunded.
+     * Version 4 keeps the chassis the player picked. A bench engine that will not fit it races the shop mule, and the
+     * picked car comes back on its own once an engine that fits is on the stand. Nothing is refunded.
      */
     fun migrate(state: GameState): GameState {
         if (state.version >= SAVE_VERSION) return state
-        // 2 to 3 added only fields whose defaults are the right start: nothing to convert.
+        // 2 and 3 added fields whose defaults are the right start, and 4 does not rewrite the chassis.
         if (state.version >= 2) return state.copy(version = SAVE_VERSION)
         val studiedSport = "tire_race" in state.raceStudies || "tire_slick" in state.raceStudies
         val studiedSemi = "tire_slick" in state.raceStudies

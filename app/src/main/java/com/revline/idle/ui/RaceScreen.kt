@@ -109,9 +109,10 @@ fun RaceScreen(
                 LineButton(tab, page != tab, { page = tab })
             }
         }
+        val standingIn = Racing.raced(state).id != Racing.picked(state).id
         Text(
-            "${body.name}  ${car.massKg.toInt()} kg  dyno ${car.wheelHp.toInt()} hp  pace ${car.pace.toInt()}",
-            color = if (car.fits) Lime else Amber,
+            "${Racing.raceLabel(state)}  ${car.massKg.toInt()} kg  dyno ${car.wheelHp.toInt()} hp  pace ${car.pace.toInt()}",
+            color = if (standingIn || !car.fits) Amber else Lime,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp),
@@ -646,7 +647,7 @@ private fun CircuitSection(
         modifier = Modifier.padding(top = 6.dp),
     )
     Text(circuit.blurb, color = White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-    CircuitMap(circuit, state.chassis, state.chassis == "r5" && state.enginePlace == "MID")
+    CircuitMap(circuit, Racing.raced(state).id, Racing.raced(state).id == "r5" && state.enginePlace == "MID")
     val favors = remember(circuit.id) { Circuits.favors(circuit) }
     val emphasis = remember(circuit.id) { Circuits.emphasis(circuit) }
     Text(
@@ -860,7 +861,7 @@ private fun CircuitSection(
                 LineButton("Watch the race", true, { onWatching(true) }, Modifier.padding(top = 4.dp))
                 remember(r) { Replay.build(r) }?.let { BestLapTraces(it, Modifier.padding(vertical = 4.dp)) }
                 if (watching) CircuitRaceScreen(
-                    r, state.chassis, state.chassis == "r5" && state.enginePlace == "MID",
+                    r, Racing.raced(state).id, Racing.raced(state).id == "r5" && state.enginePlace == "MID",
                     session = o.run?.seed, onRevise = onRevise,
                     ear = ui.sheet.params, voice = LocalEngineSpeaker.current,
                 ) { onWatching(false) }

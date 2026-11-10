@@ -268,14 +268,48 @@ object Racing {
     fun groupChassis(group: Int, build: Build): Chassis =
         chassis.firstOrNull { it.group == group && it.build == build } ?: mule
 
-    fun fits(body: Chassis, cc: Double): Boolean = cc <= body.maxCc
+    /** The mule's bay is a bedstead. Every engine goes in it. Every other tub stops at [Chassis.maxCc]. */
+    fun fits(body: Chassis, cc: Double): Boolean = body.id == mule.id || cc <= body.maxCc
 
     fun chassisById(id: String): Chassis = chassis.find { it.id == id } ?: mule
+
+    /** The car the player picked. It stays picked when the engine on the bench will not go in it. */
+    fun picked(state: GameState): Chassis = chassisById(state.chassis)
+
+    /** The car that lines up. The shop mule stands in when [picked] will not take this engine. */
+    fun raced(state: GameState): Chassis {
+        val want = picked(state)
+        val cc = EngineSim.displacementCc(Logic.sheet(state).params)
+        return if (fits(want, cc)) want else mule
+    }
+
+    /** What the race page names. The stand-in says which car is waiting. */
+    fun raceLabel(state: GameState): String {
+        val want = picked(state)
+        val body = raced(state)
+        return if (body.id == want.id) body.name else "Shop mule (engine doesn't fit ${want.name})"
+    }
 
     fun driveFor(body: Chassis, place: Place): Drive =
         if (body.id == "r5" && place == Place.MID) Drive.RWD else body.drive
 
-    fun car(state: GameState, circuit: Boolean = false): Car = assess(specOf(state, circuit), lengthOf(state.raceLength))
+    fun car(state: GameState, circuit: Boolean = false): Car {
+        val spec = specOf(state, circuit)
+        if (fits(spec.chassis, spec.displacementCc)) return assess(spec, lengthOf(state.raceLength))
+        val body = mule
+        val level = (state.chassisLevel[body.id] ?: 0).coerceIn(0, 3)
+        val place = body.place
+        return assess(
+            spec.copy(
+                chassis = body,
+                level = level,
+                slots = state.coolingSlots.coerceIn(0, slotMax(body, level)),
+                drive = driveFor(body, place),
+                place = place,
+            ),
+            lengthOf(state.raceLength),
+        )
+    }
 
     /** Fastest chassis this engine can sit in, on the distance selected. */
     fun quickest(state: GameState): Chassis? =
@@ -361,7 +395,7 @@ object Racing {
         if (spec.drive == Drive.AWD && native != Drive.AWD) eff *= 0.94
         if (spec.drive != native) eff *= 0.97
         if (spec.place !in body.places) eff *= 0.98
-        val stuffed = spec.displacementCc > body.maxCc
+        val stuffed = !fits(body, spec.displacementCc)
         val choke = if (stuffed) 0.35 else 1.0
         val made = spec.hp * eff * spec.gearbox.band * choke
         // The dyno reading is the cramped bay. The track still has the power, until the radiator gives up.

@@ -40,7 +40,7 @@ class DragRivalsTest {
         for (p in listOf(0, 3, 7)) for (build in DriverBuilds.orientations(p)) {
             val state = build.state
             val sheet = Logic.sheet(state)
-            val spec = Racing.specOf(state)
+            val spec = Racing.car(state).spec
             val entrant = DragRivals.Entrant(
                 "mirror", spec, sheet.params.redlineRpm, sheet.params.idleRpm, Racing.finalRatio(state.finalDrive), perfect,
             )

@@ -18,8 +18,9 @@ class NitrousBottleTest {
             kit = if (nos > 0) mapOf("nos" to nos) else emptyMap(),
         )
         val rig = DragTune.rig(state)
+        // The named tub, even when a race would stand the mule in. This is the bottle, not a race entry.
         return RaceDrive.setupFor(
-            Racing.car(state), 400.0, 360.0, 7500.0, 900.0,
+            Racing.assess(Racing.specOf(state)), 400.0, 360.0, 7500.0, 900.0,
             Racing.finalRatio("road") + rig.finalTrim, 402.3, 4000.0, circuit, rig,
         )
     }
