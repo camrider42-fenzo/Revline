@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.ProduceStateScope
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -94,7 +95,7 @@ fun RaceScreen(
     val pages = rememberSaveableStateHolder()
     val setup = RaceDrive.setup(state, ui.sheet)
     val forecast by produceState<Map<String, Drivers.Forecast>>(emptyMap(), setup) {
-        value = withContext(Dispatchers.Default) { Drivers.forecast(setup).associateBy { it.driver.id } }
+        publish { Drivers.forecast(setup).associateBy { it.driver.id } }
     }
     pages.SaveableStateProvider(page) {
     Column(
@@ -659,7 +660,7 @@ private fun CircuitSection(
     )
     Circuits.Aspect.entries.forEach { a -> StatBar(aspectLabel(a), (emphasis.getValue(a) * 50).toInt().coerceIn(0, 100), a in favors) }
     val fit by produceState<Double?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.prestiges, state.circuitTire, state.kit) {
-        value = withContext(Dispatchers.Default) { Circuits.fitPercent(Circuits.carOf(state, ui.sheet), circuit, state.prestiges, picked ?: Drivers.you) }
+        publish { Circuits.fitPercent(Circuits.carOf(state, ui.sheet), circuit, state.prestiges, picked ?: Drivers.you) }
     }
     fit?.let {
         Text(
@@ -801,7 +802,7 @@ private fun CircuitSection(
     val breach = Tires.breach(orders.fit, laps, weather)
     if (breach != null) Text("ILLEGAL: $breach", color = Red, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
     val mine by produceState<Circuits.Advice?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.circuitTire, state.kit, start, stops, stop, stop2, middle, finish, pace) {
-        value = withContext(Dispatchers.Default) {
+        publish {
             if (breach != null) null else Circuits.forecast(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, orders, weather)
         }
     }
@@ -819,7 +820,7 @@ private fun CircuitSection(
         )
     }
     val wearTable by produceState<Map<Tires.Compound, Double>?>(null, car.massKg, picked?.id, circuit.id, state.circuitTire, state.kit, pace) {
-        value = withContext(Dispatchers.Default) { Circuits.noStopGrip(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, pace, weather) }
+        publish { Circuits.noStopGrip(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, pace, weather) }
     }
     wearTable?.let { t ->
         Text(
@@ -828,7 +829,7 @@ private fun CircuitSection(
         )
     }
     val advice by produceState<List<Circuits.Advice>?>(null, car.fade, car.massKg, car.pace, picked?.id, circuit.id, state.circuitTire, state.kit) {
-        value = withContext(Dispatchers.Default) { Circuits.advise(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, weather) }
+        publish { Circuits.advise(Circuits.carOf(state, ui.sheet), circuit, picked ?: Drivers.you, weather) }
     }
     advice?.let { list ->
         val best = list.first().orders
@@ -946,4 +947,15 @@ private fun CircuitMap(circuit: Circuits.Circuit, chassis: String, mid: Boolean)
             ),
         )
     }
+}
+
+/**
+ * Forecasts run off the main thread. The snapshot write goes back on the main
+ * dispatcher. The compose test clock resumes the continuation on the worker
+ * that finished the block, and a write there calls requestLayout off the
+ * thread that owns the window.
+ */
+private suspend fun <T> ProduceStateScope<T>.publish(block: () -> T) {
+    val computed = withContext(Dispatchers.Default) { block() }
+    withContext(Dispatchers.Main.immediate) { value = computed }
 }
