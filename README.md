@@ -18,7 +18,7 @@ The sideload APK is `app/build/outputs/apk/release/app-release.apk`. Debug and r
 
 ## Install on a phone
 
-The phone package is `dist/revline.zip` in this repository (version 1.93.17). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
+The phone package is `dist/revline.zip` in this repository (version 1.94.0). It is a zip 2.0 archive with one file, `revline.apk`. Download that zip from the repo, extract it, then tap `revline.apk` and choose Install. Each release replaces `dist/revline.zip` in the same place.
 
 If Revline is already on the phone from a Grok Bot build, uninstall that copy first. Those builds were signed with a different key, and Android will not replace them. Uninstalling clears the save in app storage. Native libraries are stored inside the APK and signed with the JAR signature as well as the newer APK signatures, which is what phone installers expect when you tap a downloaded file.
 
@@ -101,9 +101,9 @@ The bench drawing follows the parts on the engine. A filter grows pleats, a cold
 
 The drawing runs a real four-stroke cycle slowed down so the pistons stay visible. The speaker does not. It fires at the tach: 6,000 rpm is 50 exhaust pulses a second on a single and 200 on a four. Battery saver, on the bar under the tabs, freezes that drawing and stops the speaker. The contract keeps paying. The shop itself ticks a little slower, and the parts map only pulses when a bubble can be bought. Each cylinder fires once every two turns in its own order (1-3-4-2 on the four). The plug flashes just before top dead center, and the flame spreads and fades through the power stroke. Intake and exhaust valves open on their own strokes, driven by cam lobes you can see once a cam is fitted. Intake charge drops toward the valve, and each exhaust pulse runs out through the headers to the tip. A flywheel with a timing mark turns at the crank end, the rods blur past about 2,500 rpm, and the block rocks a little at idle. From the V6 up the drawing is a front-on vee at the block's bank angle (90° for the V8, 60° otherwise). Each pair of cylinders shares a crank pin, each piston slides along its own bank, and the rear rows recede behind the front pair. The plenum (or the blower) sits in the valley. A nitrous bottle, a red arc where the rev limiter used to be, and a red ring on an overboosted turbo show up once those parts are on the engine.
 
-DEV MODE at the bottom of the REBUILD tab makes every part level and every study free for testing. Study gates still apply. A red DEV tag sits next to the title while it is on, and the switch is saved and survives rebuilds.
+DEV MODE at the bottom of the REBUILD tab makes every part level and every study free for testing. Study gates still apply. A red DEV tag sits next to the title while it is on, and the switch is saved and survives rebuilds. The switch stays on that tab, next to the rebuilds it is for.
 
-A red RESTART GAME button sits right under the dev switch. It asks first (Reset in red, or Cancel, which does nothing). Reset writes a brand-new game over the save and shows it, with no relaunch. The previous file stays until that write is in place, so a restart cannot leave a half-written save as the only copy. A save that will not open is kept, and the game falls back to the last good copy or to whatever prefix of the file still reads.
+A gear on the bar opens Settings. Restart game is there, not under the dev switch. It still asks first. Cancel does nothing. The red confirm has to be held down; a tap does not wipe the save. Reset writes a brand-new game over the save and shows it, with no relaunch. The previous file stays until that write is in place, so a restart cannot leave a half-written save as the only copy. A save that will not open is kept, and the game falls back to the last good copy or to whatever prefix of the file still reads.
 
 DRAG PARTS (1.84.0) sit under a DRAG PARTS heading on the Drag page, and each is a study then a purchase like the rest. They fit the strip only. The circuit and the rivals never see them. Launch control (3 levels) holds the tires near the edge of grip and trims a spin, so a flat-footed launch does not light them up. A transbrake holds the car on the button and lets it go with a hit sized to the tires. Wheelie bars raise the point where the nose comes up (a wheelie wastes drive), at the cost of weight and a little drag. A light flywheel revs faster for a lower ET and a higher trap speed, but bogs the launch. A short shifter (2 levels) saves shift time, though a clumsy hand misses more gates. A line lock heats sticky tires for more grip. A drag nitrous kit (3 levels) adds a shot for a limited bottle, and when it opens decides what it is worth. Drag radials and drag slicks already existed as tires, so they are not repeated. The engine's own nitrous upgrade is separate from the strip kit.
 
@@ -114,6 +114,14 @@ SHIFT POINT NEVER REACHED (1.86.0): with a Short shifter and the Shift rpm knob 
 RACING LINE (1.89.0): circuit cars drive a smoothed racing line (inside at the apex) and only step a lane aside while alongside another car, then ease back; sides lock until clear, so nothing wiggles. Follow mode centers on your car only. 16x and 32x replay chips. Kerbs cover only the apex and exit and pull in on tight hairpins.
 
 PAR FIT (1.88.2): the field par clamp now measures the same lap the circuit screen and the race use (your driver and orders), so the shown fit is always within ±10.0%.
+
+## 1.94.0
+
+A race uses the engine on the dyno. Drag and circuit both take that engine's torque curve, redline, displacement, heat, and reliability, with the parts and the fuel that are fitted. The chassis, the gearbox, the tires, the drag and circuit parts, and the driver stay what they were. The strip already read a peak under 8 lb-ft and 8 hp as 8, and it still does: the curve keeps the dyno shape and only comes up to that floor, so a 2 hp single can finish the quarter. Above the floor the curve is the dyno curve. On a stock inline-four the quarter moved from 17.08 s to 16.25 s. The first ladder rung stays 18.63 s and the club field stays 17.10 s. A stock V8 moved from 12.52 s to 12.60 s. The other cars stay on the old curve, so a ladder rung is still that rung and a quick field is still that class. The speaker on the strip uses that same engine's voice.
+
+The bay drawing heats up. The head, the manifold, and the exhaust shift from their instrument colors toward amber and then red as coolant, oil, exhaust gas, or soak climb, and they cool back when those fall. The wires stay single neon lines on black. Battery saver still freezes the drawing.
+
+The same drawing sits beside the strip on a wide screen and above it on a phone. Before the green it turns at idle. During the pass it follows the car's rpm, and the glow follows that pull.
 
 ## 1.93.17
 

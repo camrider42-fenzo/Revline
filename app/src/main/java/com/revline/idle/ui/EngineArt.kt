@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.semantics.contentDescription
@@ -37,6 +38,8 @@ fun EngineArt(
     parts: Map<String, Int> = emptyMap(),
     modifier: Modifier = Modifier,
     throttle: Float = 1f,
+    oilC: Float = coolantC,
+    soakC: Float = 0f,
 ) {
     val frozen = LocalBatterySaver.current
     val rpmState = rememberUpdatedState(rpm)
@@ -62,12 +65,14 @@ fun EngineArt(
         }
     }
     val hose = when {
-        coolantC >= 120f -> Red
-        coolantC >= 105f -> Amber
+        coolantC >= 120f || oilC >= 150f -> Red
+        coolantC >= 105f || oilC >= 130f -> Amber
         else -> Cyan
     }
-    val exhaust = if (egtC >= 880f) Red else Amber
-    val exhaustGain = ((egtC - 420f) / 480f).coerceIn(0.55f, 1.45f)
+    val head = HeatGlow.head(coolantC, oilC, soakC)
+    val heat = HeatGlow.intensity(coolantC, oilC, egtC, soakC)
+    val exhaust = HeatGlow.exhaust(egtC, soakC)
+    val exhaustGain = HeatGlow.gain(egtC, soakC)
     Canvas(
         modifier.semantics {
             contentDescription = "${params.blockTitle}, ${parts.count { it.value > 0 }} parts fitted, ${rpm.toInt()} rpm"
@@ -81,7 +86,7 @@ fun EngineArt(
             top = stroke * 0.28f * calm * sin(clock * lope * 1.55f + 0.6f),
         ) {
             try {
-                drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
+                drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle, head, heat)
             } catch (error: Throwable) {
                 com.revline.idle.RevlineCrash.record(error)
             }
@@ -102,8 +107,10 @@ internal object EngineArtDraw {
         hose: Color = Cyan,
         exhaust: Color = Amber,
         exhaustGain: Float = 1f,
+        head: Color = Lime,
+        heat: Float = 0f,
     ) {
-        scope.drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle)
+        scope.drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle, head, heat)
     }
 }
 
@@ -118,9 +125,11 @@ private fun DrawScope.drawEngine(
     exhaust: Color,
     exhaustGain: Float,
     throttle: Float,
+    head: Color = Lime,
+    heat: Float = 0f,
 ) {
     if (params.family == EngineFamily.ROTARY) {
-        drawRotary(params, parts, stroke, angle, clock, spinRpm, exhaust, exhaustGain, throttle)
+        drawRotary(params, parts, stroke, angle, clock, spinRpm, exhaust, exhaustGain, throttle, head, heat)
         return
     }
     run {
@@ -143,6 +152,7 @@ private fun DrawScope.drawEngine(
         val rod = crankY - crankThrow - deck - h * 0.03f
         val offsets = EngineMotion.firingOffsets(perBank)
         val pulse = 0.82f + 0.18f * sin(clock * (2.2f + spinRpm / 1800f))
+        val deckInk = lerp(White, head, heat.coerceIn(0f, 1f))
         fun part(id: String) = parts[id] ?: 0
         val filterLvl = part("filter")
         val coldLvl = part("cold_air")
@@ -246,8 +256,8 @@ private fun DrawScope.drawEngine(
         val caseBottom = crankY + h * 0.06f
         groundPool(Offset((left + right) / 2f, caseBottom + h * 0.035f), (right - left) * 0.42f, h * 0.028f)
         drawSlab(left - 6f, caseTop, right, caseBottom, EngineDepth.extrusion(caseBottom - caseTop), White, stroke)
-        glowLine(White, Offset(left - 6f, h * 0.40f), Offset(right, h * 0.40f), stroke, pulse)
-        glowLine(White, Offset(left - 6f, h * 0.33f), Offset(right - 8f, h * 0.33f), stroke, 0.85f)
+        glowLine(deckInk, Offset(left - 6f, h * 0.40f), Offset(right, h * 0.40f), stroke, pulse)
+        glowLine(deckInk, Offset(left - 6f, h * 0.33f), Offset(right - 8f, h * 0.33f), stroke, 0.85f)
         glowLine(White, Offset(left - 6f, h * 0.33f), Offset(left - 6f, h * 0.40f), stroke, 0.85f)
         glowLine(White, Offset(left, crankY + h * 0.06f), Offset(right, crankY + h * 0.06f), stroke, 0.8f)
         glowLine(White, Offset(left, h * 0.40f), Offset(left, crankY + h * 0.06f), stroke, 0.8f)
@@ -257,29 +267,29 @@ private fun DrawScope.drawEngine(
             params.individualThrottles -> {
                 for (i in 0 until n) {
                     val cx = left + gap * (i + 0.5f)
-                    glowLine(Lime, Offset(cx, h * 0.18f), Offset(cx, headY), stroke, 1.1f)
-                    glowLine(Lime, Offset(cx - 6f, h * 0.18f), Offset(cx + 6f, h * 0.18f), stroke, 1.1f)
+                    glowLine(head, Offset(cx, h * 0.18f), Offset(cx, headY), stroke, 1.1f)
+                    glowLine(head, Offset(cx - 6f, h * 0.18f), Offset(cx + 6f, h * 0.18f), stroke, 1.1f)
                 }
             }
             params.mixture == Mixture.CARB -> {
-                glowLine(Lime, Offset(left, headY), Offset(right - 20f, headY), stroke * 0.8f, 0.9f)
+                glowLine(head, Offset(left, headY), Offset(right - 20f, headY), stroke * 0.8f, 0.9f)
                 val cx = (left + right) / 2f
-                glowLine(Lime, Offset(cx, headY), Offset(cx, h * 0.20f), stroke)
-                glowLine(Lime, Offset(cx - 16f, h * 0.20f), Offset(cx + 16f, h * 0.20f), stroke)
-                glowLine(Lime, Offset(cx - 16f, h * 0.20f), Offset(cx - 16f, h * 0.14f), stroke)
-                glowLine(Lime, Offset(cx + 16f, h * 0.20f), Offset(cx + 16f, h * 0.14f), stroke)
-                glowLine(Lime, Offset(cx - 16f, h * 0.14f), Offset(cx + 16f, h * 0.14f), stroke)
+                glowLine(head, Offset(cx, headY), Offset(cx, h * 0.20f), stroke)
+                glowLine(head, Offset(cx - 16f, h * 0.20f), Offset(cx + 16f, h * 0.20f), stroke)
+                glowLine(head, Offset(cx - 16f, h * 0.20f), Offset(cx - 16f, h * 0.14f), stroke)
+                glowLine(head, Offset(cx + 16f, h * 0.20f), Offset(cx + 16f, h * 0.14f), stroke)
+                glowLine(head, Offset(cx - 16f, h * 0.14f), Offset(cx + 16f, h * 0.14f), stroke)
             }
             else -> {
-                glowLine(Lime, Offset(left + 8f, h * 0.24f), Offset(right - 16f, h * 0.24f), stroke, 1.05f)
+                glowLine(head, Offset(left + 8f, h * 0.24f), Offset(right - 16f, h * 0.24f), stroke, 1.05f)
                 for (i in 0 until n) {
                     val cx = left + gap * (i + 0.5f)
-                    glowLine(Lime, Offset(cx, h * 0.24f), Offset(cx, headY), stroke * 0.8f)
+                    glowLine(head, Offset(cx, h * 0.24f), Offset(cx, headY), stroke * 0.8f)
                 }
                 if (params.mixture == Mixture.DIRECT) {
                     for (i in 0 until n) {
                         val cx = left + gap * (i + 0.5f)
-                        glowLine(Lime, Offset(cx, h * 0.33f), Offset(cx, h * 0.40f), stroke * 0.75f, 1.15f)
+                        glowLine(head, Offset(cx, h * 0.33f), Offset(cx, h * 0.40f), stroke * 0.75f, 1.15f)
                     }
                 }
             }
@@ -473,7 +483,7 @@ private fun DrawScope.drawEngine(
 
         abuseMarks(parts, w, h, stroke)
         if (params.banks >= 2) {
-            drawVee(params, parts, stroke, angle, clock, exhaust, exhaustGain, perBank)
+            drawVee(params, parts, stroke, angle, clock, exhaust, exhaustGain, perBank, head, heat)
             return@run
         }
         val headerOut = headerLvl > 0
@@ -697,6 +707,8 @@ private fun DrawScope.drawVee(
     exhaust: Color,
     exhaustGain: Float,
     perBank: Int,
+    head: Color = Lime,
+    heat: Float = 0f,
 ) {
     val w = size.width
     val h = size.height
@@ -712,6 +724,7 @@ private fun DrawScope.drawVee(
     val depth = Offset(w * 0.020f, -h * 0.016f)
     val front = Offset(w * 0.47f - depth.x * (rows - 1) / 2f, h * 0.74f - depth.y * (rows - 1) / 2f)
     val crownColor = if (part("pistons") > 0) Lime else Cyan
+    val housing = lerp(White, head, heat.coerceIn(0f, 1f))
     val headerLvl = part("headers") + part("long_tube")
     val springLvl = part("springs")
     val camLvl = part("cam")
@@ -736,10 +749,10 @@ private fun DrawScope.drawVee(
 
             glowLine(White, at(rodLen - throwLen, -skirt - 2f), at(deck, -skirt - 2f), stroke * 0.75f, 0.55f * g)
             glowLine(White, at(rodLen - throwLen, skirt + 2f), at(deck, skirt + 2f), stroke * 0.75f, 0.55f * g)
-            glowLine(White, at(deck, -skirt - 6f), at(deck, skirt + 6f), stroke, 0.8f * g)
-            glowLine(White, at(deck, -skirt - 6f), at(deck + cover, -skirt + 2f), stroke * 0.85f, 0.75f * g)
-            glowLine(White, at(deck + cover, -skirt + 2f), at(deck + cover, skirt - 2f), stroke * 0.85f, 0.75f * g)
-            glowLine(White, at(deck + cover, skirt - 2f), at(deck, skirt + 6f), stroke * 0.85f, 0.75f * g)
+            glowLine(housing, at(deck, -skirt - 6f), at(deck, skirt + 6f), stroke, 0.8f * g)
+            glowLine(housing, at(deck, -skirt - 6f), at(deck + cover, -skirt + 2f), stroke * 0.85f, 0.75f * g)
+            glowLine(housing, at(deck + cover, -skirt + 2f), at(deck + cover, skirt - 2f), stroke * 0.85f, 0.75f * g)
+            glowLine(housing, at(deck + cover, skirt - 2f), at(deck, skirt + 6f), stroke * 0.85f, 0.75f * g)
 
             val burn = EngineMotion.burn(cyc)
             if (burn > 0.02f) {
@@ -892,12 +905,15 @@ private fun DrawScope.drawRotary(
     exhaust: Color,
     exhaustGain: Float,
     throttle: Float,
+    head: Color = Lime,
+    heat: Float = 0f,
 ) {
     val w = size.width
     val h = size.height
     fun part(id: String) = parts[id] ?: 0
     val rotors = params.cylinders.coerceIn(1, 4)
     val pulse = 0.82f + 0.18f * sin(clock * (2.2f + spinRpm / 1800f))
+    val housingInk = lerp(White, head, heat.coerceIn(0f, 1f))
     // Generating radius sized to the panel; R/e = 7 (Mazda-class peanut).
     val e = h * 0.030f
     val R = e * WankelGeometry.DEFAULT_R_OVER_E.toFloat()
@@ -942,11 +958,11 @@ private fun DrawScope.drawRotary(
         // Epitrochoid housing bore. The dim copy is the far wall of the same housing.
         val housing = WankelGeometry.sampleHousing(R.toDouble(), e.toDouble(), 120)
         val frontWall = housing.map(::toScreen)
-        glowPath(White, frontWall.map { it + wall }.closedPath(), stroke * 0.7f, 0.28f)
+        glowPath(housingInk, frontWall.map { it + wall }.closedPath(), stroke * 0.7f, 0.28f)
         for (s in housing.indices) {
             val a = toScreen(housing[s])
             val b = toScreen(housing[(s + 1) % housing.size])
-            glowLine(White, a, b, stroke * 0.9f, 0.75f)
+            glowLine(housingInk, a, b, stroke * 0.9f, 0.75f)
         }
 
         // Renesis-style side intake (left short face) + peripheral/side exhaust (right).
@@ -968,10 +984,10 @@ private fun DrawScope.drawRotary(
         val lead = toScreen(WankelGeometry.housing(-1.45, R.toDouble(), e.toDouble()))
         val trail = toScreen(WankelGeometry.housing(-1.75, R.toDouble(), e.toDouble()))
         val plugOut = stroke * 3.2f
-        glowLine(Lime, lead, Offset(lead.x, lead.y - plugOut), stroke * 0.85f, 1.05f)
-        glowCircle(Lime, stroke * 0.55f, Offset(lead.x, lead.y - plugOut), stroke, filled = true, gain = 1.1f)
-        glowLine(Lime, trail, Offset(trail.x, trail.y - plugOut), stroke * 0.85f, 1.05f)
-        glowCircle(Lime, stroke * 0.55f, Offset(trail.x, trail.y - plugOut), stroke, filled = true, gain = 1.1f)
+        glowLine(head, lead, Offset(lead.x, lead.y - plugOut), stroke * 0.85f, 1.05f)
+        glowCircle(head, stroke * 0.55f, Offset(lead.x, lead.y - plugOut), stroke, filled = true, gain = 1.1f)
+        glowLine(head, trail, Offset(trail.x, trail.y - plugOut), stroke * 0.85f, 1.05f)
+        glowCircle(head, stroke * 0.55f, Offset(trail.x, trail.y - plugOut), stroke, filled = true, gain = 1.1f)
 
         // Rotor flanks (Reuleaux-like with combustion recesses) + chamber glow.
         for (face in 0 until 3) {

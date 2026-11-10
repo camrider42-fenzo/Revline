@@ -2,8 +2,11 @@ package com.revline.idle.ui
 
 import android.app.Application
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.revline.idle.GameViewModel
 import com.revline.idle.data.GameState
@@ -61,8 +64,23 @@ class RestartGameTest {
         assertEquals(0, resets)
         rule.onNodeWithText("Restart game?").assertDoesNotExist()
         rule.onNodeWithText("Restart game").performClick()
-        rule.onNodeWithText("Reset").performClick()
+        rule.onNodeWithText("Hold to reset").performClick()
+        assertEquals(0, resets)
+        rule.onNodeWithText("Hold to reset").performTouchInput { longClick() }
         assertEquals(1, resets)
         rule.onNodeWithText("Restart game?").assertDoesNotExist()
+    }
+
+    @Test fun settingsHoldsRestartAndTheRebuildTabDoesNot() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val vm = GameViewModel(app)
+        if (!vm.ui.game.batterySaver) vm.toggleBatterySaver()
+        rule.setContent { RevlineApp(vm) }
+        rule.onNodeWithText("REBUILD").performClick()
+        rule.onNodeWithText("Restart game").assertDoesNotExist()
+        rule.onNodeWithText("DEV MODE").assertExists()
+        rule.onNodeWithContentDescription("Settings").performClick()
+        rule.onNodeWithText("SETTINGS").assertExists()
+        rule.onNodeWithText("Restart game").assertExists()
     }
 }

@@ -46,12 +46,14 @@ class DragRivalsTest {
             )
             val meters = Racing.lengthOf(state.raceLength).meters
             val rivalSetup = DragRivals.setup(entrant, meters)
-            // The player's setup carries the block's stock displacement for the sound model. Everything the sim reads is the same.
+            // A spec rival has peaks and the generic curve. The player's car adds the dyno sweep.
+            assertTrue("p$p ${build.name} rival curve", rivalSetup.pullRpm.isEmpty())
             val playerSetup = RaceDrive.setup(state).copy(displacementCc = spec.displacementCc)
-            assertEquals("p$p ${build.name} setup", playerSetup, rivalSetup)
+            val mirrored = rivalSetup.copy(pullRpm = playerSetup.pullRpm, pullLbFt = playerSetup.pullLbFt)
+            assertEquals("p$p ${build.name} setup", playerSetup, mirrored)
             val seed = 4_242L
             val mine = AutoRace(playerSetup, perfect, seed).finish()
-            val theirs = DragRivals.pass(rivalSetup, perfect, seed)
+            val theirs = DragRivals.pass(mirrored, perfect, seed)
             assertEquals("p$p ${build.name} ET", mine.run.time, theirs.time, 1e-9)
             assertEquals("p$p ${build.name} trap", mine.run.speed, theirs.trapMps, 1e-9)
             // And the clean-run helper the player's own hint uses agrees with them to within the pilot's tiny read noise.
