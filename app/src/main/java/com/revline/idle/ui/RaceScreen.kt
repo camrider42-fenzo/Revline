@@ -252,7 +252,7 @@ fun RaceScreen(
             fontSize = 12.sp,
         )
         val quickestId = Racing.quickest(state)?.id
-        ChassisRow("Shop mule", "640 kg  front  fits the engine you have  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
+        ChassisRow("Shop mule", "${Racing.mule.kg.toInt()} kg  front  fits the engine you have  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
         com.revline.idle.model.Block.primarySteps().forEach { block ->
             val group = Racing.chassis.filter { it.group == block.ladderStep }
             if (group.isEmpty()) return@forEach

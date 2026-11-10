@@ -117,7 +117,39 @@ PAR FIT (1.88.2): the field par clamp now measures the same lap the circuit scre
 
 ## 1.94.0
 
-A race uses the engine on the dyno. Drag and circuit both take that engine's torque curve, redline, displacement, heat, and reliability, with the parts and the fuel that are fitted. The chassis, the gearbox, the tires, the drag and circuit parts, and the driver stay what they were. The strip already read a peak under 8 lb-ft and 8 hp as 8, and it still does: the curve keeps the dyno shape and only comes up to that floor, so a 2 hp single can finish the quarter. Above the floor the curve is the dyno curve. On a stock inline-four the quarter moved from 17.08 s to 16.25 s. The first ladder rung stays 18.63 s and the club field stays 17.10 s. A stock V8 moved from 12.52 s to 12.60 s. The other cars stay on the old curve, so a ladder rung is still that rung and a quick field is still that class. The speaker on the strip uses that same engine's voice.
+A race uses the engine on the dyno. Drag and circuit both take that engine's torque curve, redline, displacement, heat, and reliability, with the parts and the fuel that are fitted. The chassis, the gearbox, the tires, the drag and circuit parts, and the driver stay what they were. The strip already read a peak under 8 lb-ft and 8 hp as 8, and it still does: the curve keeps the dyno shape and only comes up to that floor, so a 2 hp single can finish the quarter. Above the floor the curve is the dyno curve. On a stock inline-four the quarter moved from 17.08 s to 16.25 s on the old 640 kg mule, and the mule is now 620 kg, so that same pass is 16.12 s. The first ladder rung stays 18.63 s and the club field stays 17.10 s. A stock V8 moved from 12.52 s to 12.60 s on the 640 kg mule, and reads 12.58 s at 620 kg. The other cars stay on the old curve, so a ladder rung is still that rung and a quick field is still that class. The speaker on the strip uses that same engine's voice.
+
+The shop mule is 620 kg, down from 640. It is still the bedstead you start on, not the car to keep. On a stock inline-four the clean quarter goes from 16.25 s to 16.12 s and a Monza lap from 174.4 s to 173.8 s. The Lotus Seven in that class is still quicker, at 14.32 s and 162.2 s. A stock V8 goes from 12.60 s to 12.58 s and from 157.4 s to 156.9 s, and the GT40 still matches the quarter (12.57 s) and is quicker at Monza (155.0 s). Every car you can buy is 35% off its old sticker, rounded to the nearest $10. The mule stays free. A car you already own stays owned, and nothing is refunded. Studies are the same.
+
+| Car | Was | Now |
+| --- | ---: | ---: |
+| Peel P50 | 140 | 90 |
+| BMW Isetta 250 | 380 | 250 |
+| Citroen 2CV | 720 | 470 |
+| Messerschmitt KR200 | 460 | 300 |
+| Fiat 500 | 820 | 530 |
+| Saab 96 | 1,500 | 980 |
+| Austin-Healey Sprite | 980 | 640 |
+| Mini Cooper S | 900 | 580 |
+| Volvo Amazon | 2,100 | 1,360 |
+| Lotus Elan | 1,800 | 1,170 |
+| Alfa Giulia Sprint GTA | 2,400 | 1,560 |
+| BMW 2002 | 3,200 | 2,080 |
+| Lotus Seven | 480 | 310 |
+| Renault 5 | 2,600 | 1,690 |
+| Jaguar E-Type lightweight | 4,200 | 2,730 |
+| Lancia Stratos | 6,400 | 4,160 |
+| Porsche 911 | 8,200 | 5,330 |
+| Chevrolet Corvette | 9,800 | 6,370 |
+| Ford GT40 | 15,000 | 9,750 |
+| Shelby Cobra 289 | 6,400 | 4,160 |
+| Mercedes 300 SEL 6.3 | 18,000 | 11,700 |
+| Porsche 917K | 24,000 | 15,600 |
+| Ferrari Daytona competizione | 20,000 | 13,000 |
+| Jensen Interceptor | 22,000 | 14,300 |
+| Mazda RX-7 FD | 24,000 | 15,600 |
+| Mazda Cosmo Sport | 22,000 | 14,300 |
+| Rotary luxury coupe | 26,000 | 16,900 |
 
 The bay drawing heats up. The head, the manifold, and the exhaust shift from their instrument colors toward amber and then red as coolant, oil, exhaust gas, or soak climb, and they cool back when those fall. The wires stay single neon lines on black. Battery saver still freezes the drawing.
 
