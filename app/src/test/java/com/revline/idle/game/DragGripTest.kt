@@ -18,8 +18,9 @@ class DragGripTest {
     ): RaceDrive.Setup {
         val s = GameState(prestiges = 6, chassis = chassis, transmission = "close", driveline = "lsd", tire = tire, kit = kit, dragTune = tune)
         val rig = DragTune.rig(s)
+        // The named tub, even when a race would stand the mule in. This is the tire model, not a race entry.
         return RaceDrive.setupFor(
-            Racing.car(s), hp, hp * 0.9, 7500.0, 900.0,
+            Racing.assess(Racing.specOf(s)), hp, hp * 0.9, 7500.0, 900.0,
             Racing.finalRatio("road") + rig.finalTrim, 402.3, 4000.0, false, rig,
         )
     }

@@ -68,6 +68,7 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import com.revline.idle.game.EngineWeight
+import com.revline.idle.game.Racing
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Perks
 import com.revline.idle.game.ResearchStatus
@@ -156,8 +157,8 @@ fun RevlineApp(vm: GameViewModel) {
                         speaker.crank,
                         ui.sheet.params,
                         hear = !ui.game.batterySaver,
-                        yourId = ui.game.chassis,
-                        yourMid = ui.game.chassis == "r5" && ui.game.enginePlace == "MID",
+                        yourId = Racing.raced(ui.game).id,
+                        yourMid = Racing.raced(ui.game).id == "r5" && ui.game.enginePlace == "MID",
                         rivalId = strip.field.rivalId,
                         driver = strip.driver,
                         fee = strip.fee,

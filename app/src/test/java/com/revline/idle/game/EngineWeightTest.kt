@@ -52,14 +52,14 @@ class EngineWeightTest {
         val light = GameState(
             prestiges = Block.ROTARY.ladderStep,
             blockId = Block.ROTARY.name,
-            chassis = "rx7",
+            chassis = "jensen",
             tire = "slick",
             transmission = "close",
             driveline = "lsd",
         )
         val heavy = GameState(
             prestiges = Block.V12.ordinal,
-            chassis = "rx7",
+            chassis = "jensen",
             tire = "slick",
             transmission = "close",
             driveline = "lsd",
