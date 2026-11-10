@@ -25,7 +25,13 @@ class CircuitPaceTest {
     }
 
     private fun withGrip(c: Circuits.Car, k: Double) = c.copy(setup = c.setup.copy(gripN = c.setup.gripN * k))
-    private fun withPower(c: Circuits.Car, k: Double) = c.copy(setup = c.setup.copy(peakHp = c.setup.peakHp * k, peakTqLbFt = c.setup.peakTqLbFt * k))
+    private fun withPower(c: Circuits.Car, k: Double) = c.copy(
+        setup = c.setup.copy(
+            peakHp = c.setup.peakHp * k,
+            peakTqLbFt = c.setup.peakTqLbFt * k,
+            pullLbFt = c.setup.pullLbFt.map { it * k },
+        ),
+    )
 
     private fun race(id: String, seed: Long): Circuits.Result {
         val c = circuit(id)

@@ -97,8 +97,9 @@ object Racing {
 
     data class Study(val id: String, val name: String, val detail: String, val cost: Double, val requires: String? = null, val minPrestige: Int = 0)
 
+    /** The bedstead you start on. Twenty kilos under the old 640 kg tub, and still slower than the light car that fits. */
     val mule = Chassis(
-        "mule", "Shop mule", 640.0, Drive.RWD, Place.FRONT, 0.72, 1.45, 1, 0, 0.0, 0.0,
+        "mule", "Shop mule", 620.0, Drive.RWD, Place.FRONT, 0.72, 1.45, 1, 0, 0.0, 0.0,
         "A bedstead with wheels. Not a famous car.", Build.HEAVY, -1, listOf(Place.FRONT), 50_000.0, 0.90,
     )
 
@@ -116,41 +117,41 @@ object Racing {
      * 917K 800 kg, the 1970 5-litre minimum. Daytona competizione 1,240 kg dry. Jensen Interceptor about 1,680 kg.
      */
     val chassis: List<Chassis> = listOf(
-        Chassis("p50", "Peel P50", 59.0, Drive.FWD, Place.FRONT, 0.70, 0.55, 1, 0, 16.0, 140.0, "59 kg, Carfolio", Build.LIGHT, 0, listOf(Place.FRONT), 90.0, 0.74),
-        Chassis("isetta", "BMW Isetta 250", 353.0, Drive.RWD, Place.REAR, 0.62, 1.15, 2, 0, 36.0, 380.0, "353 kg, Isetta 250", Build.MEDIUM, 0, listOf(Place.REAR), 360.0, 0.92),
-        Chassis("cv2", "Citroen 2CV", 560.0, Drive.FWD, Place.FRONT, 0.52, 1.55, 3, 0, 60.0, 720.0, "560 kg, early 2CV", Build.HEAVY, 0, listOf(Place.FRONT), 750.0, 1.06),
+        Chassis("p50", "Peel P50", 59.0, Drive.FWD, Place.FRONT, 0.70, 0.55, 1, 0, 16.0, 90.0, "59 kg, Carfolio", Build.LIGHT, 0, listOf(Place.FRONT), 90.0, 0.74),
+        Chassis("isetta", "BMW Isetta 250", 353.0, Drive.RWD, Place.REAR, 0.62, 1.15, 2, 0, 36.0, 250.0, "353 kg, Isetta 250", Build.MEDIUM, 0, listOf(Place.REAR), 360.0, 0.92),
+        Chassis("cv2", "Citroen 2CV", 560.0, Drive.FWD, Place.FRONT, 0.52, 1.55, 3, 0, 60.0, 470.0, "560 kg, early 2CV", Build.HEAVY, 0, listOf(Place.FRONT), 750.0, 1.06),
 
-        Chassis("kr200", "Messerschmitt KR200", 230.0, Drive.RWD, Place.REAR, 0.48, 0.85, 1, 1, 40.0, 460.0, "about 230 kg", Build.LIGHT, 1, listOf(Place.REAR), 340.0, 0.78),
-        Chassis("fiat500", "Fiat 500", 499.0, Drive.RWD, Place.REAR, 0.48, 1.35, 2, 1, 70.0, 820.0, "499 kg, Nuova 500", Build.MEDIUM, 1, listOf(Place.REAR), 700.0, 0.94),
-        Chassis("saab96", "Saab 96", 880.0, Drive.FWD, Place.FRONT, 0.46, 1.70, 4, 1, 120.0, 1500.0, "about 880 kg", Build.HEAVY, 1, listOf(Place.FRONT), 1600.0, 1.08),
+        Chassis("kr200", "Messerschmitt KR200", 230.0, Drive.RWD, Place.REAR, 0.48, 0.85, 1, 1, 40.0, 300.0, "about 230 kg", Build.LIGHT, 1, listOf(Place.REAR), 340.0, 0.78),
+        Chassis("fiat500", "Fiat 500", 499.0, Drive.RWD, Place.REAR, 0.48, 1.35, 2, 1, 70.0, 530.0, "499 kg, Nuova 500", Build.MEDIUM, 1, listOf(Place.REAR), 700.0, 0.94),
+        Chassis("saab96", "Saab 96", 880.0, Drive.FWD, Place.FRONT, 0.46, 1.70, 4, 1, 120.0, 980.0, "about 880 kg", Build.HEAVY, 1, listOf(Place.FRONT), 1600.0, 1.08),
 
-        Chassis("sprite", "Austin-Healey Sprite", 603.0, Drive.RWD, Place.FRONT, 0.52, 1.25, 2, 2, 80.0, 980.0, "about 603 kg, Frogeye", Build.LIGHT, 2, listOf(Place.FRONT), 750.0, 0.80),
-        Chassis("mini", "Mini Cooper S", 634.0, Drive.FWD, Place.FRONT, 0.48, 1.55, 2, 2, 80.0, 900.0, "634 kg, Cooper S", Build.MEDIUM, 2, listOf(Place.FRONT), 1400.0, 0.90),
-        Chassis("amazon", "Volvo Amazon", 1090.0, Drive.RWD, Place.FRONT, 0.48, 1.85, 5, 2, 160.0, 2100.0, "about 1,090 kg", Build.HEAVY, 2, listOf(Place.FRONT), 2400.0, 1.10),
+        Chassis("sprite", "Austin-Healey Sprite", 603.0, Drive.RWD, Place.FRONT, 0.52, 1.25, 2, 2, 80.0, 640.0, "about 603 kg, Frogeye", Build.LIGHT, 2, listOf(Place.FRONT), 750.0, 0.80),
+        Chassis("mini", "Mini Cooper S", 634.0, Drive.FWD, Place.FRONT, 0.48, 1.55, 2, 2, 80.0, 580.0, "634 kg, Cooper S", Build.MEDIUM, 2, listOf(Place.FRONT), 1400.0, 0.90),
+        Chassis("amazon", "Volvo Amazon", 1090.0, Drive.RWD, Place.FRONT, 0.48, 1.85, 5, 2, 160.0, 1360.0, "about 1,090 kg", Build.HEAVY, 2, listOf(Place.FRONT), 2400.0, 1.10),
 
-        Chassis("elan", "Lotus Elan", 640.0, Drive.RWD, Place.FRONT, 0.42, 1.35, 2, 3, 180.0, 1800.0, "640 kg, Elan S1 workshop", Build.LIGHT, 3, listOf(Place.FRONT), 1700.0, 0.82),
-        Chassis("gta", "Alfa Giulia Sprint GTA", 745.0, Drive.RWD, Place.FRONT, 0.42, 1.70, 3, 3, 220.0, 2400.0, "745 kg homologation", Build.MEDIUM, 3, listOf(Place.FRONT), 2500.0, 0.98),
-        Chassis("b2002", "BMW 2002", 1030.0, Drive.RWD, Place.FRONT, 0.44, 1.75, 5, 3, 280.0, 3200.0, "about 1,030 kg", Build.HEAVY, 3, listOf(Place.FRONT), 4000.0, 1.10),
+        Chassis("elan", "Lotus Elan", 640.0, Drive.RWD, Place.FRONT, 0.42, 1.35, 2, 3, 180.0, 1170.0, "640 kg, Elan S1 workshop", Build.LIGHT, 3, listOf(Place.FRONT), 1700.0, 0.82),
+        Chassis("gta", "Alfa Giulia Sprint GTA", 745.0, Drive.RWD, Place.FRONT, 0.42, 1.70, 3, 3, 220.0, 1560.0, "745 kg homologation", Build.MEDIUM, 3, listOf(Place.FRONT), 2500.0, 0.98),
+        Chassis("b2002", "BMW 2002", 1030.0, Drive.RWD, Place.FRONT, 0.44, 1.75, 5, 3, 280.0, 2080.0, "about 1,030 kg", Build.HEAVY, 3, listOf(Place.FRONT), 4000.0, 1.10),
 
-        Chassis("seven", "Lotus Seven", 387.0, Drive.RWD, Place.FRONT, 0.68, 1.15, 2, 4, 40.0, 480.0, "387 kg kerb", Build.LIGHT, 4, listOf(Place.FRONT), 2400.0, 0.80),
-        Chassis("r5", "Renault 5", 730.0, Drive.FWD, Place.FRONT, 0.40, 1.72, 3, 4, 240.0, 2600.0, "about 730 kg. Front in the road car. Mid in the Turbo.", Build.MEDIUM, 4, listOf(Place.FRONT, Place.MID), 2800.0, 0.98),
-        Chassis("etype", "Jaguar E-Type lightweight", 1016.0, Drive.RWD, Place.FRONT, 0.44, 1.78, 5, 4, 420.0, 4200.0, "about 1,016 kg", Build.HEAVY, 4, listOf(Place.FRONT), 5600.0, 1.10),
+        Chassis("seven", "Lotus Seven", 387.0, Drive.RWD, Place.FRONT, 0.68, 1.15, 2, 4, 40.0, 310.0, "387 kg kerb", Build.LIGHT, 4, listOf(Place.FRONT), 2400.0, 0.80),
+        Chassis("r5", "Renault 5", 730.0, Drive.FWD, Place.FRONT, 0.40, 1.72, 3, 4, 240.0, 1690.0, "about 730 kg. Front in the road car. Mid in the Turbo.", Build.MEDIUM, 4, listOf(Place.FRONT, Place.MID), 2800.0, 0.98),
+        Chassis("etype", "Jaguar E-Type lightweight", 1016.0, Drive.RWD, Place.FRONT, 0.44, 1.78, 5, 4, 420.0, 2730.0, "about 1,016 kg", Build.HEAVY, 4, listOf(Place.FRONT), 5600.0, 1.10),
 
-        Chassis("stratos", "Lancia Stratos", 960.0, Drive.RWD, Place.MID, 0.40, 1.55, 2, 5, 700.0, 6400.0, "960 kg", Build.LIGHT, 5, listOf(Place.MID), 4200.0, 0.84),
-        Chassis("p911", "Porsche 911", 1080.0, Drive.RWD, Place.REAR, 0.40, 1.68, 3, 5, 900.0, 8200.0, "about 1,080 kg, early 911", Build.MEDIUM, 5, listOf(Place.REAR), 5600.0, 1.0),
-        Chassis("vette", "Chevrolet Corvette", 1360.0, Drive.RWD, Place.FRONT, 0.48, 1.85, 5, 5, 1100.0, 9800.0, "about 1,360 kg, 1963", Build.HEAVY, 5, listOf(Place.FRONT), 7500.0, 1.12),
+        Chassis("stratos", "Lancia Stratos", 960.0, Drive.RWD, Place.MID, 0.40, 1.55, 2, 5, 700.0, 4160.0, "960 kg", Build.LIGHT, 5, listOf(Place.MID), 4200.0, 0.84),
+        Chassis("p911", "Porsche 911", 1080.0, Drive.RWD, Place.REAR, 0.40, 1.68, 3, 5, 900.0, 5330.0, "about 1,080 kg, early 911", Build.MEDIUM, 5, listOf(Place.REAR), 5600.0, 1.0),
+        Chassis("vette", "Chevrolet Corvette", 1360.0, Drive.RWD, Place.FRONT, 0.48, 1.85, 5, 5, 1100.0, 6370.0, "about 1,360 kg, 1963", Build.HEAVY, 5, listOf(Place.FRONT), 7500.0, 1.12),
 
-        Chassis("gt40", "Ford GT40", 910.0, Drive.RWD, Place.MID, 0.39, 1.58, 2, 6, 2200.0, 15000.0, "910 kg kerb", Build.LIGHT, 6, listOf(Place.MID), 5800.0, 0.86),
-        Chassis("cobra", "Shelby Cobra 289", 985.0, Drive.RWD, Place.FRONT, 0.58, 1.62, 3, 6, 700.0, 6400.0, "985 kg, FIA historic", Build.MEDIUM, 6, listOf(Place.FRONT), 6200.0, 1.0),
-        Chassis("sel63", "Mercedes 300 SEL 6.3", 1780.0, Drive.RWD, Place.FRONT, 0.45, 2.20, 5, 6, 1800.0, 18000.0, "1,780 kg", Build.HEAVY, 6, listOf(Place.FRONT), 8500.0, 1.14),
+        Chassis("gt40", "Ford GT40", 910.0, Drive.RWD, Place.MID, 0.39, 1.58, 2, 6, 2200.0, 9750.0, "910 kg kerb", Build.LIGHT, 6, listOf(Place.MID), 5800.0, 0.86),
+        Chassis("cobra", "Shelby Cobra 289", 985.0, Drive.RWD, Place.FRONT, 0.58, 1.62, 3, 6, 700.0, 4160.0, "985 kg, FIA historic", Build.MEDIUM, 6, listOf(Place.FRONT), 6200.0, 1.0),
+        Chassis("sel63", "Mercedes 300 SEL 6.3", 1780.0, Drive.RWD, Place.FRONT, 0.45, 2.20, 5, 6, 1800.0, 11700.0, "1,780 kg", Build.HEAVY, 6, listOf(Place.FRONT), 8500.0, 1.14),
 
-        Chassis("p917", "Porsche 917K", 800.0, Drive.RWD, Place.MID, 0.36, 1.52, 2, 7, 4200.0, 24000.0, "800 kg class minimum", Build.LIGHT, 7, listOf(Place.MID), 7200.0, 0.86),
-        Chassis("daytona", "Ferrari Daytona competizione", 1240.0, Drive.RWD, Place.FRONT, 0.40, 1.80, 3, 7, 2800.0, 20000.0, "1,240 kg dry", Build.MEDIUM, 7, listOf(Place.FRONT), 7800.0, 1.0),
-        Chassis("jensen", "Jensen Interceptor", 1680.0, Drive.RWD, Place.FRONT, 0.46, 2.05, 5, 7, 2200.0, 22000.0, "about 1,680 kg", Build.HEAVY, 7, listOf(Place.FRONT), 9000.0, 1.12),
+        Chassis("p917", "Porsche 917K", 800.0, Drive.RWD, Place.MID, 0.36, 1.52, 2, 7, 4200.0, 15600.0, "800 kg class minimum", Build.LIGHT, 7, listOf(Place.MID), 7200.0, 0.86),
+        Chassis("daytona", "Ferrari Daytona competizione", 1240.0, Drive.RWD, Place.FRONT, 0.40, 1.80, 3, 7, 2800.0, 13000.0, "1,240 kg dry", Build.MEDIUM, 7, listOf(Place.FRONT), 7800.0, 1.0),
+        Chassis("jensen", "Jensen Interceptor", 1680.0, Drive.RWD, Place.FRONT, 0.46, 2.05, 5, 7, 2200.0, 14300.0, "about 1,680 kg", Build.HEAVY, 7, listOf(Place.FRONT), 9000.0, 1.12),
         // Group 8 — rotary bay. Light RX-7-ish, mid Cosmo, heavy luxury coupe.
-        Chassis("rx7", "Mazda RX-7 FD", 1260.0, Drive.RWD, Place.FRONT, 0.38, 1.72, 3, 8, 3200.0, 24000.0, "about 1,260 kg", Build.LIGHT, 8, listOf(Place.FRONT), 2800.0, 0.90),
-        Chassis("cosmo", "Mazda Cosmo Sport", 1180.0, Drive.RWD, Place.FRONT, 0.40, 1.80, 3, 8, 2800.0, 22000.0, "about 1,180 kg", Build.MEDIUM, 8, listOf(Place.FRONT), 3200.0, 1.0),
-        Chassis("luxrotary", "Rotary luxury coupe", 1520.0, Drive.RWD, Place.FRONT, 0.44, 1.95, 4, 8, 2600.0, 26000.0, "about 1,520 kg", Build.HEAVY, 8, listOf(Place.FRONT), 4000.0, 1.10),
+        Chassis("rx7", "Mazda RX-7 FD", 1260.0, Drive.RWD, Place.FRONT, 0.38, 1.72, 3, 8, 3200.0, 15600.0, "about 1,260 kg", Build.LIGHT, 8, listOf(Place.FRONT), 2800.0, 0.90),
+        Chassis("cosmo", "Mazda Cosmo Sport", 1180.0, Drive.RWD, Place.FRONT, 0.40, 1.80, 3, 8, 2800.0, 14300.0, "about 1,180 kg", Build.MEDIUM, 8, listOf(Place.FRONT), 3200.0, 1.0),
+        Chassis("luxrotary", "Rotary luxury coupe", 1520.0, Drive.RWD, Place.FRONT, 0.44, 1.95, 4, 8, 2600.0, 16900.0, "about 1,520 kg", Build.HEAVY, 8, listOf(Place.FRONT), 4000.0, 1.10),
     )
 
     val gearboxes = listOf(

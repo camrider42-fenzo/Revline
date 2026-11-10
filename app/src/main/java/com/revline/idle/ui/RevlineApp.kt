@@ -1,9 +1,11 @@
 package com.revline.idle.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -42,7 +45,12 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -56,7 +64,9 @@ import com.revline.idle.economy.Prestige
 import com.revline.idle.economy.formatCompact
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.model.Block
+import kotlin.math.cos
 import kotlin.math.pow
+import kotlin.math.sin
 import com.revline.idle.game.EngineWeight
 import com.revline.idle.game.Logic
 import com.revline.idle.game.Perks
@@ -77,6 +87,7 @@ fun RevlineApp(vm: GameViewModel) {
     val tab = remember { androidx.compose.runtime.mutableStateOf(Tab.BENCH) }
     val context = LocalContext.current
     var crashNote by remember { mutableStateOf(RevlineCrash.read(context)) }
+    var settings by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalBatterySaver provides ui.game.batterySaver, LocalEngineSpeaker provides speaker) {
     RevlineTheme {
         Scaffold(
@@ -91,22 +102,27 @@ fun RevlineApp(vm: GameViewModel) {
                         .navigationBarsPadding()
                         .padding(bottom = 8.dp),
                 ) {
-                    Text(
-                        if (ui.game.batterySaver) "BATTERY SAVER ON  ·  DRAWING FROZEN" else "BATTERY SAVER",
-                        color = if (ui.game.batterySaver) Amber else Olive,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Black)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = vm::toggleBatterySaver,
-                            )
-                            .padding(vertical = 8.dp),
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().background(Black),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (ui.game.batterySaver) "BATTERY SAVER ON  ·  DRAWING FROZEN" else "BATTERY SAVER",
+                            color = if (ui.game.batterySaver) Amber else Olive,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = vm::toggleBatterySaver,
+                                )
+                                .padding(vertical = 8.dp),
+                        )
+                        SettingsGear { settings = true }
+                    }
                     Box(Modifier.fillMaxWidth().height(1.dp).background(White))
                     Row(Modifier.fillMaxWidth()) {
                         Tab.entries.forEach { item ->
@@ -146,6 +162,8 @@ fun RevlineApp(vm: GameViewModel) {
                         driver = strip.driver,
                         fee = strip.fee,
                         seed = strip.seed,
+                        parts = ui.game.upgrades,
+                        baySoak = ui.game.soakC,
                     )
                 } else {
                     when (tab.value) {
@@ -169,8 +187,17 @@ fun RevlineApp(vm: GameViewModel) {
                             vm::runCircuit,
                             vm::reviseCircuit,
                         )
-                        Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::fitBlock, vm::toggleDevMode, vm::resetGame)
+                        Tab.REBUILD -> RebuildScreen(ui, vm::perk, vm::prestige, vm::fitBlock, vm::toggleDevMode)
                     }
+                }
+                if (settings) {
+                    SettingsScreen(
+                        onClose = { settings = false },
+                        onReset = {
+                            settings = false
+                            vm.resetGame()
+                        },
+                    )
                 }
             }
         }
@@ -287,7 +314,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                     Hud(ui)
                     Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     FailureLine(ui)
-                    EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(280.dp), throttle = if (ui.phase == DynoPhase.IDLE) ui.game.throttle.toFloat() else 1f)
+                    EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(280.dp), throttle = if (ui.phase == DynoPhase.IDLE) ui.game.throttle.toFloat() else 1f, oilC = live.oilTempC.toFloat(), soakC = ui.game.soakC.toFloat())
                     Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(170.dp), bouncing = ui.limiter)
                         ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(84.dp).height(170.dp))
@@ -312,7 +339,7 @@ private fun BenchScreen(ui: UiModel, onDyno: () -> Unit, onThrottle: (Double) ->
                 Hud(ui)
                 Text(Logic.engineTitle(params), color = Lime, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                 FailureLine(ui)
-                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(200.dp), throttle = if (ui.phase == DynoPhase.IDLE) ui.game.throttle.toFloat() else 1f)
+                EngineArt(params, ui.rpm.toFloat(), live.coolantTempC.toFloat(), live.egtC.toFloat(), ui.game.upgrades, Modifier.fillMaxWidth().height(200.dp), throttle = if (ui.phase == DynoPhase.IDLE) ui.game.throttle.toFloat() else 1f, oilC = live.oilTempC.toFloat(), soakC = ui.game.soakC.toFloat())
                 Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Tachometer(ui.rpm, params.redlineRpm, target, Modifier.weight(1f).height(148.dp), bouncing = ui.limiter)
                     ThrottlePedal(ui.game.throttle, pedalEnabled, onThrottle, Modifier.width(76.dp).height(148.dp))
@@ -612,7 +639,7 @@ private fun StudyScreen(ui: UiModel, onBuy: (String) -> Unit) {
 }
 
 @Composable
-private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Boolean) -> Unit, onFitBlock: (String) -> Unit, onDevMode: () -> Unit, onReset: () -> Unit) {
+private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Boolean) -> Unit, onFitBlock: (String) -> Unit, onDevMode: () -> Unit) {
     val block = Block.of(ui.game.blockId, ui.game.prestiges)
     val next = Block.forPrestige(ui.game.prestiges + 1)
     val nextAlts = Block.alternativesAt(ui.game.prestiges + 1).filter { it != next }
@@ -805,11 +832,74 @@ private fun RebuildScreen(ui: UiModel, onPerk: (String) -> Unit, onPrestige: (Bo
             Text("Free upgrades", color = White, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
             DevSwitch(ui.game.devMode)
         }
+    }
+}
+
+/**
+ * Restart lives here, off the rebuild sheet and away from the dev switch.
+ * The gear on the bar opens it. Reset still asks, and the confirm has to be held.
+ */
+@Composable
+internal fun SettingsScreen(onClose: () -> Unit, onReset: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Black).padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("SETTINGS", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
+            Text(
+                "Close",
+                color = Lime,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .border(1.dp, Lime)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            )
+        }
+        Text(
+            "Restart wipes the save and starts a new game. Hold the red confirm. A tap does not do it. Cancel leaves the save where it is.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
+        )
         RestartGame(onReset)
     }
 }
 
-/** The "Restart game" button and its confirmation: Reset writes a new game over the save, Cancel closes the popup and does nothing. */
+@Composable
+private fun SettingsGear(onClick: () -> Unit) {
+    Canvas(
+        Modifier
+            .padding(end = 8.dp)
+            .size(28.dp)
+            .semantics { contentDescription = "Settings" }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val stroke = (size.minDimension * 0.08f).coerceIn(1.2f, 2.4f)
+        drawCircle(color = White, radius = size.minDimension * 0.18f, center = c, style = Stroke(stroke))
+        drawCircle(color = White, radius = size.minDimension * 0.07f, center = c)
+        val tooth = size.minDimension * 0.36f
+        val inner = size.minDimension * 0.24f
+        for (i in 0 until 6) {
+            val a = Math.toRadians(i * 60.0 - 90.0)
+            val dx = cos(a).toFloat()
+            val dy = sin(a).toFloat()
+            drawLine(
+                White,
+                Offset(c.x + dx * inner, c.y + dy * inner),
+                Offset(c.x + dx * tooth, c.y + dy * tooth),
+                strokeWidth = stroke * 1.7f,
+            )
+        }
+    }
+}
+
+/** Restart asks first. Cancel closes the popup. The confirm has to be held down; a tap does not wipe the save. */
 @Composable
 internal fun RestartGame(onReset: () -> Unit) {
     var asking by remember { mutableStateOf(false) }
@@ -839,9 +929,21 @@ internal fun RestartGame(onReset: () -> Unit) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = { asking = false; onReset() }) {
-                    Text("Reset", color = Red, fontFamily = FontFamily.Monospace)
-                }
+                Text(
+                    "Hold to reset",
+                    color = Red,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .pointerInput(onReset) {
+                            detectTapGestures(
+                                onLongPress = {
+                                    asking = false
+                                    onReset()
+                                },
+                            )
+                        }
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                )
             },
             dismissButton = {
                 TextButton(onClick = { asking = false }) {

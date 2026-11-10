@@ -4,6 +4,9 @@ import com.revline.idle.data.GameState
 import com.revline.idle.economy.formatDollars
 import com.revline.idle.model.Block
 import com.revline.idle.model.EngineFamily
+import com.revline.idle.model.EngineParams
+import com.revline.idle.model.EngineSim
+import com.revline.idle.model.EngineStats
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.exp
@@ -225,11 +228,32 @@ object Circuits {
         val kit = Parts.kit(state)
         val road = Racing.car(state, circuit = true)
         return Car(
-            RaceDrive.setup(state, sheet, circuit = true), road.fade, sheet.stats.reliability,
+            RaceDrive.setup(state, sheet, circuit = true),
+            raceFade(road.fade, sheet.params, sheet.stats),
+            sheet.stats.reliability,
             brake = kit.brake, lateral = kit.lateral, lowTorque = kit.traction, downforce = kit.downforce,
-            wear = Tires.tierWear(road.spec.tire.wear) * kit.wear, mistakes = kit.mistakes, hazard = kit.hazard,
+            wear = Tires.tierWear(road.spec.tire.wear) * kit.wear, mistakes = kit.mistakes,
+            hazard = raceHazard(kit.hazard, sheet.params, sheet.stats),
             wetTire = Weather.wetRating(road.spec.tire.id),
         )
+    }
+
+    /**
+     * Chassis fade, plus a little more when the bench sweep is already past its heat limit.
+     * A cool sheet keeps the chassis number. The add stops at 0.12 so a hot stock block is not a different race.
+     */
+    fun raceFade(chassisFade: Double, params: EngineParams, stats: EngineStats): Double {
+        val over = ((-EngineSim.heatMarginC(params, stats)) / 250.0).coerceIn(0.0, 0.12)
+        return (chassisFade + over).coerceIn(0.0, 0.6)
+    }
+
+    /**
+     * The kit's failure chance, raised when the bench engine is over its tightest limit.
+     * Under the limit the kit stands. Deeply over it, the chance is at most 1.35 times the kit.
+     */
+    fun raceHazard(kitHazard: Double, params: EngineParams, stats: EngineStats): Double {
+        val hot = ((8.0 - EngineSim.heatMarginC(params, stats)) / 80.0).coerceIn(0.0, 0.35)
+        return kitHazard * (1.0 + hot)
     }
 
     /** What a driver does with it. All 0..1, from his [Drivers.Driver] stats and the specialty boost the car earns him. */

@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +46,7 @@ import com.revline.idle.game.RaceDrive
 import com.revline.idle.game.Racing
 import com.revline.idle.game.RevLimiter
 import com.revline.idle.model.EngineParams
+import com.revline.idle.model.EngineSim
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -70,6 +72,8 @@ fun RaceMeet(
     driver: Drivers.Driver? = null,
     fee: Double = 0.0,
     seed: Long = 0L,
+    parts: Map<String, Int> = emptyMap(),
+    baySoak: Double = 0.0,
 ) {
     val finish = setup.distanceM
     // A hired driver works the same three controls through the same sim. The player watches.
@@ -97,6 +101,12 @@ fun RaceMeet(
     val hearNow by rememberUpdatedState(hear)
     val paramsNow by rememberUpdatedState(params)
     var spoken by remember { mutableFloatStateOf(Float.NaN) }
+    var pullSoak by remember(baySoak) { mutableFloatStateOf(baySoak.toFloat().coerceIn(0f, 80f)) }
+    fun climb(rpm: Double, th: Double, dt: Double) {
+        if (dt <= 0.0) return
+        val rate = EngineSim.soakPer10s(paramsNow, rpm, th)
+        pullSoak = (pullSoak + (rate * dt / 10.0).toFloat()).coerceIn(0f, 80f)
+    }
     fun speak(rpm: Float, throttle: Float, limiter: Boolean, dt: Double, running: Boolean) {
         val bus = speaker
         val tone = paramsNow
@@ -130,7 +140,8 @@ fun RaceMeet(
                     throttle = auto.throttle.toFloat()
                     clutchShown = auto.clutch.toFloat()
                     if (playerRolled.isNaN() && !auto.staging && auto.run.distance >= 0.15) playerRolled = auto.run.time
-                    frame = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown)
+                    climb(auto.run.rpm, auto.throttle, dt)
+                    frame = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown, throttle = auto.throttle)
                     val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
                     speak(voiceRpm.toFloat(), auto.throttle.toFloat(), auto.run.limiter, dt, running = true)
                     return@withFrameNanos
@@ -144,7 +155,8 @@ fun RaceMeet(
                 if (countdown > 0f || lights > 0f) {
                     if (countdown > 0f) countdown -= dt.toFloat() else lights -= dt.toFloat()
                     RaceDrive.stage(setup, hands.run, hands.throttle, dt, hands.clutch)
-                    frame = snap(hands.run, lights, rivalPass, finish, done = false, won = false, countdown = countdown)
+                    climb(hands.run.rpm, hands.throttle, dt)
+                    frame = snap(hands.run, lights, rivalPass, finish, done = false, won = false, countdown = countdown, throttle = hands.throttle)
                     val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                     speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
                     return@withFrameNanos
@@ -153,7 +165,8 @@ fun RaceMeet(
                 hands.shift = false
                 RaceDrive.step(setup, hands.run, hands.throttle, shift, dt, hands.clutch)
                 if (playerRolled.isNaN() && hands.run.distance >= 0.15) playerRolled = hands.run.time
-                frame = snap(hands.run, 0f, rivalPass, finish, done = false, won = false)
+                climb(hands.run.rpm, hands.throttle, dt)
+                frame = snap(hands.run, 0f, rivalPass, finish, done = false, won = false, throttle = hands.throttle)
                 val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                 speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
             }
@@ -207,7 +220,45 @@ fun RaceMeet(
         }
         Text(purse, color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         Text(banner, color = bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
-        Canvas(Modifier.fillMaxWidth().height(40.dp).padding(top = 4.dp)) {
+        val heat = remember(params, (frame.rpm / 40.0).toInt(), (frame.throttle * 25.0).toInt(), (pullSoak * 2f).toInt()) {
+            EngineSim.point(
+                params,
+                frame.rpm.coerceAtLeast(400.0),
+                frame.throttle.coerceIn(0.12, 1.0),
+                pullSoak.toDouble(),
+            )
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            val wide = maxWidth >= 600.dp
+            Row(Modifier.fillMaxWidth().height(if (wide) 320.dp else 348.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (wide) {
+                    EngineArt(
+                        params,
+                        frame.rpm.toFloat(),
+                        heat.coolantTempC.toFloat(),
+                        heat.egtC.toFloat(),
+                        parts,
+                        Modifier.width(220.dp).fillMaxHeight(),
+                        throttle = frame.throttle.toFloat(),
+                        oilC = heat.oilTempC.toFloat(),
+                        soakC = pullSoak,
+                    )
+                }
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    if (!wide) {
+                        EngineArt(
+                            params,
+                            frame.rpm.toFloat(),
+                            heat.coolantTempC.toFloat(),
+                            heat.egtC.toFloat(),
+                            parts,
+                            Modifier.fillMaxWidth().height(100.dp),
+                            throttle = frame.throttle.toFloat(),
+                            oilC = heat.oilTempC.toFloat(),
+                            soakC = pullSoak,
+                        )
+                    }
+                    Canvas(Modifier.fillMaxWidth().height(40.dp)) {
             val stroke = 2f
             val lamp = size.minDimension * 0.28f
             val y = size.height * 0.55f
@@ -225,23 +276,26 @@ fun RaceMeet(
                 return@Canvas
             }
             drawDragTree(colors, lit, Offset(size.width * 0.5f, y), lamp, xs)
-        }
-        val scenes = remember { DragSceneHolder() }
-        val memory = remember { DragMemory() }
-        Canvas(Modifier.fillMaxWidth().height(280.dp).padding(top = 4.dp)) {
-            val scene = scenes.get(this, yourId, yourMid, rivalId, finish.toFloat())
-            val yourGas = (frame.rpm / setup.redline).toFloat().coerceIn(0.2f, 1f)
-            val theirGas = if (frame.lights > 0f) 0.05f else 0.55f
-            drawDragScene(
-                scene,
-                DragFrame(
-                    distance = frame.distance.toFloat(), rival = frame.rival.toFloat(), finish = finish.toFloat(),
-                    slip = frame.slip, speed = frame.speed.toFloat(), clock = frame.clock.toFloat(),
-                    gasYou = yourGas, gasRival = theirGas, countdown = frame.countdown, lights = frame.lights,
-                    done = frame.done, won = frame.won, jumped = frame.jumped,
-                ),
-                memory, yourId, yourMid, rivalId,
-            )
+                    }
+                    val scenes = remember { DragSceneHolder() }
+                    val memory = remember { DragMemory() }
+                    Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp)) {
+                        val scene = scenes.get(this, yourId, yourMid, rivalId, finish.toFloat())
+                        val yourGas = (frame.rpm / setup.redline).toFloat().coerceIn(0.2f, 1f)
+                        val theirGas = if (frame.lights > 0f) 0.05f else 0.55f
+                        drawDragScene(
+                            scene,
+                            DragFrame(
+                                distance = frame.distance.toFloat(), rival = frame.rival.toFloat(), finish = finish.toFloat(),
+                                slip = frame.slip, speed = frame.speed.toFloat(), clock = frame.clock.toFloat(),
+                                gasYou = yourGas, gasRival = theirGas, countdown = frame.countdown, lights = frame.lights,
+                                done = frame.done, won = frame.won, jumped = frame.jumped,
+                            ),
+                            memory, yourId, yourMid, rivalId,
+                        )
+                    }
+                }
+            }
         }
         val gapM = frame.distance - frame.rival
         Text(
@@ -453,6 +507,7 @@ private data class Frame(
     val jumped: Boolean = false,
     val nitrousS: Double = 0.0,
     val shotOpen: Boolean = false,
+    val throttle: Double = 0.0,
 )
 
 private fun snap(
@@ -463,6 +518,7 @@ private fun snap(
     done: Boolean,
     won: Boolean,
     countdown: Float = 0f,
+    throttle: Double = 0.0,
 ): Frame = Frame(
     lights = lights.coerceAtLeast(0f),
     countdown = countdown.coerceAtLeast(0f),
@@ -481,6 +537,7 @@ private fun snap(
     won = won,
     nitrousS = run.nitrousS,
     shotOpen = run.shotOpen,
+    throttle = throttle.coerceIn(0.0, 1.0),
 )
 
 private fun bottleOf(setup: RaceDrive.Setup, frame: Frame): RaceDrive.Bottle {

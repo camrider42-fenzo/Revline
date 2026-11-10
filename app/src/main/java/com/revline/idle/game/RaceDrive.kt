@@ -1,7 +1,6 @@
 package com.revline.idle.game
 
 import com.revline.idle.data.GameState
-import com.revline.idle.model.Block
 import com.revline.idle.model.EngineSim
 import kotlin.math.exp
 import kotlin.math.pow
@@ -84,6 +83,12 @@ object RaceDrive {
         val heat0: Double = TIRE_COOL,
         /** Grip gained per unit of temperature above [TIRE_COOL] (and lost below it). A slick has the most to gain. */
         val tempGain: Double = 0.0,
+        /**
+         * Wide-open torque from the bench engine, sampled idle to redline. Empty means the generic curve,
+         * which is what a rival keeps: the rival is a class car, not the engine on the dyno.
+         */
+        val pullRpm: List<Double> = emptyList(),
+        val pullLbFt: List<Double> = emptyList(),
     )
 
     /** Tire temperature of a car that has not had a burnout. */
@@ -135,12 +140,37 @@ object RaceDrive {
             idle = sheet.params.idleRpm,
             finalDrive = Racing.finalRatio(state.finalDrive) + rig.finalTrim,
             distanceM = Racing.lengthOf(state.raceLength).meters,
-            displacementCc = Block.of(state.blockId, state.prestiges).let {
-                EngineSim.displacementCc(it.boreMm, it.strokeMm, it.cylinders)
-            },
+            displacementCc = sheet.stats.displacementCc.coerceAtLeast(40.0),
             circuit = circuit,
             rig = rig,
-        )
+        ).let { built ->
+            val (rpm, raw) = benchPull(sheet)
+            // The strip already treats a peak under 8 lb-ft and 8 hp as 8. A 2 hp single would otherwise
+            // never finish the quarter the gearbox was geared for. The shape stays the dyno's. The level
+            // comes up only until that existing floor, then the same horsepower cap the generic curve used.
+            val peak = raw.maxOrNull() ?: 0.0
+            val scale = if (peak > 1e-3) built.peakTqLbFt / peak else 1.0
+            val cap = built.peakHp * 1.05
+            val lbFt = raw.mapIndexed { i, sample ->
+                val lifted = sample * scale
+                val hp = lifted * rpm[i] / 5252.0
+                if (hp > cap && hp > 1.0) lifted * cap / hp else lifted
+            }
+            built.copy(pullRpm = rpm, pullLbFt = lbFt)
+        }
+    }
+
+    /**
+     * The dyno curve the car actually makes. One extra sample at idle when the sheet starts higher,
+     * so a launch reads the same engine the chart does. Rivals do not come through here.
+     */
+    internal fun benchPull(sheet: Sheet): Pair<List<Double>, List<Double>> {
+        val curve = sheet.stats.curve
+        if (curve.size < 2) return emptyList<Double>() to emptyList()
+        val idle = sheet.params.idleRpm
+        val extra = if (curve.first().rpm > idle + 40.0) listOf(EngineSim.point(sheet.params, idle)) else emptyList()
+        val points = extra + curve
+        return points.map { it.rpm } to points.map { it.torqueLbFt.coerceAtLeast(0.0) }
     }
 
     /**
@@ -736,8 +766,37 @@ object RaceDrive {
     internal fun dragForce(setup: Setup, speed: Double): Double =
         (0.5 * 1.22 * setup.drag * speed * speed + setup.rollN).coerceAtLeast(0.0)
 
-    /** lb-ft curve that peaks mid-range and will not make more horsepower than the engine has. */
+    /**
+     * Torque at the crank. The player's car uses the bench sweep. A rival has no sweep, so it keeps
+     * the generic mid-range shape scaled to its own peak.
+     */
     fun torqueNm(setup: Setup, rpm: Double): Double {
+        val lbFt = if (setup.pullRpm.size >= 2 && setup.pullLbFt.size == setup.pullRpm.size) {
+            benchLbFt(setup, rpm)
+        } else {
+            syntheticLbFt(setup, rpm)
+        }
+        val floored = if (rpm < setup.idle * 0.85) lbFt * 0.35 else lbFt
+        return floored.coerceAtLeast(0.0) * 1.3558
+    }
+
+    /** The bench sample at this rpm. Flat outside the sweep, straight between samples. */
+    internal fun benchLbFt(setup: Setup, rpm: Double): Double {
+        val xs = setup.pullRpm
+        val ys = setup.pullLbFt
+        if (rpm <= xs.first()) return ys.first()
+        if (rpm >= xs.last()) return ys.last()
+        var i = 1
+        while (i < xs.lastIndex && xs[i] < rpm) i++
+        val x0 = xs[i - 1]
+        val x1 = xs[i]
+        val span = (x1 - x0).coerceAtLeast(1e-6)
+        val t = ((rpm - x0) / span).coerceIn(0.0, 1.0)
+        return ys[i - 1] + (ys[i] - ys[i - 1]) * t
+    }
+
+    /** A class car's curve: mid-range, and never more horsepower than the peak it was given. */
+    private fun syntheticLbFt(setup: Setup, rpm: Double): Double {
         val span = (setup.redline - setup.idle).coerceAtLeast(500.0)
         val x = ((rpm - setup.idle) / span).coerceIn(0.0, 1.2)
         val shape = exp(-((x - 0.72).pow(2.0)) / 0.05)
@@ -745,7 +804,6 @@ object RaceDrive {
         val hp = lbFt * rpm / 5252.0
         val cap = setup.peakHp * 1.05
         if (hp > cap && hp > 1.0) lbFt *= cap / hp
-        if (rpm < setup.idle * 0.85) lbFt *= 0.35
-        return lbFt * 1.3558
+        return lbFt
     }
 }
