@@ -32,6 +32,20 @@ import kotlin.math.sin
 /** One paint for the faded rear rotors. The layer copies the alpha when it opens. */
 private val rotorFadePaint = Paint()
 
+/**
+ * Live tach, throttle and temperatures for a screen that already ticks every
+ * frame. The race page writes this and the canvas reads it inside the draw,
+ * so the rest of that page does not recompose with the needle.
+ */
+class EngineFeed {
+    var rpm: Float = 0f
+    var throttle: Float = 1f
+    var coolantC: Float = 80f
+    var egtC: Float = 400f
+    var oilC: Float = 90f
+    var soakC: Float = 0f
+}
+
 @Composable
 fun EngineArt(
     params: EngineParams,
@@ -43,12 +57,14 @@ fun EngineArt(
     throttle: Float = 1f,
     oilC: Float = coolantC,
     soakC: Float = 0f,
+    feed: EngineFeed? = null,
 ) {
     val frozen = LocalBatterySaver.current
     val rpmState = rememberUpdatedState(rpm)
+    val feedState = rememberUpdatedState(feed)
     var angle by remember { mutableFloatStateOf(20f) }
     var clock by remember { mutableFloatStateOf(0f) }
-    var spinRpm by remember { mutableFloatStateOf(rpm) }
+    var spinRpm by remember { mutableFloatStateOf(feed?.rpm ?: rpm) }
     LaunchedEffect(frozen) {
         if (frozen) return@LaunchedEffect
         var last = 0L
@@ -57,9 +73,10 @@ fun EngineArt(
                 if (last != 0L) {
                     val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
                     val follow = 1f - exp(-dt * 11f)
-                    spinRpm += (rpmState.value - spinRpm) * follow
+                    val rpmNow = feedState.value?.rpm ?: rpmState.value
+                    spinRpm += (rpmNow - spinRpm) * follow
                     clock += dt
-                    if (rpmState.value > 1f) {
+                    if (rpmNow > 1f) {
                         angle = EngineMotion.advanceCrank(angle, spinRpm, dt)
                     }
                 }
@@ -67,20 +84,32 @@ fun EngineArt(
             }
         }
     }
-    val hose = when {
+    val fed = feed != null
+    val hose = if (fed) Cyan else when {
         coolantC >= 120f || oilC >= 150f -> Red
         coolantC >= 105f || oilC >= 130f -> Amber
         else -> Cyan
     }
-    val head = HeatGlow.head(coolantC, oilC, soakC)
-    val heat = HeatGlow.intensity(coolantC, oilC, egtC, soakC)
-    val exhaust = HeatGlow.exhaust(egtC, soakC)
-    val exhaustGain = HeatGlow.gain(egtC, soakC)
+    val head = if (fed) Lime else HeatGlow.head(coolantC, oilC, soakC)
+    val heat = if (fed) 0f else HeatGlow.intensity(coolantC, oilC, egtC, soakC)
+    val exhaust = if (fed) Amber else HeatGlow.exhaust(egtC, soakC)
+    val exhaustGain = if (fed) 1f else HeatGlow.gain(egtC, soakC)
     Canvas(
         modifier.semantics {
-            contentDescription = "${params.blockTitle}, ${parts.count { it.value > 0 }} parts fitted, ${rpm.toInt()} rpm"
+            contentDescription = "${params.blockTitle}, ${parts.count { it.value > 0 }} parts fitted, ${if (fed) feed.rpm.toInt() else rpm.toInt()} rpm"
         },
     ) {
+        val live = feedState.value
+        val hoseNow = if (live != null) when {
+            live.coolantC >= 120f || live.oilC >= 150f -> Red
+            live.coolantC >= 105f || live.oilC >= 130f -> Amber
+            else -> Cyan
+        } else hose
+        val headNow = if (live != null) HeatGlow.head(live.coolantC, live.oilC, live.soakC) else head
+        val heatNow = if (live != null) HeatGlow.intensity(live.coolantC, live.oilC, live.egtC, live.soakC) else heat
+        val exhaustNow = if (live != null) HeatGlow.exhaust(live.egtC, live.soakC) else exhaust
+        val gainNow = if (live != null) HeatGlow.gain(live.egtC, live.soakC) else exhaustGain
+        val throttleNow = live?.throttle ?: throttle
         val stroke = (size.width / 170f).coerceIn(1.7f, 3.4f)
         val calm = (1f - spinRpm / params.redlineRpm.toFloat()).coerceIn(0.15f, 1f)
         val lope = 2.2f + spinRpm / 900f
@@ -89,7 +118,7 @@ fun EngineArt(
             top = stroke * 0.28f * calm * sin(clock * lope * 1.55f + 0.6f),
         ) {
             try {
-                drawEngine(params, parts, stroke, angle, clock, spinRpm, hose, exhaust, exhaustGain, throttle, head, heat)
+                drawEngine(params, parts, stroke, angle, clock, spinRpm, hoseNow, exhaustNow, gainNow, throttleNow, headNow, heatNow)
             } catch (error: Throwable) {
                 com.revline.idle.RevlineCrash.record(error)
             }
@@ -960,14 +989,8 @@ private fun DrawScope.drawRotary(
         fun toScreen(p: WankelGeometry.Pt): Offset = Offset(cx + p.x.toFloat(), cy + p.y.toFloat())
 
         // Epitrochoid housing bore. The dim copy is the far wall of the same housing.
-        val housing = WankelGeometry.sampleHousing(R.toDouble(), e.toDouble(), 120)
-        val frontWall = housing.map(::toScreen)
-        glowPath(housingInk, frontWall.map { it + wall }.closedPath(), stroke * 0.7f, 0.28f)
-        for (s in housing.indices) {
-            val a = toScreen(housing[s])
-            val b = toScreen(housing[(s + 1) % housing.size])
-            glowLine(housingInk, a, b, stroke * 0.9f, 0.75f)
-        }
+        // Stamped from a bitmap of these same strokes. The rotor on top is drawn live.
+        RotaryPlate.draw(this, cx, cy, R, e, stroke, housingInk, wall)
 
         // Renesis-style side intake (left short face) + peripheral/side exhaust (right).
         val portGlow = 0.50f + 0.40f * throttle * pulse
@@ -1041,8 +1064,7 @@ private fun DrawScope.drawRotary(
                 ring += Offset(center.x + (cos(a) * radius).toFloat(), center.y + (sin(a) * radius).toFloat())
             }
             for (t in ring.indices) glowLine(color, ring[t], ring[(t + 1) % ring.size], stroke * 0.65f, gain)
-            // Tooth ticks.
-            for (t in 0 until teeth step 1) {
+            for (t in 0 until teeth) {
                 val a = t * Math.PI * 2.0 / teeth
                 val iR = radius * 0.82f
                 val oR = radius * 1.08f
