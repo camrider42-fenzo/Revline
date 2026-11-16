@@ -769,7 +769,36 @@ object Logic {
         val u = Upgrades.all.find { it.id == id } ?: return null
         val level = state.upgrades[id] ?: 0
         if (level >= u.maxLevel) return null
+        return previewDelta(state, id, level, sheet(state))
+    }
+
+    /**
+     * Every part's preview from one sheet of the engine that is fitted.
+     * The per-part call used to rebuild that sheet each time.
+     */
+    fun previews(state: GameState): Map<String, StatDelta?> {
         val now = sheet(state)
+        val out = LinkedHashMap<String, StatDelta?>(Upgrades.all.size)
+        for (upgrade in Upgrades.all) {
+            val level = state.upgrades[upgrade.id] ?: 0
+            out[upgrade.id] = if (level >= upgrade.maxLevel) null else previewDelta(state, upgrade.id, level, now)
+        }
+        return out
+    }
+
+    private var previewKey: Any? = null
+    private var previewValue: Map<String, StatDelta?> = emptyMap()
+
+    /** Keeps [previews] for the parts bay across a tab change when [key] is unchanged. */
+    fun cachedPreviews(key: Any, state: GameState): Map<String, StatDelta?> = synchronized(this) {
+        if (previewKey == key) return previewValue
+        val built = previews(state)
+        previewKey = key
+        previewValue = built
+        built
+    }
+
+    private fun previewDelta(state: GameState, id: String, level: Int, now: Sheet): StatDelta {
         val next = sheet(state.copy(upgrades = state.upgrades + (id to level + 1)))
         val nowRpm = targetRpm(now.params.redlineRpm, state.throttle, now.params.idleRpm)
         val nextRpm = targetRpm(next.params.redlineRpm, state.throttle, next.params.idleRpm)

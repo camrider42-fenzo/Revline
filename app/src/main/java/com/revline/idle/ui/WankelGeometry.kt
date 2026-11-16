@@ -94,8 +94,21 @@ object WankelGeometry {
         return worst
     }
 
-    fun sampleHousing(R: Double, e: Double, n: Int = 96): List<Pt> =
-        (0 until n).map { housing(2.0 * PI * it / n, R, e) }
+    private var houseN = -1
+    private var houseR = Double.NaN
+    private var houseE = Double.NaN
+    private var housePts: List<Pt> = emptyList()
+
+    /** The housing does not turn with the shaft, so one panel size is sampled once. */
+    fun sampleHousing(R: Double, e: Double, n: Int = 96): List<Pt> {
+        if (n == houseN && R == houseR && e == houseE) return housePts
+        val built = (0 until n).map { housing(2.0 * PI * it / n, R, e) }
+        houseN = n
+        houseR = R
+        houseE = e
+        housePts = built
+        return built
+    }
 
     fun sampleFlank(shaftRad: Double, face: Int, R: Double, e: Double, n: Int = 16): List<Pt> =
         (0..n).map { flankPoint(shaftRad, face, it.toDouble() / n, R, e) }
