@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -47,9 +46,50 @@ import androidx.compose.ui.unit.sp
 import com.revline.idle.UiModel
 import com.revline.idle.data.GameState
 import com.revline.idle.economy.formatDollars
+import com.revline.idle.game.DragTune
+import com.revline.idle.game.Logic
 import com.revline.idle.game.Parts
 import com.revline.idle.game.Racing
 import java.util.Locale
+
+/**
+ * Composition counters for the race page. A pay tick should move cash without
+ * rebuilding the strip forecast or the gear times. Tests read these.
+ */
+internal object RaceCompose {
+    var passes = 0
+    var driverSims = 0
+    var gearBuilds = 0
+    var drag = 0
+    var road = 0
+    var dragParts = 0
+    var raceParts = 0
+    var looks = 0
+    var forecasts = 0
+    var composeNs = 0L
+
+    fun reset() {
+        passes = 0
+        driverSims = 0
+        gearBuilds = 0
+        drag = 0
+        road = 0
+        dragParts = 0
+        raceParts = 0
+        looks = 0
+        forecasts = 0
+        composeNs = 0L
+    }
+}
+
+/** An old save of the race tab said DRAG or CIRCUIT. CIRCUIT is the road page. Anything else opens drag. */
+internal fun racePage(saved: String): String = when (saved) {
+    "CIRCUIT" -> "ROAD"
+    "DRAG", "ROAD", "DRAG PARTS", "RACE PARTS" -> saved
+    else -> "DRAG"
+}
+
+private data class RaceCatalog(val quickestId: String?, val looks: Map<String, Racing.Car>)
 
 @Composable
 fun RaceScreen(
@@ -67,14 +107,13 @@ fun RaceScreen(
     onPick: (String) -> Unit = {},
     onCircuit: (String, String, Circuits.Orders) -> Unit = { _, _, _ -> },
     onRevise: (Circuits.Orders, Int) -> Unit = { _, _ -> },
+    onDrag: (String, Double) -> Unit = { _, _ -> },
+    initialPage: String = "DRAG",
 ) {
     val state = ui.game
-    val car = Racing.car(state)
-    val body = car.spec.chassis
-    val level = state.chassisLevel[body.id] ?: 0
-    val slots = car.spec.slots
-    val slotMax = Racing.slotMax(body, level)
-    var page by rememberSaveable { mutableStateOf("DRAG") }
+    val t0 = System.nanoTime()
+    var stored by rememberSaveable { mutableStateOf(initialPage) }
+    val page = racePage(stored)
     var circuitId by rememberSaveable { mutableStateOf(Season.next(state).id) }
     val handled = remember { arrayOf(ui.circuitOutcome) }
     LaunchedEffect(ui.circuitOutcome) {
@@ -85,337 +124,466 @@ fun RaceScreen(
     var armed by rememberSaveable { mutableStateOf(false) }
     var watching by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(ui.circuitOutcome, page, armed) {
-        if (page == "CIRCUIT" && armed && ui.circuitOutcome?.result?.log?.rows?.isNotEmpty() == true) {
+        if (page == "ROAD" && armed && ui.circuitOutcome?.result?.log?.rows?.isNotEmpty() == true) {
             watching = true
             armed = false
         }
     }
     val dragScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
-    val circuitScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val roadScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val dragPartsScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val racePartsScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     val pages = rememberSaveableStateHolder()
-    val setup = RaceDrive.setup(state, ui.sheet)
+    val (car, setup) = rememberStrip(state)
     val forecast by produceState<Map<String, Drivers.Forecast>>(emptyMap(), setup) {
+        RaceCompose.driverSims++
         publish { Drivers.forecast(setup).associateBy { it.driver.id } }
     }
-    pages.SaveableStateProvider(page) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(if (page == "DRAG") dragScroll else circuitScroll)
-            .padding(12.dp),
-    ) {
-        Text("RACE", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("DRAG", "CIRCUIT").forEach { tab ->
-                LineButton(tab, page != tab, { page = tab })
+    val slots = car.spec.slots
+    val slotMax = Racing.slotMax(car.spec.chassis, state.chassisLevel[car.spec.chassis.id] ?: 0)
+    RaceCompose.passes++
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
+            Text("RACE", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LineButton("DRAG RACE", page != "DRAG", { stored = "DRAG" })
+                LineButton("ROAD RACE", page != "ROAD", { stored = "ROAD" })
             }
-        }
-        val standingIn = Racing.raced(state).id != Racing.picked(state).id
-        Text(
-            "${Racing.raceLabel(state)}  ${car.massKg.toInt()} kg  dyno ${car.wheelHp.toInt()} hp  pace ${car.pace.toInt()}",
-            color = if (standingIn || !car.fits) Amber else Lime,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Text(
-            "${car.spec.place.name.lowercase(Locale.US)} ${car.spec.drive.name}  ducts $slots/$slotMax  fade ${(car.fade * 100).toInt()}%" +
-                if (car.fits) "" else "  ENGINE DOES NOT FIT",
-            color = if (!car.fits || car.fade > 0.2) Amber else White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        if (ui.raceNote != null) {
-            Text(
-                ui.raceNote,
-                color = Cyan,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-        if (page == "DRAG") {
-        val bottle = RaceDrive.bottle(setup, RaceDrive.fresh(setup), racing = false)
-        Row(
-            Modifier.fillMaxWidth().height(64.dp).padding(top = 8.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        ) {
-            NitrousGauge(bottle, Modifier.width(72.dp).fillMaxHeight())
-            Text(
-                if (bottle.phase == RaceDrive.BottlePhase.OFF) {
-                    "No drag nitrous kit. The bottle stays dark until one is fitted."
-                } else {
-                    "Bottle ${String.format(Locale.US, "%.0f", setup.bottleS)}s. A new pass fills it. It drains while the shot is open."
-                },
-                color = if (bottle.phase == RaceDrive.BottlePhase.OFF) Olive else White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 8.dp).weight(1f),
-            )
-        }
-        Text("DISTANCE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
-        Text(
-            "An eighth is the launch. A quarter is the gears. A half mile is the top end. The pace number follows that distance.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        ChipRow(Racing.Length.entries.map { it.id to it.title }, state.raceLength, onLength)
-        DriverToggle(state, forecast, onPick)
-        Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
-        Text(
-            "Club is a heavy car. National is a medium one. International is a light car with a milder engine. You drive the distance above.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Racing.Tier.entries.forEach { tier ->
-                LineButton(tier.name.lowercase(Locale.US), true, { onQuick(tier) })
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LineButton("DRAG PARTS", page != "DRAG PARTS", { stored = "DRAG PARTS" })
+                LineButton("RACE PARTS", page != "RACE PARTS", { stored = "RACE PARTS" })
             }
-        }
-        Text("LADDER", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
-        val rungs = Racing.ladderRungs(Racing.lengthOf(state.raceLength))
-        val rung = rungs[state.raceLadder.coerceIn(0, rungs.lastIndex)]
-        Text(
-            "Rung ${state.raceLadder + 1}/${rungs.size}: ${rung.title}, pace ${rung.pace.toInt()}. The field does not care what you drive.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        LineButton("Drive the rung", true, onLadder, Modifier.padding(top = 6.dp))
-        Text("STAKE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
-        val stake = Racing.stakeCost(state.prestiges)
-        Text(
-            "A random car in this class. ${formatDollars(stake)} to enter. Win pays ${formatDollars(stake * 2)}. Lose pays nothing.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
-        Text("DRAG TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "For the strip. Grip off the line, and nothing else. Circuit races use the circuit tires on the Circuit page, whatever is fitted here. A better tire is a study, then the price.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        ChipRow(Racing.tires.map { it.id to Racing.gate(state, "tire", it.id, it.name).label }, state.tire) { id ->
-            val tire = Racing.tires.first { it.id == id }
-            val gate = Racing.gate(state, "tire", id, tire.name)
-            if (gate.study != null) onStudy(gate.study) else onPart("tire", id)
-        }
-        Text("DRAG PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "Launch control, a transbrake, wheelie bars, a light flywheel, a short shifter, a line lock and a nitrous kit. They work on the strip only, at full price. Several open a knob on the Tune page's Drag tab.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        Parts.strip.forEach { line -> KitLine(state, line, onStudy, onPart) }
-        } else {
-        CircuitSection(ui, car, circuitId, { circuitId = it }, watching, { watching = it }, { armed = true }, onCircuit, onRevise)
-        Text("CIRCUIT TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "For corners and brakes. A softer tire grips more and wears faster, most on a hot circuit. Strips use the drag tires on the Drag page. Costs a study, then the price.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        ChipRow(Racing.circuitTires.map { it.id to Racing.gate(state, "ctire", it.id, it.name).label }, state.circuitTire) { id ->
-            val tire = Racing.circuitTires.first { it.id == id }
-            val gate = Racing.gate(state, "ctire", id, tire.name)
-            if (gate.study != null) onStudy(gate.study) else onPart("ctire", id)
-        }
-        Racing.circuitTires.firstOrNull { it.id == state.circuitTire }?.let { t ->
-            Text(
-                String.format(Locale.US, "Grip %.2f, loses %.1f%% a lap on a mild track. For circuits only.", t.mu, t.wear * 100.0),
-                color = Cyan,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        Text("CIRCUIT PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "Brakes, suspension, aero and the rest. Each moves a lap a lot and a drag run a little. A study, then the price. One level of a line is fitted at a time.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        Parts.lines.forEach { line -> KitLine(state, line, onStudy, onPart) }
-        }
-
-        Text("CHASSIS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp))
-        Text(
-            "A light car is quickest on the strip and worst on the dyno. The bay is small and the radiator is small. A medium car is the middle, and a few of them sat the engine in more than one place. A heavy car takes a much larger engine, reads higher on the dyno, and is slower on the track.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        val quickestId = Racing.quickest(state)?.id
-        ChassisRow("Shop mule", "${Racing.mule.kg.toInt()} kg  front  fits the engine you have  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
-        com.revline.idle.model.Block.primarySteps().forEach { block ->
-            val group = Racing.chassis.filter { it.group == block.ladderStep }
-            if (group.isEmpty()) return@forEach
-            if (block.ladderStep > state.prestiges) {
+            CarLine(state, car, slots, slotMax)
+            if (ui.raceNote != null) {
                 Text(
-                    "${block.title}  ·  three cars, with a later engine",
-                    color = Olive,
+                    ui.raceNote,
+                    color = Cyan,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = 6.dp),
                 )
-                return@forEach
             }
-            Text(block.title.uppercase(Locale.US), color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
-            group.forEach { item ->
-                val study = "chassis_${item.id}"
-                val owned = state.chassisLevel[item.id] ?: 0
-                val open = item.minPrestige <= state.prestiges
-                val known = study in state.raceStudies
-                val label = when {
-                    !open -> "Needs a later engine"
-                    !known -> "Study · ${item.studyCost.toInt()} RP"
-                    state.chassis == item.id && owned < 3 -> "Lighten to ${owned + 1}/3 · ${formatDollars(Racing.chassisPrice(state, item, owned + 1))}"
-                    state.chassis == item.id -> "Fitted ${owned}/3"
-                    owned >= 1 -> "Fit it"
-                    else -> "Buy · ${formatDollars(Racing.chassisPrice(state, item, 1))}"
-                }
-                val places = item.places.joinToString("/") { it.name.lowercase(Locale.US) }
-                val bay = if (item.maxCc < 800) "${item.maxCc.toInt()} cc" else String.format(Locale.US, "%.1f L", item.maxCc / 1000.0)
-                val look = Racing.forecast(state, item)
-                val outlook = if (look.fits) {
-                    "dyno ${look.wheelHp.toInt()}  pace ${look.pace.toInt()}  fade ${(look.fade * 100).toInt()}%"
-                } else {
-                    "this engine will not fit"
-                }
-                val star = if (item.id == quickestId) "  ·  quickest" else ""
-                ChassisRow(
-                    "${item.build.name.lowercase(Locale.US)}  ${item.name}$star",
-                    "$outlook  ·  ${item.kg.toInt()} kg  $places  bay $bay  ·  ${item.source}",
-                    state.chassis == item.id,
-                    open,
-                    label,
-                ) {
-                    if (!known) onStudy(study) else onChassis(item.id)
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            pages.SaveableStateProvider(page) {
+                when (page) {
+                    "ROAD" -> {
+                        RaceCompose.road++
+                        RaceColumn(Modifier.fillMaxSize().verticalScroll(roadScroll)) {
+                            CircuitSection(
+                                ui, car, circuitId, { circuitId = it }, watching, { watching = it },
+                                { armed = true }, onCircuit, onRevise,
+                            )
+                            Text(
+                                "Tires, the chassis and the aero are on Race Parts.",
+                                color = White,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
+                        }
+                    }
+                    "DRAG PARTS" -> {
+                        RaceCompose.dragParts++
+                        RaceColumn(Modifier.fillMaxSize().verticalScroll(dragPartsScroll)) {
+                            DragParts(ui, state, setup, onStudy, onPart, onFinal, onDrag)
+                        }
+                    }
+                    "RACE PARTS" -> {
+                        RaceCompose.raceParts++
+                        RaceColumn(Modifier.fillMaxSize().verticalScroll(racePartsScroll)) {
+                            RaceParts(state, car, slots, slotMax, forecast, onStudy, onChassis, onPart, onSlots, onHire)
+                        }
+                    }
+                    else -> {
+                        RaceCompose.drag++
+                        RaceColumn(Modifier.fillMaxSize().verticalScroll(dragScroll)) {
+                            DragRace(state, setup, forecast, onLength, onPick, onQuick, onLadder, onStake)
+                        }
+                    }
                 }
             }
         }
+    }
+    RaceCompose.composeNs += System.nanoTime() - t0
+}
 
-        Text("GEARBOX", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            "The mule starts on the 4-speed. Another box is a study, then the price.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        ChipRow(Racing.gearboxes.map { it.id to Racing.gate(state, "box", it.id, it.name).label }, state.transmission) { id ->
-            val gate = Racing.gate(state, "box", id, Racing.gearboxes.first { it.id == id }.name)
-            if (gate.study != null) onStudy(gate.study) else onPart("box", id)
+@Composable
+private fun rememberStrip(state: GameState): Pair<Racing.Car, RaceDrive.Setup> {
+    val key = DragTune.forecastKey(state)
+    return remember(key) {
+        RaceCompose.looks++
+        val sheet = Logic.sheet(state)
+        Racing.car(state, sheet) to RaceDrive.setup(state, sheet)
+    }
+}
+
+@Composable
+private fun rememberCatalog(state: GameState): RaceCatalog {
+    val key = DragTune.forecastKey(state)
+    return remember(key) {
+        RaceCompose.looks++
+        val sheet = Logic.sheet(state)
+        val open = Racing.chassis.filter { it.minPrestige <= state.prestiges }
+        val looks = open.associate { body ->
+            RaceCompose.forecasts++
+            body.id to Racing.forecast(state, sheet, body)
         }
-        val fitted = Racing.gearboxes.first { it.id == state.transmission }
-        val ratioText = fitted.ratios.joinToString(" / ") { String.format(Locale.US, "%.2f", it) }
+        val quickest = looks.entries.filter { it.value.fits }.maxByOrNull { it.value.pace }?.key
+        RaceCatalog(quickest, looks)
+    }
+}
+
+@Composable
+private fun RaceColumn(modifier: Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(modifier.padding(horizontal = 12.dp).padding(bottom = 16.dp), content = content)
+}
+
+@Composable
+private fun CarLine(state: GameState, car: Racing.Car, slots: Int, slotMax: Int) {
+    val picked = Racing.picked(state)
+    val standingIn = car.spec.chassis.id != picked.id
+    val name = if (standingIn) "Shop mule (engine doesn't fit ${picked.name})" else car.spec.chassis.name
+    Text(
+        "$name  ${car.massKg.toInt()} kg  dyno ${car.wheelHp.toInt()} hp  pace ${car.pace.toInt()}",
+        color = if (standingIn || !car.fits) Amber else Lime,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    Text(
+        "${car.spec.place.name.lowercase(Locale.US)} ${car.spec.drive.name}  ducts $slots/$slotMax  fade ${(car.fade * 100).toInt()}%" +
+            if (car.fits) "" else "  ENGINE DOES NOT FIT",
+        color = if (!car.fits || car.fade > 0.2) Amber else White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.DragRace(
+    state: GameState,
+    setup: RaceDrive.Setup,
+    forecast: Map<String, Drivers.Forecast>,
+    onLength: (String) -> Unit,
+    onPick: (String) -> Unit,
+    onQuick: (Racing.Tier) -> Unit,
+    onLadder: () -> Unit,
+    onStake: () -> Unit,
+) {
+    val bottle = RaceDrive.bottle(setup, RaceDrive.fresh(setup), racing = false)
+    Row(
+        Modifier.fillMaxWidth().height(64.dp).padding(top = 8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        NitrousGauge(bottle, Modifier.width(72.dp).fillMaxHeight())
         Text(
-            "Ratios $ratioText. A shift takes ${String.format(Locale.US, "%.2f", fitted.shift)}s.",
+            if (bottle.phase == RaceDrive.BottlePhase.OFF) {
+                "No drag nitrous kit. The bottle stays dark until one is fitted."
+            } else {
+                "Bottle ${String.format(Locale.US, "%.0f", setup.bottleS)}s. A new pass fills it. It drains while the shot is open."
+            },
+            color = if (bottle.phase == RaceDrive.BottlePhase.OFF) Olive else White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(start = 8.dp).weight(1f),
+        )
+    }
+    Text("DISTANCE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+    Text(
+        "An eighth is the launch. A quarter is the gears. A half mile is the top end. The pace number follows that distance.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    ChipRow(Racing.Length.entries.map { it.id to it.title }, state.raceLength, onLength)
+    DriverToggle(state, forecast, onPick)
+    Text("QUICK", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+    Text(
+        "Club is a heavy car. National is a medium one. International is a light car with a milder engine. You drive the distance above.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Racing.Tier.entries.forEach { tier ->
+            LineButton(tier.name.lowercase(Locale.US), true, { onQuick(tier) })
+        }
+    }
+    Text("LADDER", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+    val rungs = Racing.ladderRungs(Racing.lengthOf(state.raceLength))
+    val rung = rungs[state.raceLadder.coerceIn(0, rungs.lastIndex)]
+    Text(
+        "Rung ${state.raceLadder + 1}/${rungs.size}: ${rung.title}, pace ${rung.pace.toInt()}. The field does not care what you drive.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    LineButton("Drive the rung", true, onLadder, Modifier.padding(top = 6.dp))
+    Text("STAKE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 12.dp))
+    val stake = Racing.stakeCost(state.prestiges)
+    Text(
+        "A random car in this class. ${formatDollars(stake)} to enter. Win pays ${formatDollars(stake * 2)}. Lose pays nothing.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    LineButton("Drive for the stake", state.devMode || state.money >= stake, onStake, Modifier.padding(top = 6.dp))
+    Text(
+        "Tires, the final drive and the strip knobs are on Drag Parts.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+}
+
+@Composable
+private fun DragParts(
+    ui: UiModel,
+    state: GameState,
+    setup: RaceDrive.Setup,
+    onStudy: (String) -> Unit,
+    onPart: (String, String) -> Unit,
+    onFinal: (String) -> Unit,
+    onDrag: (String, Double) -> Unit,
+) {
+    Text("DRAG TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 8.dp))
+    Text(
+        "For the strip. Grip off the line, and nothing else. Road races use the circuit tires on Race Parts, whatever is fitted here. A better tire is a study, then the price.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    ChipRow(Racing.tires.map { it.id to Racing.gate(state, "tire", it.id, it.name).label }, state.tire) { id ->
+        val tire = Racing.tires.first { it.id == id }
+        val gate = Racing.gate(state, "tire", id, tire.name)
+        if (gate.study != null) onStudy(gate.study) else onPart("tire", id)
+    }
+    Text("DRAG PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    Text(
+        "Launch control, a transbrake, wheelie bars, a light flywheel, a short shifter, a line lock and a nitrous kit. They work on the strip only, at full price. Several open a knob further down this page.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    Parts.strip.forEach { line -> KitLine(state, line, onStudy, onPart) }
+    Text("FINAL DRIVE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    Text(
+        "Short leaves harder and runs out of rpm. Tall is lazy off the line and carries the top. The road gear is already in the mule. The other two are a study, then the price. The pace number does not see the gear. The strip does.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    ChipRow(
+        Racing.finals.map { it.id to Racing.gate(state, "final", it.id, it.name).label },
+        state.finalDrive,
+    ) { id ->
+        val gear = Racing.finals.first { it.id == id }
+        val gate = Racing.gate(state, "final", id, gear.name)
+        if (gate.study != null) onStudy(gate.study) else onFinal(id)
+    }
+    val gearKey = listOf(
+        state.finalDrive,
+        state.raceLength,
+        state.chassis,
+        state.transmission,
+        state.driveline,
+        state.tire,
+        state.circuitTire,
+        state.kit,
+        state.enginePlace,
+        state.dragTune,
+        ui.sheet.stats.peakHorsepower.toInt(),
+        ui.sheet.stats.peakTorqueLbFt.toInt(),
+    )
+    val gearLine = remember(gearKey) {
+        RaceCompose.gearBuilds++
+        val times = Racing.gearTimes(setup, state.raceLength)
+        val best = times.minBy { it.value }
+        val now = times[state.finalDrive] ?: best.value
+        val name = when (best.key) {
+            "short" -> "Short"
+            "tall" -> "Tall"
+            else -> "Road"
+        }
+        if (best.key == state.finalDrive) {
+            "$name is the quick gear here, ${fmtSeconds(now)}."
+        } else {
+            "$name is ${fmtSeconds(now - best.value)} quicker on this distance."
+        }
+    }
+    Text(
+        gearLine,
+        color = Cyan,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    Text("STRIP KNOBS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    DragTuning(ui, onDrag)
+}
+
+@Composable
+private fun RaceParts(
+    state: GameState,
+    car: Racing.Car,
+    slots: Int,
+    slotMax: Int,
+    forecast: Map<String, Drivers.Forecast>,
+    onStudy: (String) -> Unit,
+    onChassis: (String) -> Unit,
+    onPart: (String, String) -> Unit,
+    onSlots: (Int) -> Unit,
+    onHire: (String) -> Unit,
+) {
+    val body = car.spec.chassis
+    val catalog = rememberCatalog(state)
+    Text("CIRCUIT TIRES", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 8.dp))
+    Text(
+        "For corners and brakes. A softer tire grips more and wears faster, most on a hot circuit. Strips use the drag tires on Drag Parts. Costs a study, then the price.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    ChipRow(Racing.circuitTires.map { it.id to Racing.gate(state, "ctire", it.id, it.name).label }, state.circuitTire) { id ->
+        val tire = Racing.circuitTires.first { it.id == id }
+        val gate = Racing.gate(state, "ctire", id, tire.name)
+        if (gate.study != null) onStudy(gate.study) else onPart("ctire", id)
+    }
+    Racing.circuitTires.firstOrNull { it.id == state.circuitTire }?.let { t ->
+        Text(
+            String.format(Locale.US, "Grip %.2f, loses %.1f%% a lap on a mild track. For circuits only.", t.mu, t.wear * 100.0),
+            color = Cyan,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    Text("CIRCUIT PARTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    Text(
+        "Brakes, suspension, aero and the rest. Each moves a lap a lot and a drag run a little. A study, then the price. One level of a line is fitted at a time.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    Parts.lines.forEach { line -> KitLine(state, line, onStudy, onPart) }
+    Text("CHASSIS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 16.dp))
+    Text(
+        "A light car is quickest on the strip and worst on the dyno. The bay is small and the radiator is small. A medium car is the middle, and a few of them sat the engine in more than one place. A heavy car takes a much larger engine, reads higher on the dyno, and is slower on the track.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    ChassisRow("Shop mule", "${Racing.mule.kg.toInt()} kg  front  fits the engine you have  1 duct", state.chassis == "mule", true, "Use the mule") { onChassis("mule") }
+    com.revline.idle.model.Block.primarySteps().forEach { block ->
+        val group = Racing.chassis.filter { it.group == block.ladderStep }
+        if (group.isEmpty()) return@forEach
+        if (block.ladderStep > state.prestiges) {
+            Text(
+                "${block.title}  ·  three cars, with a later engine",
+                color = Olive,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            return@forEach
+        }
+        Text(block.title.uppercase(Locale.US), color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+        group.forEach { item ->
+            val study = "chassis_${item.id}"
+            val owned = state.chassisLevel[item.id] ?: 0
+            val open = item.minPrestige <= state.prestiges
+            val known = study in state.raceStudies
+            val label = when {
+                !open -> "Needs a later engine"
+                !known -> "Study · ${item.studyCost.toInt()} RP"
+                state.chassis == item.id && owned < 3 -> "Lighten to ${owned + 1}/3 · ${formatDollars(Racing.chassisPrice(state, item, owned + 1))}"
+                state.chassis == item.id -> "Fitted ${owned}/3"
+                owned >= 1 -> "Fit it"
+                else -> "Buy · ${formatDollars(Racing.chassisPrice(state, item, 1))}"
+            }
+            val places = item.places.joinToString("/") { it.name.lowercase(Locale.US) }
+            val bay = if (item.maxCc < 800) "${item.maxCc.toInt()} cc" else String.format(Locale.US, "%.1f L", item.maxCc / 1000.0)
+            val look = catalog.looks[item.id]
+            val outlook = when {
+                look == null -> ""
+                look.fits -> "dyno ${look.wheelHp.toInt()}  pace ${look.pace.toInt()}  fade ${(look.fade * 100).toInt()}%"
+                else -> "this engine will not fit"
+            }
+            val star = if (item.id == catalog.quickestId) "  ·  quickest" else ""
+            ChassisRow(
+                "${item.build.name.lowercase(Locale.US)}  ${item.name}$star",
+                "$outlook  ·  ${item.kg.toInt()} kg  $places  bay $bay  ·  ${item.source}",
+                state.chassis == item.id,
+                open,
+                label,
+            ) {
+                if (!known) onStudy(study) else onChassis(item.id)
+            }
+        }
+    }
+    Text("GEARBOX", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    Text(
+        "The mule starts on the 4-speed. Another box is a study, then the price.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+    )
+    ChipRow(Racing.gearboxes.map { it.id to Racing.gate(state, "box", it.id, it.name).label }, state.transmission) { id ->
+        val gate = Racing.gate(state, "box", id, Racing.gearboxes.first { it.id == id }.name)
+        if (gate.study != null) onStudy(gate.study) else onPart("box", id)
+    }
+    val fitted = Racing.gearboxes.first { it.id == state.transmission }
+    val ratioText = fitted.ratios.joinToString(" / ") { String.format(Locale.US, "%.2f", it) }
+    Text(
+        "Ratios $ratioText. A shift takes ${String.format(Locale.US, "%.2f", fitted.shift)}s.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    Text("DRIVELINE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    ChipRow(Racing.axles.map { it.id to Racing.gate(state, "axle", it.id, it.name).label }, state.driveline) { id ->
+        val gate = Racing.gate(state, "axle", id, Racing.axles.first { it.id == id }.name)
+        if (gate.study != null) onStudy(gate.study) else onPart("axle", id)
+    }
+    Text("LAYOUT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    if (body.places.size == 1) {
+        Text(
+            "${body.places.first().name.lowercase(Locale.US)} engine, ${car.spec.drive.name}. This car was not built the other ways.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
-            modifier = Modifier.padding(top = 4.dp),
         )
-        Text("FINAL DRIVE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
+    } else {
         Text(
-            "Short leaves harder and runs out of rpm. Tall is lazy off the line and carries the top. The road gear is already in the mule. The other two are a study, then the price. The pace number does not see the gear. The strip does.",
+            "Front is the road car, and it pulls the front wheels. Mid is the Turbo, and it drives the rears.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
         ChipRow(
-            Racing.finals.map { it.id to Racing.gate(state, "final", it.id, it.name).label },
-            state.finalDrive,
-        ) { id ->
-            val gear = Racing.finals.first { it.id == id }
-            val gate = Racing.gate(state, "final", id, gear.name)
-            if (gate.study != null) onStudy(gate.study) else onFinal(id)
-        }
-        val gearKey = listOf(
-            state.finalDrive,
-            state.raceLength,
-            state.chassis,
-            state.transmission,
-            state.driveline,
-            state.tire,
-            state.circuitTire,
-            state.kit,
-            state.enginePlace,
-            ui.sheet.stats.peakHorsepower.toInt(),
-            ui.sheet.stats.peakTorqueLbFt.toInt(),
-        )
-        val gearLine = remember(gearKey) {
-            val times = Racing.gearTimes(state)
-            val best = times.minBy { it.value }
-            val now = times[state.finalDrive] ?: best.value
-            val name = when (best.key) {
-                "short" -> "Short"
-                "tall" -> "Tall"
-                else -> "Road"
-            }
-            if (best.key == state.finalDrive) {
-                "$name is the quick gear here, ${fmtSeconds(now)}."
-            } else {
-                "$name is ${fmtSeconds(now - best.value)} quicker on this distance."
-            }
-        }
-        Text(
-            gearLine,
-            color = Cyan,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Text("DRIVELINE", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        ChipRow(Racing.axles.map { it.id to Racing.gate(state, "axle", it.id, it.name).label }, state.driveline) { id ->
-            val gate = Racing.gate(state, "axle", id, Racing.axles.first { it.id == id }.name)
-            if (gate.study != null) onStudy(gate.study) else onPart("axle", id)
-        }
-        Text("LAYOUT", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp))
-        if (body.places.size == 1) {
-            Text(
-                "${body.places.first().name.lowercase(Locale.US)} engine, ${car.spec.drive.name}. This car was not built the other ways.",
-                color = White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-        } else {
-            Text(
-                "Front is the road car, and it pulls the front wheels. Mid is the Turbo, and it drives the rears.",
-                color = White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            ChipRow(
-                body.places.map { spot ->
-                    val drive = Racing.driveFor(body, spot)
-                    spot.name to "${spot.name.lowercase(Locale.US)} ${drive.name}"
-                },
-                car.spec.place.name,
-            ) { onPart("place", it) }
-        }
-        Text("DUCTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LineButton("Blank one", slots > 0, { onSlots(slots - 1) })
-            LineButton("Open one", slots < slotMax, { onSlots(slots + 1) })
-        }
-        Text(
-            "A duct lets heat out and adds a little drag. A small engine does not need many. A big one fades without them.",
-            color = White,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
-        )
-        DriverRoster(state, forecast, onHire)
+            body.places.map { spot ->
+                val drive = Racing.driveFor(body, spot)
+                spot.name to "${spot.name.lowercase(Locale.US)} ${drive.name}"
+            },
+            car.spec.place.name,
+        ) { onPart("place", it) }
     }
+    Text("DUCTS", color = Lime, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LineButton("Blank one", slots > 0, { onSlots(slots - 1) })
+        LineButton("Open one", slots < slotMax, { onSlots(slots + 1) })
     }
+    Text(
+        "A duct lets heat out and adds a little drag. A small engine does not need many. A big one fades without them.",
+        color = White,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
+    )
+    DriverRoster(state, forecast, onHire)
 }
 
 private fun fmtSeconds(seconds: Double): String =
@@ -482,7 +650,7 @@ private fun ChipRow(options: List<Pair<String, String>>, selected: String, onPic
                     .background(if (on) Lime else Black)
                     .border(1.dp, if (on) Lime else White)
                     .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
+                        interactionSource = null,
                         indication = null,
                     ) { onPick(id) }
                     .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -502,7 +670,7 @@ private fun DriverToggle(state: com.revline.idle.data.GameState, forecast: Map<S
     val picked = Drivers.selected(state)
     if (hired.isEmpty()) {
         Text(
-            "You drive. Hire someone below and he can take any race for a share of its purse.",
+            "You drive. Hire someone on Race Parts and he can take any race for a share of its purse.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
@@ -681,7 +849,7 @@ private fun CircuitSection(
             modifier = Modifier.padding(top = 2.dp),
         )
         Text(
-            "Hire one from the DRIVERS list below. Circuit races are driven by your hired drivers, not by you.",
+            "Hire one on Race Parts. Circuit races are driven by your hired drivers, not by you.",
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,

@@ -50,7 +50,7 @@ class NitrousGaugeTest {
     @Test fun aBareDragPageGreysTheBottleAndTheCircuitPageHidesIt() {
         show(Logic.newGame())
         rule.onNodeWithText("NO KIT").assertIsDisplayed()
-        rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("ROAD RACE", substring = false).performSemanticsAction(SemanticsActions.OnClick)
         rule.onNodeWithText("NO KIT").assertDoesNotExist()
         rule.onNodeWithText("ARMED").assertDoesNotExist()
     }
@@ -61,7 +61,7 @@ class NitrousGaugeTest {
         rule.onNodeWithText("ARMED").assertIsDisplayed()
         rule.onNodeWithText("7.0s").assertIsDisplayed()
         rule.onNode(hasContentDescription("nitrous ARMED 1.00")).assertIsDisplayed()
-        rule.onNodeWithText("CIRCUIT", substring = false).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("ROAD RACE", substring = false).performSemanticsAction(SemanticsActions.OnClick)
         rule.onNodeWithText("ARMED").assertDoesNotExist()
         rule.onNodeWithText("7.0s").assertDoesNotExist()
         assertEquals(7.0, RaceDrive.setup(fitted, Logic.sheet(fitted)).bottleS, 1e-6)

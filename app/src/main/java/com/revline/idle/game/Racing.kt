@@ -293,8 +293,11 @@ object Racing {
     fun driveFor(body: Chassis, place: Place): Drive =
         if (body.id == "r5" && place == Place.MID) Drive.RWD else body.drive
 
-    fun car(state: GameState, circuit: Boolean = false): Car {
-        val spec = specOf(state, circuit)
+    fun car(state: GameState, circuit: Boolean = false): Car = car(state, Logic.sheet(state), circuit)
+
+    /** [sheet] is the dyno the bench already built. A page that has one should pass it, so a tick does not build another. */
+    fun car(state: GameState, sheet: Sheet, circuit: Boolean = false): Car {
+        val spec = specOf(state, sheet, circuit)
         if (fits(spec.chassis, spec.displacementCc)) return assess(spec, lengthOf(state.raceLength))
         val body = mule
         val level = (state.chassisLevel[body.id] ?: 0).coerceIn(0, 3)
@@ -312,10 +315,12 @@ object Racing {
     }
 
     /** Fastest chassis this engine can sit in, on the distance selected. */
-    fun quickest(state: GameState): Chassis? =
+    fun quickest(state: GameState): Chassis? = quickest(state, Logic.sheet(state))
+
+    fun quickest(state: GameState, sheet: Sheet): Chassis? =
         chassis
             .filter { it.minPrestige <= state.prestiges }
-            .map { it to forecast(state, it) }
+            .map { it to forecast(state, sheet, it) }
             .filter { (_, look) -> look.fits }
             .maxByOrNull { (_, look) -> look.pace }
             ?.first
@@ -324,17 +329,21 @@ object Racing {
      * A clean run in each final drive, on the strip selected.
      * The pace card does not see the gear. This does.
      */
-    fun gearTimes(state: GameState): Map<String, Double> {
-        val setup = RaceDrive.setup(state)
-        val meters = lengthOf(state.raceLength).meters
+    fun gearTimes(state: GameState): Map<String, Double> = gearTimes(RaceDrive.setup(state), state.raceLength)
+
+    /** The three gears, from a setup the page already built. */
+    fun gearTimes(setup: RaceDrive.Setup, lengthId: String): Map<String, Double> {
+        val meters = lengthOf(lengthId).meters
         return listOf("short", "road", "tall").associateWith { id ->
             RaceDrive.driveWell(setup.copy(finalDrive = finalRatio(id), distanceM = meters)).time
         }
     }
 
     /** What this engine would do in [body] on the strip you have selected. */
-    fun forecast(state: GameState, body: Chassis): Car {
-        val now = specOf(state)
+    fun forecast(state: GameState, body: Chassis): Car = forecast(state, Logic.sheet(state), body)
+
+    fun forecast(state: GameState, sheet: Sheet, body: Chassis): Car {
+        val now = specOf(state, sheet)
         val place = body.place
         return assess(
             now.copy(chassis = body, place = place, drive = driveFor(body, place), slots = body.slots),
@@ -343,8 +352,9 @@ object Racing {
     }
 
     /** [circuit] puts the circuit tire on. A strip puts the drag tire on. */
-    fun specOf(state: GameState, circuit: Boolean = false): Spec {
-        val sheet = Logic.sheet(state)
+    fun specOf(state: GameState, circuit: Boolean = false): Spec = specOf(state, Logic.sheet(state), circuit)
+
+    fun specOf(state: GameState, sheet: Sheet, circuit: Boolean = false): Spec {
         val body = chassisById(state.chassis)
         val level = (state.chassisLevel[body.id] ?: 0).coerceIn(0, 3)
         val box = gearboxes.find { it.id == state.transmission } ?: gearboxes.first { it.id == "four" }
