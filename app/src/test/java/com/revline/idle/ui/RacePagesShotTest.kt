@@ -29,13 +29,14 @@ class RacePagesShotTest {
     @Test fun fold() {
         show()
         capture("drag-fold.png")
-        open("CIRCUIT")
-        capture("circuit-fold.png")
+        open("ROAD RACE")
+        capture("road-fold.png")
+        open("DRAG PARTS")
+        capture("drag-parts-fold.png")
+        open("RACE PARTS")
+        capture("race-parts-fold.png")
         scrollTo("DRIVERS")
-        capture("circuit-fold-shared.png")
-        open("DRAG")
-        scrollTo("DRIVERS")
-        capture("drag-fold-shared.png")
+        capture("race-parts-fold-drivers.png")
     }
 
     @Test
@@ -43,8 +44,12 @@ class RacePagesShotTest {
     fun phone() {
         show()
         capture("drag-phone.png")
-        open("CIRCUIT")
-        capture("circuit-phone.png")
+        open("ROAD RACE")
+        capture("road-phone.png")
+        open("DRAG PARTS")
+        capture("drag-parts-phone.png")
+        open("RACE PARTS")
+        capture("race-parts-phone.png")
     }
 
     private fun show() {

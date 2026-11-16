@@ -133,7 +133,7 @@ object RaceDrive {
     fun setup(state: GameState, sheet: Sheet, circuit: Boolean = false): Setup {
         val rig = if (circuit) DragTune.Rig() else DragTune.rig(state)
         return setupFor(
-            body = Racing.car(state, circuit),
+            body = Racing.car(state, sheet, circuit),
             peakHp = sheet.stats.peakHorsepower,
             peakTqLbFt = sheet.stats.peakTorqueLbFt,
             redline = sheet.params.redlineRpm,

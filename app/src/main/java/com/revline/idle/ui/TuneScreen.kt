@@ -13,10 +13,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -31,7 +28,6 @@ import java.util.Locale
 
 @Composable
 fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit, onDrag: (String, Double) -> Unit = { _, _ -> }) {
-    var page by remember { mutableStateOf("ENGINE") }
     val stats = ui.sheet.stats
     val params = ui.sheet.params
     Column(
@@ -42,15 +38,12 @@ fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit, onDrag: (String, Dou
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("TUNE", color = White, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("ENGINE", "DRAG").forEach { tab ->
-                LineButton(tab, page != tab, { page = tab })
-            }
-        }
-        if (page == "DRAG") {
-            DragTuning(ui, onDrag)
-            return@Column
-        }
+        Text(
+            "Strip knobs (tire pressure, launch, nitrous) are on the Race tab, under Drag Parts.",
+            color = White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+        )
         Text(
             "Screws stay locked until the part is on the engine. More of that part, and the parts that refine it, make the clicks smaller.",
             color = White,
@@ -78,11 +71,11 @@ fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit, onDrag: (String, Dou
 }
 
 @Composable
-private fun DragTuning(ui: UiModel, onDrag: (String, Double) -> Unit) {
+internal fun DragTuning(ui: UiModel, onDrag: (String, Double) -> Unit) {
     val forecast = remember(DragTune.forecastKey(ui.game)) { DragTune.forecast(ui.game) }
     Text(
         "The strip car's own knobs. Every one is a trade: what it gives on the launch it takes at the top, or the other way round. " +
-            "Knobs need their part on the car. The Parts tab has the drag parts.",
+            "Knobs need their part on the car. The parts are above.",
         color = White,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,
