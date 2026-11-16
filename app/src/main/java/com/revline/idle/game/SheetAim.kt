@@ -146,6 +146,18 @@ data class Aim(
     val detail: String,
 )
 
+/**
+ * One ranking of the unlocked next levels. [settled] is set when cash and the
+ * spend mode cannot change the line. Otherwise [pick] applies them.
+ */
+internal data class RankedAim(
+    val settled: Aim?,
+    val goal: AimGoal?,
+    val before: Double,
+    val target: Double?,
+    val offers: List<AimOffer>,
+)
+
 object SheetAim {
     /**
      * Lowest ratio is farthest from its goal. A tie goes to power, then torque.
@@ -160,8 +172,37 @@ object SheetAim {
         return marks.minWith(compareBy<Pair<SheetMark, Double>> { it.second }.thenBy { it.first.ordinal }).first
     }
 
-    fun recommend(state: GameState, goal: AimGoal? = null, spend: AimSpend = AimSpend.BEST): Aim {
-        if (goal != null) return toward(state, goal, spend)
+    /**
+     * The evaluates behind [recommend]. Cash and [AimSpend] are not read, so a
+     * pay tick can keep this and only run [pick].
+     */
+    internal fun rank(state: GameState, goal: AimGoal? = null): RankedAim {
+        if (goal != null) return rankToward(state, goal)
+        return RankedAim(sheetLine(state), goal = null, before = 0.0, target = null, offers = emptyList())
+    }
+
+    /** Applies the till and the spend mode to a ranking from [rank]. */
+    internal fun pick(ranked: RankedAim, money: Double, spend: AimSpend): Aim {
+        val settled = ranked.settled
+        if (settled != null) return settled
+        val goal = ranked.goal ?: return Aim(SheetMark.POWER, null, "", "")
+        val choice = AimSpends.choose(ranked.offers, money, spend, ranked.target)
+        val chosen = choice.offer
+        if (chosen == null) {
+            return Aim(markOf(goal), null, goal.short, none(goal, spend, ranked.before, money))
+        }
+        val name = Upgrades.byId(chosen.id).name
+        val move = "${goal.short}  ${fmt(goal, ranked.before)} → ${fmt(goal, chosen.after)}"
+        if (spend == AimSpend.BEST) {
+            return Aim(markOf(goal), chosen.id, name, "$move. ${formatDollars(chosen.cost)}.")
+        }
+        return Aim(markOf(goal), chosen.id, name, "$move. ${why(spend, choice, goal, ranked.target, chosen.cost)}")
+    }
+
+    fun recommend(state: GameState, goal: AimGoal? = null, spend: AimSpend = AimSpend.BEST): Aim =
+        pick(rank(state, goal), state.money, spend)
+
+    private fun sheetLine(state: GameState): Aim {
         val block = Block.of(state.blockId, state.prestiges)
         val nowParams = Logic.paramsFrom(state)
         val now = EngineSim.evaluate(nowParams)
@@ -230,10 +271,10 @@ object SheetAim {
         Logic.profitStop(params, stats, Prestige.multiplier(state.knowledge), Logic.GATE_CAP).mpg
 
     /**
-     * The next unlocked level for [goal], ranked by [spend].
+     * The next unlocked level for [goal].
      * Horsepower and torque are the sheet peaks. mpg is read at the profit pedal, the way the rebuild sheet reads it. $/s is the contract at the pedal you are holding, and it has no sheet number. Cooling is degrees under the tightest temperature limit on the wide-open sweep. Zero is the limit.
      */
-    private fun toward(state: GameState, goal: AimGoal, spend: AimSpend): Aim {
+    private fun rankToward(state: GameState, goal: AimGoal): RankedAim {
         val nowParams = Logic.paramsFrom(state)
         val now = EngineSim.evaluate(nowParams)
         val beforePay = if (goal == AimGoal.PAY) contract(state, now) else 0.0
@@ -247,7 +288,7 @@ object SheetAim {
             } else {
                 "${goal.short} is already on the sheet, at ${fmt(goal, before)}."
             }
-            return Aim(markOf(goal), null, "Clear", detail)
+            return RankedAim(Aim(markOf(goal), null, "Clear", detail), goal, before, target, emptyList())
         }
         val offers = ArrayList<AimOffer>()
         for (upgrade in Upgrades.all) {
@@ -264,17 +305,7 @@ object SheetAim {
             if (gain < floor(goal)) continue
             offers += AimOffer(upgrade.id, Logic.upgradeCost(state, upgrade.id), gain, after)
         }
-        val choice = AimSpends.choose(offers, state.money, spend, target)
-        val chosen = choice.offer
-        if (chosen == null) {
-            return Aim(markOf(goal), null, goal.short, none(goal, spend, before, state.money))
-        }
-        val name = Upgrades.byId(chosen.id).name
-        val move = "${goal.short}  ${fmt(goal, before)} → ${fmt(goal, chosen.after)}"
-        if (spend == AimSpend.BEST) {
-            return Aim(markOf(goal), chosen.id, name, "$move. ${formatDollars(chosen.cost)}.")
-        }
-        return Aim(markOf(goal), chosen.id, name, "$move. ${why(spend, choice, goal, target, chosen.cost)}")
+        return RankedAim(settled = null, goal = goal, before = before, target = target, offers = offers)
     }
 
     private fun none(goal: AimGoal, spend: AimSpend, before: Double, money: Double): String {

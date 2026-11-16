@@ -181,4 +181,16 @@ object DragTune {
 
     /** The Drag tune page's forecast: a clean pass on this car as tuned. */
     fun forecast(state: GameState): RaceDrive.Clean = RaceDrive.clean(RaceDrive.setup(state))
+
+    /**
+     * Fields the clean pass actually reads. The pay tick moves cash, research,
+     * the clock, and soak, and none of those change the pass.
+     */
+    fun forecastKey(state: GameState): GameState = state.copy(
+        money = 0.0,
+        runEarnings = 0.0,
+        researchPoints = 0.0,
+        savedAtEpochMs = 0L,
+        soakC = 0.0,
+    )
 }

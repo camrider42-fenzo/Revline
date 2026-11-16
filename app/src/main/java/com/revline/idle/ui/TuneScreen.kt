@@ -79,7 +79,7 @@ fun TuneScreen(ui: UiModel, onNudge: (String, Int) -> Unit, onDrag: (String, Dou
 
 @Composable
 private fun DragTuning(ui: UiModel, onDrag: (String, Double) -> Unit) {
-    val forecast = remember(ui.game) { DragTune.forecast(ui.game) }
+    val forecast = remember(DragTune.forecastKey(ui.game)) { DragTune.forecast(ui.game) }
     Text(
         "The strip car's own knobs. Every one is a trade: what it gives on the launch it takes at the top, or the other way round. " +
             "Knobs need their part on the car. The Parts tab has the drag parts.",

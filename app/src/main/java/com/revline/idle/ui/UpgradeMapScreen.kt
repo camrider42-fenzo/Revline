@@ -97,7 +97,7 @@ fun PartsScreen(
     val family = Block.of(ui.game.blockId, ui.game.prestiges).family
     val layout = remember(family) { UpgradeMap.bubbles(family) }
     val pedalBucket = (ui.game.throttle * 20.0).toInt()
-    val previews = remember(
+    val previewKey = listOf(
         ui.game.upgrades,
         ui.game.researched,
         ui.game.fuel,
@@ -105,9 +105,8 @@ fun PartsScreen(
         ui.game.knowledge,
         ui.game.prestiges,
         pedalBucket,
-    ) {
-        Upgrades.all.associate { it.id to Logic.preview(ui.game, it.id) }
-    }
+    )
+    val previews = remember(previewKey) { Logic.cachedPreviews(previewKey, ui.game) }
     val saver = LocalBatterySaver.current
     var pulse by remember { mutableFloatStateOf(0.7f) }
     LaunchedEffect(saver) {
@@ -135,7 +134,7 @@ fun PartsScreen(
     }
     val aimGoal = AimGoal.from(ui.game.aimGoal)
     val aimSpend = AimSpend.from(ui.game.aimSpend)
-    val aim = remember(
+    val aimRank = remember(
         ui.game.upgrades,
         ui.game.researched,
         ui.game.prestiges,
@@ -143,14 +142,13 @@ fun PartsScreen(
         ui.game.tune,
         ui.game.perks,
         ui.game.aimGoal,
-        ui.game.aimSpend,
-        ui.game.money,
         ui.game.throttle,
         ui.game.blockId,
         ui.game.racing,
     ) {
-        SheetAim.recommend(ui.game, aimGoal, aimSpend)
+        SheetAim.rank(ui.game, aimGoal)
     }
+    val aim = SheetAim.pick(aimRank, ui.game.money, aimSpend)
     var focusTick by remember { mutableIntStateOf(0) }
     var pinned by remember { mutableStateOf<Effect?>(null) }
     var focusPart by remember { mutableStateOf<String?>(null) }

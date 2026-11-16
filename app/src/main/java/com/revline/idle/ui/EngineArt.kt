@@ -29,6 +29,9 @@ import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.sin
 
+/** One paint for the faded rear rotors. The layer copies the alpha when it opens. */
+private val rotorFadePaint = Paint()
+
 @Composable
 fun EngineArt(
     params: EngineParams,
@@ -947,7 +950,8 @@ private fun DrawScope.drawRotary(
         val depthGain = RotorStack.gain(i, rotors)
         val faded = depthGain < 0.99f
         if (faded) {
-            drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint().apply { alpha = depthGain })
+            rotorFadePaint.alpha = depthGain
+            drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), rotorFadePaint)
         }
         val shaftDeg = angle + i * (360f / rotors)
         val shaftRad = Math.toRadians(shaftDeg.toDouble())
