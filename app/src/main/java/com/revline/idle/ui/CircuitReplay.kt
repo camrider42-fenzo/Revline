@@ -31,7 +31,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -360,6 +359,11 @@ internal object ReplaySpeed {
     fun progress(clock: Float, replay: Replay): Float = ((clock * replay.speed) / replay.duration).toFloat().coerceIn(0f, 1f)
 }
 
+/** Film time the speaker follows. Not snapshot state, so advancing it does not redraw the map. */
+private class FilmClock {
+    var seconds: Float = -1.5f
+}
+
 private data class FilmChrome(
     val lap: Int,
     val place: Int,
@@ -407,7 +411,9 @@ internal fun CircuitReplayView(
     val lanes = remember(replay) { LaneKeeper(replay) }
     var clock by remember(key) { mutableFloatStateOf(-1.5f) }
     var film by remember(key) { mutableStateOf(filmChrome(-1.5f, replay)) }
-    var lastFilmNs by remember(key) { mutableLongStateOf(0L) }
+    // The film's time. The speaker reads this. The canvases read [clock], and only while the picture is up.
+    val runClock = remember(key) { FilmClock() }
+    val live = rememberDrawLive()
     var run by remember(key) { mutableIntStateOf(0) }
     var finished by remember(key) { mutableStateOf(false) }
     var paused by remember(key) { mutableStateOf(false) }
@@ -424,48 +430,64 @@ internal fun CircuitReplayView(
     DisposableEffect(voice) {
         onDispose { voice?.source = RaceAudio.Source.DYNO }
     }
+    // Audio clock. It keeps the note on the car even when the map is not being drawn.
     LaunchedEffect(key, run) {
+        runClock.seconds = -1.5f
         clock = -1.5f
         film = filmChrome(-1.5f, replayNow)
-        lastFilmNs = 0L
         finished = false
         paused = false
         var last = 0L
         var spoken = Float.NaN
-        while (isActive && clock * replayNow.speed < replayNow.duration) {
+        while (isActive && runClock.seconds * replayNow.speed < replayNow.duration) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.05f)
                 last = now
                 val playing = !pausedNow
-                clock = ReplaySpeed.advance(clock, dt, playing, ReplaySpeed.multiplier(speedNow, replayNow))
-                if (now - lastFilmNs > 80_000_000L) {
-                    film = filmChrome(clock, replayNow)
-                    lastFilmNs = now
-                }
+                runClock.seconds = ReplaySpeed.advance(runClock.seconds, dt, playing, ReplaySpeed.multiplier(speedNow, replayNow))
                 val speaker = voiceNow
                 val params = earNow
                 if (speaker != null && params != null) {
                     val mode = RaceAudio.source(ReplaySpeed.multiplier(speedNow, replayNow), playing)
                     speaker.source = mode
                     if (mode == RaceAudio.Source.TRACK) {
-                        val at = max(0.0, clock * replayNow.speed)
+                        val at = max(0.0, runClock.seconds * replayNow.speed)
                         val dash = replayNow.you.dash(at)
                         val target = (dash?.rpm ?: params.idleRpm).toFloat()
-                        if (spoken.isNaN()) spoken = speaker.crank.rpm.takeIf { it > 1f } ?: target
-                        spoken = RaceAudio.smoothRpm(spoken, target, dt)
                         val braking = dash?.braking == true
                         val limit = dash != null && RaceAudio.circuitLimiter(dash.rpm, dash.redline)
-                        speaker.crank.publish(params, spoken, RaceAudio.circuitThrottle(braking), true, limit)
+                        spoken = SpeakerFollow.step(
+                            speaker.crank, params, spoken, target, dt,
+                            RaceAudio.circuitThrottle(braking), limit,
+                        )
                     } else {
                         spoken = Float.NaN
                     }
                 }
             }
         }
-        clock = ReplaySpeed.endClock(replayNow)
-        film = filmChrome(clock, replayNow)
+        val end = ReplaySpeed.endClock(replayNow)
+        runClock.seconds = end
+        clock = end
+        film = filmChrome(end, replayNow)
         finished = true
         voiceNow?.source = RaceAudio.Source.QUIET
+    }
+    // Draw clock. Absent unless the film is actually on screen, so a paused activity does not redraw the map.
+    LaunchedEffect(key, run, live.drawing) {
+        if (!live.drawing) return@LaunchedEffect
+        var lastFilmNs = 0L
+        while (isActive && runClock.seconds * replayNow.speed < replayNow.duration) {
+            withFrameNanos { now ->
+                DrawClock.film++
+                val shown = runClock.seconds
+                clock = shown
+                if (now - lastFilmNs > 80_000_000L) {
+                    film = filmChrome(shown, replayNow)
+                    lastFilmNs = now
+                }
+            }
+        }
     }
     val lap = film.lap
     val place = film.place
@@ -519,6 +541,7 @@ internal fun CircuitReplayView(
         val skip: @Composable () -> Unit = {
             com.revline.idle.ui.LineButton("Skip to the end", !finished, {
                 val end = ReplaySpeed.endClock(replay)
+                runClock.seconds = end
                 clock = end
                 film = filmChrome(end, replay)
             })
@@ -546,7 +569,7 @@ internal fun CircuitReplayView(
     // the trace take what they need up to their share of the spare height, so the controls are never pushed off the bottom.
     val slot = Alignment.Center
     if (wide) {
-        BoxWithConstraints(modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier.then(live.modifier).fillMaxSize()) {
             // The map is only as wide as its shape and the height allow (but never more than 55% of the width), so a tall map
             // does not leave a blank strip beside it.
             val mapW = minOf(maxWidth * 0.55f, maxHeight * CircuitLayouts.aspect(result.circuit.id) + 4.dp)
@@ -563,7 +586,7 @@ internal fun CircuitReplayView(
             }
         }
     } else {
-        Column(modifier.fillMaxSize()) {
+        Column(modifier.then(live.modifier).fillMaxSize()) {
             header()
             chips()
             conditions()

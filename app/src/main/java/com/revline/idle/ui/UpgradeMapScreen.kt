@@ -108,16 +108,19 @@ fun PartsScreen(
     )
     val previews = remember(previewKey) { Logic.cachedPreviews(previewKey, ui.game) }
     val saver = LocalBatterySaver.current
+    val pulseLive = rememberDrawLive()
     var pulse by remember { mutableFloatStateOf(0.7f) }
-    LaunchedEffect(saver) {
+    LaunchedEffect(saver, pulseLive.drawing) {
         if (saver) {
             pulse = 0.55f
             return@LaunchedEffect
         }
+        if (!pulseLive.drawing) return@LaunchedEffect
         var bright = false
         while (true) {
             bright = !bright
             pulse = if (bright) 1f else 0.45f
+            DrawClock.bubble++
             delay(700)
         }
     }
@@ -178,7 +181,7 @@ fun PartsScreen(
             focusPart = focusPart,
             focusTick = focusTick,
             onSelect = { selected.value = it },
-            modifier = Modifier.weight(1f).fillMaxWidth().zIndex(0f),
+            modifier = Modifier.weight(1f).fillMaxWidth().zIndex(0f).then(pulseLive.modifier),
         )
         Column(Modifier.fillMaxWidth().zIndex(2f).background(Black)) {
             if (selected.value == null) {

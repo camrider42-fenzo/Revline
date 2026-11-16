@@ -1,9 +1,12 @@
 package com.revline.idle.ui
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.revline.idle.model.EngineParams
 import kotlin.math.exp
 
 /**
@@ -59,3 +62,54 @@ class EngineSpeaker(val crank: EngineCrank) {
 }
 
 val LocalEngineSpeaker = compositionLocalOf<EngineSpeaker?> { null }
+
+/**
+ * The dyno note. It follows the tach the view model already publishes.
+ * It does not wait on the rotor's draw clock, so hiding the picture leaves the note where it was.
+ */
+@Composable
+internal fun DynoNote(
+    speaker: EngineSpeaker,
+    params: EngineParams,
+    rpm: Float,
+    throttle: Float,
+    live: Boolean,
+    limiter: Boolean,
+) {
+    val source = speaker.source
+    LaunchedEffect(params, rpm, throttle, live, limiter, source) {
+        when (source) {
+            RaceAudio.Source.DYNO -> {
+                speaker.crank.publish(params, rpm, throttle, live, limiterOn = limiter && live)
+                AudioClock.publishes++
+            }
+            RaceAudio.Source.QUIET -> {
+                speaker.crank.publish(params, rpm, 0f, false, limiterOn = false)
+                AudioClock.publishes++
+            }
+            RaceAudio.Source.TRACK -> Unit
+        }
+    }
+}
+
+/**
+ * Rpm the speaker eases toward while a pass or a film is moving.
+ * Callers run this from the audio clock, not from the draw clock.
+ */
+internal object SpeakerFollow {
+    fun step(
+        crank: EngineCrank,
+        params: EngineParams,
+        spoken: Float,
+        target: Float,
+        dt: Float,
+        throttle: Float,
+        limiter: Boolean,
+    ): Float {
+        val from = if (spoken.isNaN()) crank.rpm.takeIf { it > 1f } ?: target else spoken
+        val next = RaceAudio.smoothRpm(from, target, dt)
+        crank.publish(params, next, throttle, true, limiter)
+        AudioClock.publishes++
+        return next
+    }
+}
