@@ -38,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -257,14 +256,7 @@ private fun rememberEngineSpeaker(vm: GameViewModel): EngineSpeaker {
     val throttle = if (vm.ui.phase == DynoPhase.IDLE) vm.ui.game.throttle.toFloat() else 1f
     val live = !vm.ui.game.batterySaver &&
         !(Logic.stalled(vm.ui.game.throttle) && vm.ui.phase == DynoPhase.IDLE)
-    val source = speaker.source
-    LaunchedEffect(params, rpm, throttle, live, vm.ui.limiter, source) {
-        when (source) {
-            RaceAudio.Source.DYNO -> speaker.crank.publish(params, rpm, throttle, live, limiterOn = vm.ui.limiter && live)
-            RaceAudio.Source.QUIET -> speaker.crank.publish(params, rpm, 0f, false, limiterOn = false)
-            RaceAudio.Source.TRACK -> Unit
-        }
-    }
+    DynoNote(speaker, params, rpm, throttle, live, vm.ui.limiter)
     return speaker
 }
 

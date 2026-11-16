@@ -52,23 +52,27 @@ fun Tachometer(
     modifier: Modifier = Modifier,
     bouncing: Boolean = false,
 ) {
-    val settle: AnimationSpec<Float> = if (LocalBatterySaver.current) snap() else tween(durationMillis = 180)
+    val live = rememberDrawLive()
+    val settle: AnimationSpec<Float> = if (live.drawing) tween(durationMillis = 180) else snap()
     val shown by animateFloatAsState(rpm.toFloat(), settle, label = "tach")
     var nanos by androidx.compose.runtime.remember { mutableLongStateOf(0L) }
-    if (bouncing && !LocalBatterySaver.current) {
+    if (bouncing && live.drawing) {
         LaunchedEffect(Unit) {
             while (isActive) {
-                withFrameNanos { nanos = it }
+                withFrameNanos {
+                    nanos = it
+                    DrawClock.gauge++
+                }
             }
         }
     }
-    val needle = if (bouncing && !LocalBatterySaver.current) {
+    val needle = if (bouncing && live.drawing) {
         RevLimiter.rpm(redline, nanos / 1_000_000_000.0).toFloat()
     } else {
         shown
     }
     val mark by animateFloatAsState(targetRpm.toFloat(), settle, label = "mark")
-    Canvas(modifier) { drawTach(needle, redline, mark, bouncing) }
+    Canvas(modifier.then(live.modifier)) { drawTach(needle, redline, mark, bouncing) }
 }
 
 /** The dial of [Tachometer], drawn into whatever canvas it is handed: [needle] and [mark] in rpm, the redline marked and the needle red when [bouncing] or near the redline. */
@@ -139,12 +143,13 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTach(needle: F
 
 @Composable
 fun DynoChart(curve: List<OperatingPoint>, rpm: Double, modifier: Modifier = Modifier) {
+    val live = rememberDrawLive()
     val shown by animateFloatAsState(
         rpm.toFloat(),
-        if (LocalBatterySaver.current) snap() else tween(durationMillis = 180),
+        if (live.drawing) tween(durationMillis = 180) else snap(),
         label = "cursor",
     )
-    Column(modifier) {
+    Column(modifier.then(live.modifier)) {
         val peakHp = curve.maxOfOrNull { it.horsepower } ?: 0.0
         val peakTq = curve.maxOfOrNull { it.torqueLbFt } ?: 0.0
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -192,12 +197,13 @@ fun ThrottlePedal(
     onThrottle: (Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val live = rememberDrawLive()
     val shown by animateFloatAsState(
         targetValue = throttle.toFloat().coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 80),
+        animationSpec = if (live.drawing) tween(durationMillis = 80) else snap(),
         label = "pedal",
     )
-    Box(modifier) {
+    Box(modifier.then(live.modifier)) {
         Canvas(
             Modifier
                 .fillMaxSize()
@@ -251,13 +257,14 @@ fun ClutchPedal(
     onHeld: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val live = rememberDrawLive()
     val shown by animateFloatAsState(
         targetValue = depression.toFloat().coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 80),
+        animationSpec = if (live.drawing) tween(durationMillis = 80) else snap(),
         label = "clutch",
     )
     val biting = shown < RaceDrive.BITE_START && shown > RaceDrive.BITE_FULL
-    Box(modifier) {
+    Box(modifier.then(live.modifier)) {
         Canvas(
             Modifier
                 .fillMaxSize()

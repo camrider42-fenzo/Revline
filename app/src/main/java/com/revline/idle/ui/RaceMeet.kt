@@ -118,6 +118,9 @@ fun RaceMeet(
     var spoken by remember { mutableFloatStateOf(Float.NaN) }
     val soak = remember(baySoak) { floatArrayOf(baySoak.toFloat().coerceIn(0f, 80f)) }
     var lastChromeNs by remember { mutableLongStateOf(0L) }
+    // The pass and the note keep running. The tree, the strip, and the tach only invalidate while this column is up.
+    val picture = rememberDrawLive()
+    val pictureNow = rememberUpdatedState(picture.drawing)
     val heatKey = remember { intArrayOf(Int.MIN_VALUE, Int.MIN_VALUE, Int.MIN_VALUE) }
     fun climb(rpm: Double, th: Double, dt: Double) {
         if (dt <= 0.0) return
@@ -164,9 +167,7 @@ fun RaceMeet(
             return
         }
         bus?.source = RaceAudio.Source.TRACK
-        if (spoken.isNaN()) spoken = crank.rpm.takeIf { it > 1f } ?: rpm
-        spoken = RaceAudio.smoothRpm(spoken, rpm, dt.toFloat())
-        crank.publish(tone, spoken, throttle, true, limiter)
+        spoken = SpeakerFollow.step(crank, tone, spoken, rpm, dt.toFloat(), throttle, limiter)
     }
     DisposableEffect(speaker) {
         onDispose {
@@ -189,10 +190,13 @@ fun RaceMeet(
                     pedal[1] = auto.clutch.toFloat()
                     if (playerRolled.isNaN() && !auto.staging && auto.run.distance >= 0.15) playerRolled = auto.run.time
                     climb(auto.run.rpm, auto.throttle, dt)
-                    frame = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown, throttle = auto.throttle)
+                    val next = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown, throttle = auto.throttle)
                     val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
                     speak(voiceRpm.toFloat(), auto.throttle.toFloat(), auto.run.limiter, dt, running = true)
-                    publish(now)
+                    if (pictureNow.value) {
+                        frame = next
+                        publish(now)
+                    }
                     return@withFrameNanos
                 }
                 if (!hands.clutchHeld && hands.clutchTouched) {
@@ -205,10 +209,13 @@ fun RaceMeet(
                     if (countdown > 0f) countdown -= dt.toFloat() else lights -= dt.toFloat()
                     RaceDrive.stage(setup, hands.run, hands.throttle, dt, hands.clutch)
                     climb(hands.run.rpm, hands.throttle, dt)
-                    frame = snap(hands.run, lights, rivalPass, finish, done = false, won = false, countdown = countdown, throttle = hands.throttle)
+                    val next = snap(hands.run, lights, rivalPass, finish, done = false, won = false, countdown = countdown, throttle = hands.throttle)
                     val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                     speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
-                    publish(now)
+                    if (pictureNow.value) {
+                        frame = next
+                        publish(now)
+                    }
                     return@withFrameNanos
                 }
                 val shift = hands.shift && hands.clutch > RaceDrive.SHIFT_PEDAL
@@ -217,10 +224,13 @@ fun RaceMeet(
                 if (playerRolled.isNaN() && hands.run.distance >= 0.15) playerRolled = hands.run.time
                 climb(hands.run.rpm, hands.throttle, dt)
                 pedal[0] = hands.throttle.toFloat()
-                frame = snap(hands.run, 0f, rivalPass, finish, done = false, won = false, throttle = hands.throttle)
+                val next = snap(hands.run, 0f, rivalPass, finish, done = false, won = false, throttle = hands.throttle)
                 val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                 speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
-                publish(now)
+                if (pictureNow.value) {
+                    frame = next
+                    publish(now)
+                }
             }
         }
         speak(0f, 0f, false, 0.0, running = false)
@@ -242,7 +252,7 @@ fun RaceMeet(
         field.stake > 0.0 -> "Win pays ${formatDollars(field.purse)}. Lose pays nothing."
         else -> "Win pays ${formatDollars(field.purse)}."
     }
-    Column(Modifier.fillMaxSize().background(Black).padding(12.dp)) {
+    Column(picture.modifier.fillMaxSize().background(Black).padding(12.dp)) {
         val length = Racing.Length.entries.firstOrNull { kotlin.math.abs(it.meters - finish) < 1.0 }?.title ?: "strip"
         Text("${field.title.uppercase(Locale.US)}  $length", color = White, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
         Text(field.detail, color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))

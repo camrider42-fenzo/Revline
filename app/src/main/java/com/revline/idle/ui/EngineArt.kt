@@ -59,17 +59,21 @@ fun EngineArt(
     soakC: Float = 0f,
     feed: EngineFeed? = null,
 ) {
-    val frozen = LocalBatterySaver.current
     val rpmState = rememberUpdatedState(rpm)
     val feedState = rememberUpdatedState(feed)
     var angle by remember { mutableFloatStateOf(20f) }
     var clock by remember { mutableFloatStateOf(0f) }
     var spinRpm by remember { mutableFloatStateOf(feed?.rpm ?: rpm) }
-    LaunchedEffect(frozen) {
-        if (frozen) return@LaunchedEffect
+    val live = rememberDrawLive()
+    // Off the window, off this page, or paused: no frame callback at all.
+    // The angle stays where it was. Coming back snaps to the live rpm and carries on.
+    LaunchedEffect(live.drawing) {
+        if (!live.drawing) return@LaunchedEffect
+        spinRpm = feedState.value?.rpm ?: rpmState.value
         var last = 0L
         while (true) {
             withFrameNanos { now ->
+                DrawClock.engine++
                 if (last != 0L) {
                     val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
                     val follow = 1f - exp(-dt * 11f)
@@ -95,7 +99,7 @@ fun EngineArt(
     val exhaust = if (fed) Amber else HeatGlow.exhaust(egtC, soakC)
     val exhaustGain = if (fed) 1f else HeatGlow.gain(egtC, soakC)
     Canvas(
-        modifier.semantics {
+        modifier.then(live.modifier).semantics {
             contentDescription = "${params.blockTitle}, ${parts.count { it.value > 0 }} parts fitted, ${if (fed) feed.rpm.toInt() else rpm.toInt()} rpm"
         },
     ) {
