@@ -24,6 +24,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -85,10 +86,24 @@ fun RaceMeet(
         DragRivals.run(field.rival, setup.distanceM, stamp)
     }
     val rivalTime = rivalPass.time
-    var throttle by remember { mutableFloatStateOf(0f) }
-    // Staged with the clutch on the floor. The pedal stays there until a foot touches it.
-    var clutchShown by remember { mutableFloatStateOf(1f) }
-    var frame by remember { mutableStateOf(Frame(rpm = setup.idle)) }
+    // Pedal targets. The strip writes these every frame; the chrome copies them slowly so the
+    // column does not recompose with the tach. A finger writes the chrome immediately.
+    val pedal = remember { floatArrayOf(0f, 1f) }
+    val opening = Frame(rpm = setup.idle)
+    var frame by remember { mutableStateOf(opening) }
+    val feed = remember {
+        EngineFeed().apply {
+            rpm = setup.idle.toFloat()
+            val point = EngineSim.point(params, setup.idle, 0.12, baySoak)
+            coolantC = point.coolantTempC.toFloat()
+            egtC = point.egtC.toFloat()
+            oilC = point.oilTempC.toFloat()
+            soakC = baySoak.toFloat()
+        }
+    }
+    var chrome by remember {
+        mutableStateOf(raceChrome(opening, setup, rivalPass, driver, auto != null, Double.NaN, pedal[0], pedal[1]))
+    }
     var settled by remember { mutableStateOf(false) }
     // Green-to-roll for the player's lane (hired or self). Always recorded so the board can show it.
     var playerRolled by remember { mutableStateOf(Double.NaN) }
@@ -101,11 +116,44 @@ fun RaceMeet(
     val hearNow by rememberUpdatedState(hear)
     val paramsNow by rememberUpdatedState(params)
     var spoken by remember { mutableFloatStateOf(Float.NaN) }
-    var pullSoak by remember(baySoak) { mutableFloatStateOf(baySoak.toFloat().coerceIn(0f, 80f)) }
+    val soak = remember(baySoak) { floatArrayOf(baySoak.toFloat().coerceIn(0f, 80f)) }
+    var lastChromeNs by remember { mutableLongStateOf(0L) }
+    val heatKey = remember { intArrayOf(Int.MIN_VALUE, Int.MIN_VALUE, Int.MIN_VALUE) }
     fun climb(rpm: Double, th: Double, dt: Double) {
         if (dt <= 0.0) return
         val rate = EngineSim.soakPer10s(paramsNow, rpm, th)
-        pullSoak = (pullSoak + (rate * dt / 10.0).toFloat()).coerceIn(0f, 80f)
+        soak[0] = (soak[0] + (rate * dt / 10.0).toFloat()).coerceIn(0f, 80f)
+    }
+    fun publish(now: Long) {
+        val f = frame
+        feed.rpm = f.rpm.toFloat()
+        feed.throttle = f.throttle.toFloat()
+        feed.soakC = soak[0]
+        val rpmB = (f.rpm / 40.0).toInt()
+        val thB = (f.throttle * 25.0).toInt()
+        val soakB = (soak[0] * 2f).toInt()
+        if (rpmB != heatKey[0] || thB != heatKey[1] || soakB != heatKey[2]) {
+            val point = EngineSim.point(
+                paramsNow,
+                f.rpm.coerceAtLeast(400.0),
+                f.throttle.coerceIn(0.12, 1.0),
+                soak[0].toDouble(),
+            )
+            feed.coolantC = point.coolantTempC.toFloat()
+            feed.egtC = point.egtC.toFloat()
+            feed.oilC = point.oilTempC.toFloat()
+            heatKey[0] = rpmB
+            heatKey[1] = thB
+            heatKey[2] = soakB
+        }
+        val next = raceChrome(f, setup, rivalPass, driver, auto != null, playerRolled, pedal[0], pedal[1], auto?.reaction ?: Double.NaN)
+        val urgent = next.banner != chrome.banner || next.canShift != chrome.canShift || next.done != chrome.done ||
+            next.bottle.phase != chrome.bottle.phase || next.showBoard != chrome.showBoard || next.spinOn != chrome.spinOn ||
+            next.jumped != chrome.jumped
+        if ((urgent || now - lastChromeNs > 80_000_000L) && next != chrome) {
+            chrome = next
+            lastChromeNs = now
+        }
     }
     fun speak(rpm: Float, throttle: Float, limiter: Boolean, dt: Double, running: Boolean) {
         val bus = speaker
@@ -137,18 +185,19 @@ fun RaceMeet(
                 last = now
                 if (auto != null) {
                     auto.advance(dt)
-                    throttle = auto.throttle.toFloat()
-                    clutchShown = auto.clutch.toFloat()
+                    pedal[0] = auto.throttle.toFloat()
+                    pedal[1] = auto.clutch.toFloat()
                     if (playerRolled.isNaN() && !auto.staging && auto.run.distance >= 0.15) playerRolled = auto.run.time
                     climb(auto.run.rpm, auto.throttle, dt)
                     frame = snap(auto.run, auto.lights, rivalPass, finish, done = false, won = false, countdown = auto.countdown, throttle = auto.throttle)
                     val voiceRpm = if (auto.run.limiter) RevLimiter.rpm(setup.redline, auto.run.clock) else auto.run.rpm
                     speak(voiceRpm.toFloat(), auto.throttle.toFloat(), auto.run.limiter, dt, running = true)
+                    publish(now)
                     return@withFrameNanos
                 }
                 if (!hands.clutchHeld && hands.clutchTouched) {
                     hands.clutch = RaceDrive.releaseClutch(hands.clutch, dt)
-                    clutchShown = hands.clutch.toFloat()
+                    pedal[1] = hands.clutch.toFloat()
                 }
                 // Five seconds of count, then the tree. The engine is live the whole time, so the tach follows the
                 // throttle. The road is not: no clock runs, and a clutch that grabs enough to roll the car is a red light.
@@ -159,6 +208,7 @@ fun RaceMeet(
                     frame = snap(hands.run, lights, rivalPass, finish, done = false, won = false, countdown = countdown, throttle = hands.throttle)
                     val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                     speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
+                    publish(now)
                     return@withFrameNanos
                 }
                 val shift = hands.shift && hands.clutch > RaceDrive.SHIFT_PEDAL
@@ -166,42 +216,26 @@ fun RaceMeet(
                 RaceDrive.step(setup, hands.run, hands.throttle, shift, dt, hands.clutch)
                 if (playerRolled.isNaN() && hands.run.distance >= 0.15) playerRolled = hands.run.time
                 climb(hands.run.rpm, hands.throttle, dt)
+                pedal[0] = hands.throttle.toFloat()
                 frame = snap(hands.run, 0f, rivalPass, finish, done = false, won = false, throttle = hands.throttle)
                 val voiceRpm = if (hands.run.limiter) RevLimiter.rpm(setup.redline, hands.run.clock) else hands.run.rpm
                 speak(voiceRpm.toFloat(), hands.throttle.toFloat(), hands.run.limiter, dt, running = true)
+                publish(now)
             }
         }
         speak(0f, 0f, false, 0.0, running = false)
         if (!settled && isActive && hands.run.jumped) {
             frame = snap(hands.run, 0f, rivalPass, finish, done = true, won = false).copy(jumped = true)
+            publish(System.nanoTime())
             delay(1500)
             settle(false, jumped = true)
         } else if (!settled && isActive) {
             val won = hands.run.distance >= finish && hands.run.time <= rivalTime
             frame = snap(hands.run, 0f, rivalPass, finish, done = true, won = won)
+            publish(System.nanoTime())
             delay(900)
             settle(won)
         }
-    }
-    val banner = when {
-        frame.jumped -> "RED LIGHT"
-        frame.done && frame.won -> "CAUGHT THEM"
-        frame.done -> "SHORT"
-        frame.countdown > 0f -> "STAGE"
-        frame.lights > 0.7f -> "READY"
-        frame.lights > 0f -> "SET"
-        frame.shiftLeft > 0.0 -> "SHIFT"
-        RaceDrive.wheelspinLit(frame.slip.toDouble()) -> "SPIN"
-        frame.limiter -> "LIMITER"
-        else -> "GO"
-    }
-    val bannerColor = when {
-        frame.jumped -> Red
-        frame.countdown > 0f || frame.lights > 0f -> Amber
-        frame.done && frame.won -> Lime
-        frame.done || RaceDrive.wheelspinLit(frame.slip.toDouble()) || frame.limiter -> Red
-        frame.shiftLeft > 0.0 -> Amber
-        else -> Lime
     }
     val purse = when {
         field.stake > 0.0 && field.purse <= 0.0 -> "The stake is not on the table."
@@ -219,43 +253,31 @@ fun RaceMeet(
             )
         }
         Text(purse, color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
-        Text(banner, color = bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
-        val heat = remember(params, (frame.rpm / 40.0).toInt(), (frame.throttle * 25.0).toInt(), (pullSoak * 2f).toInt()) {
-            EngineSim.point(
-                params,
-                frame.rpm.coerceAtLeast(400.0),
-                frame.throttle.coerceIn(0.12, 1.0),
-                pullSoak.toDouble(),
-            )
-        }
+        Text(chrome.banner, color = chrome.bannerColor, fontFamily = FontFamily.Monospace, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
         BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 4.dp)) {
             val wide = maxWidth >= 600.dp
             Row(Modifier.fillMaxWidth().height(if (wide) 320.dp else 348.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (wide) {
                     EngineArt(
                         params,
-                        frame.rpm.toFloat(),
-                        heat.coolantTempC.toFloat(),
-                        heat.egtC.toFloat(),
+                        0f,
+                        0f,
+                        0f,
                         parts,
                         Modifier.width(220.dp).fillMaxHeight(),
-                        throttle = frame.throttle.toFloat(),
-                        oilC = heat.oilTempC.toFloat(),
-                        soakC = pullSoak,
+                        feed = feed,
                     )
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     if (!wide) {
                         EngineArt(
                             params,
-                            frame.rpm.toFloat(),
-                            heat.coolantTempC.toFloat(),
-                            heat.egtC.toFloat(),
+                            0f,
+                            0f,
+                            0f,
                             parts,
                             Modifier.fillMaxWidth().height(100.dp),
-                            throttle = frame.throttle.toFloat(),
-                            oilC = heat.oilTempC.toFloat(),
-                            soakC = pullSoak,
+                            feed = feed,
                         )
                     }
                     Canvas(Modifier.fillMaxWidth().height(40.dp)) {
@@ -297,43 +319,33 @@ fun RaceMeet(
                 }
             }
         }
-        val gapM = frame.distance - frame.rival
         Text(
-            if (frame.jumped) "JUMPED THE START" else if (frame.countdown > 0f) "COUNTDOWN" else if (frame.lights > 0f) "LIGHTS" else if (gapM >= 0) "AHEAD ${gapM.toInt()} m" else "BEHIND ${(-gapM).toInt()} m",
-            color = if (frame.jumped) Red else if (frame.lights > 0f || frame.countdown > 0f) Olive else if (gapM >= 0) Lime else Red,
+            chrome.gap,
+            color = chrome.gapColor,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
         )
         // Reaction board: after the tree, show both lanes. Player lane always — even with a hired driver.
-        if (frame.lights <= 0f && frame.countdown <= 0f && !frame.jumped) {
-            val youRt = when {
-                !playerRolled.isNaN() -> playerRolled
-                auto != null -> auto.reaction
-                else -> Double.NaN
-            }
-            val themRt = rivalPass.rolled
-            val youLabel = driver?.name?.uppercase(Locale.US) ?: "YOU"
-            val youTxt = if (youRt.isNaN()) "—" else String.format(Locale.US, "%.3f", youRt)
-            val themTxt = if (themRt.isNaN() || themRt > 30.0) "—" else String.format(Locale.US, "%.3f", themRt)
+        if (chrome.showBoard) {
             Text(
-                "RT $youLabel ${youTxt}s   THEM ${themTxt}s",
+                chrome.board,
                 color = Cyan,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
-        val canShift = auto == null && frame.countdown <= 0f && frame.lights <= 0f && frame.shiftLeft <= 0.0 && frame.gear < setup.ratios.size && !frame.done && clutchShown > RaceDrive.SHIFT_PEDAL.toFloat()
         Row(Modifier.fillMaxWidth().height(128.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(Modifier.width(60.dp).fillMaxHeight()) {
                 Text("CLUTCH", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ClutchPedal(
-                    clutchShown.toDouble(),
+                    chrome.clutch.toDouble(),
                     onDepression = {
                         if (auto != null) return@ClutchPedal
                         hands.clutchTouched = true
                         hands.clutch = it
-                        clutchShown = it.toFloat()
+                        pedal[1] = it.toFloat()
+                        chrome = raceChrome(frame, setup, rivalPass, driver, false, playerRolled, pedal[0], pedal[1])
                     },
                     onHeld = { if (auto == null) hands.clutchHeld = it },
                     modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
@@ -378,38 +390,38 @@ fun RaceMeet(
                 glowLine(if (hot) Red else Lime, tail, tip, stroke * 1.25f, 1.15f)
                 glowCircle(if (RaceDrive.wheelspinLit(frame.slip.toDouble())) Red else Lime, stroke * 2.2f, c, stroke, filled = true)
             }
-            SpinLamp(RaceDrive.wheelspinLit(frame.slip.toDouble()), frame.slip, Modifier.align(Alignment.TopCenter))
+            SpinLamp(chrome.spinOn, chrome.slip, Modifier.align(Alignment.TopCenter))
             NitrousGauge(
-                bottleOf(setup, frame),
+                chrome.bottle,
                 Modifier.align(Alignment.TopStart).width(58.dp).fillMaxHeight().padding(top = 2.dp),
             )
             }
             Box(Modifier.width(60.dp).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
-                SquareShift(if (auto != null) "AUTO" else if (frame.gear >= setup.ratios.size) "TOP" else "SHIFT", canShift) { hands.shift = true }
+                SquareShift(chrome.shiftLabel, chrome.canShift) { hands.shift = true }
             }
             Column(Modifier.width(60.dp).fillMaxHeight()) {
                 Text("THROTTLE", color = White, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                 ThrottlePedal(
-                    throttle.toDouble(),
-                    enabled = !frame.done && auto == null,
+                    chrome.throttle.toDouble(),
+                    enabled = chrome.throttleEnabled,
                     onThrottle = {
                         if (auto != null) return@ThrottlePedal
-                        throttle = it.toFloat()
+                        pedal[0] = it.toFloat()
                         hands.throttle = it
+                        chrome = raceChrome(frame, setup, rivalPass, driver, false, playerRolled, pedal[0], pedal[1])
                     },
                     modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp),
                 )
             }
         }
         Text(
-            "GEAR ${frame.gear}/${setup.ratios.size}   ${frame.rpm.toInt()} rpm   ${(frame.speed * 2.237).toInt()} mph   ${String.format(Locale.US, "%.2f", frame.time)}s",
+            chrome.gearLine,
             color = White,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
         )
-        val ratio = setup.ratios.getOrElse(frame.gear - 1) { setup.ratios.last() }
         Text(
-            "This gear ${String.format(Locale.US, "%.2f", ratio)} × ${String.format(Locale.US, "%.2f", setup.finalDrive)}",
+            chrome.ratioLine,
             color = Cyan,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
@@ -423,7 +435,7 @@ fun RaceMeet(
             modifier = Modifier.padding(top = 6.dp),
         )
         Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-            LineButton("BAIL", !frame.done, { settle(false) }, Modifier.weight(1f))
+            LineButton("BAIL", !chrome.done, { settle(false) }, Modifier.weight(1f))
         }
     }
 }
@@ -509,6 +521,107 @@ private data class Frame(
     val shotOpen: Boolean = false,
     val throttle: Double = 0.0,
 )
+
+private data class RaceChrome(
+    val banner: String,
+    val bannerColor: Color,
+    val gap: String,
+    val gapColor: Color,
+    val gearLine: String,
+    val ratioLine: String,
+    val canShift: Boolean,
+    val shiftLabel: String,
+    val done: Boolean,
+    val showBoard: Boolean,
+    val board: String,
+    val spinOn: Boolean,
+    val slip: Float,
+    val bottle: RaceDrive.Bottle,
+    val throttle: Float,
+    val clutch: Float,
+    val throttleEnabled: Boolean,
+    val jumped: Boolean,
+)
+
+/** Text and pedals. The canvases read [Frame] themselves, so this can lag a frame or two. */
+private fun raceChrome(
+    f: Frame,
+    setup: RaceDrive.Setup,
+    rivalPass: DragRivals.Pass,
+    driver: Drivers.Driver?,
+    hired: Boolean,
+    rolled: Double,
+    throttle: Float,
+    clutch: Float,
+    reaction: Double = Double.NaN,
+): RaceChrome {
+    val banner = when {
+        f.jumped -> "RED LIGHT"
+        f.done && f.won -> "CAUGHT THEM"
+        f.done -> "SHORT"
+        f.countdown > 0f -> "STAGE"
+        f.lights > 0.7f -> "READY"
+        f.lights > 0f -> "SET"
+        f.shiftLeft > 0.0 -> "SHIFT"
+        RaceDrive.wheelspinLit(f.slip.toDouble()) -> "SPIN"
+        f.limiter -> "LIMITER"
+        else -> "GO"
+    }
+    val bannerColor = when {
+        f.jumped -> Red
+        f.countdown > 0f || f.lights > 0f -> Amber
+        f.done && f.won -> Lime
+        f.done || RaceDrive.wheelspinLit(f.slip.toDouble()) || f.limiter -> Red
+        f.shiftLeft > 0.0 -> Amber
+        else -> Lime
+    }
+    val gapM = f.distance - f.rival
+    val gap = when {
+        f.jumped -> "JUMPED THE START"
+        f.countdown > 0f -> "COUNTDOWN"
+        f.lights > 0f -> "LIGHTS"
+        gapM >= 0 -> "AHEAD ${gapM.toInt()} m"
+        else -> "BEHIND ${(-gapM).toInt()} m"
+    }
+    val gapColor = when {
+        f.jumped -> Red
+        f.lights > 0f || f.countdown > 0f -> Olive
+        gapM >= 0 -> Lime
+        else -> Red
+    }
+    val gearLine = "GEAR ${f.gear}/${setup.ratios.size}   ${f.rpm.toInt()} rpm   ${(f.speed * 2.237).toInt()} mph   ${String.format(Locale.US, "%.2f", f.time)}s"
+    val ratio = setup.ratios.getOrElse(f.gear - 1) { setup.ratios.last() }
+    val ratioLine = "This gear ${String.format(Locale.US, "%.2f", ratio)} × ${String.format(Locale.US, "%.2f", setup.finalDrive)}"
+    val youRt = when {
+        !rolled.isNaN() -> rolled
+        hired -> reaction
+        else -> Double.NaN
+    }
+    val themRt = rivalPass.rolled
+    val youLabel = driver?.name?.uppercase(Locale.US) ?: "YOU"
+    val youTxt = if (youRt.isNaN()) "—" else String.format(Locale.US, "%.3f", youRt)
+    val themTxt = if (themRt.isNaN() || themRt > 30.0) "—" else String.format(Locale.US, "%.3f", themRt)
+    return RaceChrome(
+        banner = banner,
+        bannerColor = bannerColor,
+        gap = gap,
+        gapColor = gapColor,
+        gearLine = gearLine,
+        ratioLine = ratioLine,
+        canShift = !hired && f.countdown <= 0f && f.lights <= 0f && f.shiftLeft <= 0.0 && f.gear < setup.ratios.size && !f.done && clutch > RaceDrive.SHIFT_PEDAL.toFloat(),
+        shiftLabel = if (hired) "AUTO" else if (f.gear >= setup.ratios.size) "TOP" else "SHIFT",
+        done = f.done,
+        showBoard = f.lights <= 0f && f.countdown <= 0f && !f.jumped,
+        board = "RT $youLabel ${youTxt}s   THEM ${themTxt}s",
+        spinOn = RaceDrive.wheelspinLit(f.slip.toDouble()),
+        slip = f.slip,
+        bottle = bottleOf(setup, f),
+        throttle = throttle,
+        clutch = clutch,
+        throttleEnabled = !f.done && !hired,
+        jumped = f.jumped,
+    )
+}
 
 private fun snap(
     run: RaceDrive.Run,

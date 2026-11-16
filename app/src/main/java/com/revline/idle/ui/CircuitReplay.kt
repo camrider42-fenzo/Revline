@@ -19,7 +19,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clipToBounds
@@ -32,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -360,6 +360,26 @@ internal object ReplaySpeed {
     fun progress(clock: Float, replay: Replay): Float = ((clock * replay.speed) / replay.duration).toFloat().coerceIn(0f, 1f)
 }
 
+private data class FilmChrome(
+    val lap: Int,
+    val place: Int,
+    val state: String,
+    val youLaps: Double,
+    val frac: Double,
+    val ahead: Boolean,
+)
+
+/** Lap and place for the text. The map and the dash read the clock inside their draw. */
+private fun filmChrome(clock: Float, replay: Replay): FilmChrome {
+    val t = max(0.0, clock * replay.speed)
+    val youLaps = replay.you.progress(t)
+    val rivalLaps = replay.rival.progress(t)
+    val lap = min(replay.laps, youLaps.toInt() + 1)
+    val place = 1 + replay.rivals.count { it.progress(t) > youLaps }
+    val state = if (clock < 0f) "ON THE GRID" else "LAP $lap of ${replay.laps}"
+    return FilmChrome(lap, place, state, youLaps, youLaps - (lap - 1), youLaps >= rivalLaps)
+}
+
 /** A short film of the race: you and the closest rival round the circuit, lap by lap. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -386,6 +406,8 @@ internal fun CircuitReplayView(
     val scenes = remember { CircuitSceneHolder() }
     val lanes = remember(replay) { LaneKeeper(replay) }
     var clock by remember(key) { mutableFloatStateOf(-1.5f) }
+    var film by remember(key) { mutableStateOf(filmChrome(-1.5f, replay)) }
+    var lastFilmNs by remember(key) { mutableLongStateOf(0L) }
     var run by remember(key) { mutableIntStateOf(0) }
     var finished by remember(key) { mutableStateOf(false) }
     var paused by remember(key) { mutableStateOf(false) }
@@ -404,6 +426,8 @@ internal fun CircuitReplayView(
     }
     LaunchedEffect(key, run) {
         clock = -1.5f
+        film = filmChrome(-1.5f, replayNow)
+        lastFilmNs = 0L
         finished = false
         paused = false
         var last = 0L
@@ -414,6 +438,10 @@ internal fun CircuitReplayView(
                 last = now
                 val playing = !pausedNow
                 clock = ReplaySpeed.advance(clock, dt, playing, ReplaySpeed.multiplier(speedNow, replayNow))
+                if (now - lastFilmNs > 80_000_000L) {
+                    film = filmChrome(clock, replayNow)
+                    lastFilmNs = now
+                }
                 val speaker = voiceNow
                 val params = earNow
                 if (speaker != null && params != null) {
@@ -435,14 +463,13 @@ internal fun CircuitReplayView(
             }
         }
         clock = ReplaySpeed.endClock(replayNow)
+        film = filmChrome(clock, replayNow)
         finished = true
         voiceNow?.source = RaceAudio.Source.QUIET
     }
-    val t = max(0.0, clock * replay.speed)
-    val youLaps = replay.you.progress(t)
-    val rivalLaps = replay.rival.progress(t)
-    val lap = min(replay.laps, youLaps.toInt() + 1)
-    val place = 1 + replay.rivals.count { it.progress(t) > youLaps }
+    val lap = film.lap
+    val place = film.place
+    val youLaps = film.youLaps
     val title = result.circuit.name.substringBefore('-').uppercase(Locale.US)
     val sub = String.format(Locale.US, "%.3f km  %d corners", result.circuit.lapKm, result.circuit.corners)
     val map: @Composable () -> Unit = {
@@ -450,6 +477,7 @@ internal fun CircuitReplayView(
             Canvas(Modifier.aspectRatio(CircuitLayouts.aspect(result.circuit.id)).clipToBounds()) {
                 val zoom = if (zoomed) CircuitView.zoomFor(size.width, size.height) else 1f
                 val scene = scenes.get(this, result.circuit.id, title, sub, zoom)
+                val t = max(0.0, clock * replay.speed)
                 val cars = lanes.cars(scene.geo, t, yourId, yourMid)
                 drawCircuitView(scene, cars, size.width, size.height, followYou = zoomed)
             }
@@ -457,22 +485,28 @@ internal fun CircuitReplayView(
     }
     val dials: @Composable () -> Unit = {
         Box(Modifier.padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
-            CircuitDash(if (clock < 0f) null else replay.you.dash(t), Modifier, fit = true)
+            CircuitDash(
+                {
+                    val t = max(0.0, clock * replay.speed)
+                    if (clock < 0f) null else replay.you.dash(t)
+                },
+                Modifier,
+                fit = true,
+            )
         }
     }
     val trace: @Composable () -> Unit = {
         Box(Modifier.padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
-            if (finished) endContent(Modifier) else LiveTrace(replay, if (clock < 0f) null else t, Modifier, fit = true)
+            if (finished) endContent(Modifier) else LiveTrace(replay, { if (clock < 0f) null else max(0.0, clock * replay.speed) }, Modifier, fit = true)
         }
     }
     val state = when {
-        clock < 0f -> "ON THE GRID"
         finished && replay.retired -> "OUT"
         finished -> "FINISHED"
         paused -> "PAUSED  LAP $lap of ${replay.laps}"
-        else -> "LAP $lap of ${replay.laps}"
+        else -> film.state
     }
-    val ahead = youLaps >= rivalLaps
+    val ahead = film.ahead
     val controls: @Composable () -> Unit = {
         Text(
             "$state   P$place of ${replay.all.size}  vs ${replay.rival.name.substringAfterLast(' ')}  " + if (clock < 0f) "" else if (ahead) "ahead" else "behind",
@@ -482,7 +516,13 @@ internal fun CircuitReplayView(
         )
         val pause: @Composable () -> Unit = { com.revline.idle.ui.LineButton(if (paused) "Play" else "Pause", !finished, { paused = !paused }) }
         val again: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Replay", true, { run++ }) }
-        val skip: @Composable () -> Unit = { com.revline.idle.ui.LineButton("Skip to the end", !finished, { clock = ReplaySpeed.endClock(replay) }) }
+        val skip: @Composable () -> Unit = {
+            com.revline.idle.ui.LineButton("Skip to the end", !finished, {
+                val end = ReplaySpeed.endClock(replay)
+                clock = end
+                film = filmChrome(end, replay)
+            })
+        }
         val follow: @Composable () -> Unit = { com.revline.idle.ui.LineButton(if (zoomed) "Whole track" else "Follow", true, { zoomed = !zoomed }) }
         val pit: @Composable () -> Unit = {
             com.revline.idle.ui.LineButton("Pit strategy", onRevise != null && !finished, { resumeAfter = !paused; paused = true; sheetLap = lap })
@@ -499,7 +539,7 @@ internal fun CircuitReplayView(
         }
     }
     // What the sim models of the track and the car on the lap in progress, with the sky for the laps to come.
-    val conditions: @Composable () -> Unit = { CircuitConditions(result, lap, youLaps - (lap - 1)) }
+    val conditions: @Composable () -> Unit = { CircuitConditions(result, lap, film.frac) }
     // Nothing scrolls: every part has a share of the height (or the width) and keeps its own proportions inside it. At the flag
     // the live trace gives way to the best-lap chart, which takes a bigger share, and the map gives up some.
     // Top down: header, speed chips, dials, trace, then the status and buttons right after, with no weighted spacers. The dials and
